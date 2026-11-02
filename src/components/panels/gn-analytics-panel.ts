@@ -6,6 +6,7 @@
 
 import { LitElement, html, css, svg, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
+import { localized, msg, str } from '@lit/localize';
 import { sharedStyles } from '../../styles/shared-styles.ts';
 import { formatFileSize } from '../../utils/format.ts';
 import * as gitService from '../../services/git.service.ts';
@@ -33,6 +34,7 @@ const CHART_COLORS = [
 ];
 
 @customElement('gn-analytics-panel')
+@localized()
 export class GnAnalyticsPanel extends LitElement {
   static styles = [
     sharedStyles,
@@ -466,7 +468,7 @@ export class GnAnalyticsPanel extends LitElement {
       if (result.success && result.data) {
         this.stats = result.data;
       } else {
-        this.error = result.error?.message ?? 'Failed to load statistics';
+        this.error = result.error?.message ?? msg('Failed to load statistics');
       }
     } catch (err) {
       if (seq !== this.loadSeq) return;
@@ -480,30 +482,32 @@ export class GnAnalyticsPanel extends LitElement {
 
   render() {
     if (!this.repositoryPath) {
-      return html`<div class="empty-state">No repository open</div>`;
+      return html`<div class="empty-state">${msg('No repository open')}</div>`;
     }
 
     if (!this.stats) {
       if (this.loading) {
-        return html`<div class="loading">Loading statistics...</div>`;
+        return html`<div class="loading">${msg('Loading statistics...')}</div>`;
       }
 
       if (this.error) {
         return html`
           <div class="error">
             <span>${this.error}</span>
-            <button class="retry-btn" @click=${this.loadStats}>Retry</button>
+            <button class="retry-btn" @click=${this.loadStats}>${msg('Retry')}</button>
           </div>
         `;
       }
 
-      return html`<div class="empty-state">No statistics available</div>`;
+      return html`<div class="empty-state">${msg('No statistics available')}</div>`;
     }
 
     return html`
       <div class="content">
         ${this.error
-          ? html`<div class="refresh-error" role="alert">Refresh failed: ${this.error}</div>`
+          ? html`<div class="refresh-error" role="alert">
+              ${msg(str`Refresh failed: ${this.error}`)}
+            </div>`
           : nothing}
         ${this.renderOverview(this.stats)}
         ${this.stats.activityByMonth ? this.renderTimeline(this.stats.activityByMonth) : nothing}
@@ -526,11 +530,11 @@ export class GnAnalyticsPanel extends LitElement {
     return html`
       <div class="section">
         <div class="section-header section-header-row">
-          <span>Overview</span>
+          <span>${msg('Overview')}</span>
           <button
             class="refresh-btn"
-            title="Refresh statistics"
-            aria-label="Refresh statistics"
+            title=${msg('Refresh statistics')}
+            aria-label=${msg('Refresh statistics')}
             ?disabled=${this.loading}
             aria-busy=${this.loading ? 'true' : 'false'}
             @click=${this.handleRefreshClick}
@@ -543,15 +547,15 @@ export class GnAnalyticsPanel extends LitElement {
         </div>
         <div class="section-body">
           <div class="overview-grid">
-            ${this.renderCard(this.formatCompactNumber(s.totalCommits), 'Commits')}
-            ${this.renderCard(String(s.totalContributors), 'Contributors')}
-            ${this.renderCard(String(s.totalBranches), 'Branches')}
-            ${this.renderCard(String(s.totalTags), 'Tags')}
-            ${this.renderCard(this.formatCompactNumber(s.totalFiles), 'Files')}
-            ${this.renderCard(size, 'Repo Size')}
-            ${this.renderCard(String(s.repoAgeDays), 'Days Old')}
-            ${this.renderCard(firstDate, 'First Commit')}
-            ${this.renderCard(lastDate, 'Last Commit')}
+            ${this.renderCard(this.formatCompactNumber(s.totalCommits), msg('Commits'))}
+            ${this.renderCard(String(s.totalContributors), msg('Contributors'))}
+            ${this.renderCard(String(s.totalBranches), msg('Branches'))}
+            ${this.renderCard(String(s.totalTags), msg('Tags'))}
+            ${this.renderCard(this.formatCompactNumber(s.totalFiles), msg('Files'))}
+            ${this.renderCard(size, msg('Repo Size'))}
+            ${this.renderCard(String(s.repoAgeDays), msg('Days Old'))}
+            ${this.renderCard(firstDate, msg('First Commit'))}
+            ${this.renderCard(lastDate, msg('Last Commit'))}
           </div>
         </div>
       </div>
@@ -582,10 +586,10 @@ export class GnAnalyticsPanel extends LitElement {
 
     return html`
       <div class="section">
-        <div class="section-header">Commit Activity</div>
+        <div class="section-header">${msg('Commit Activity')}</div>
         <div class="section-body">
           <div class="chart-container">
-            <svg viewBox="0 0 ${chartW} ${totalH}" preserveAspectRatio="xMinYMid meet" role="img" aria-label="Monthly commit activity chart">
+            <svg viewBox="0 0 ${chartW} ${totalH}" preserveAspectRatio="xMinYMid meet" role="img" aria-label=${msg('Monthly commit activity chart')}>
               ${months.map((m, i) => {
                 const x = i * (barW + gap);
                 const h = (m.commits / maxCommits) * chartH;
@@ -595,7 +599,9 @@ export class GnAnalyticsPanel extends LitElement {
                 return svg`
                   <rect class="chart-bar" x="${x}" y="${y}" width="${barW}" height="${h}"
                     fill="var(--color-primary)" rx="2">
-                    <title>${label}: ${m.commits} commits, ${m.authors} authors</title>
+                    <title>${msg(
+                      str`${label}: ${m.commits} commits, ${m.authors} authors`,
+                    )}</title>
                   </rect>
                   ${showLabel
                     ? svg`<text class="chart-label" x="${x + barW / 2}" y="${totalH}" text-anchor="middle">${label.slice(2)}</text>`
@@ -617,13 +623,13 @@ export class GnAnalyticsPanel extends LitElement {
   ) {
     return html`
       <div class="section">
-        <div class="section-header">Activity Patterns</div>
+        <div class="section-header">${msg('Activity Patterns')}</div>
         <div class="section-body">
           <div class="chart-pair">
             ${weekday
               ? html`
                   <div class="chart-sub">
-                    <span class="chart-sub-title">By Day of Week</span>
+                    <span class="chart-sub-title">${msg('By Day of Week')}</span>
                     ${this.renderWeekdayChart(weekday)}
                   </div>
                 `
@@ -631,7 +637,7 @@ export class GnAnalyticsPanel extends LitElement {
             ${hourly
               ? html`
                   <div class="chart-sub">
-                    <span class="chart-sub-title">By Hour (UTC)</span>
+                    <span class="chart-sub-title">${msg('By Hour (UTC)')}</span>
                     ${this.renderHourChart(hourly)}
                   </div>
                 `
@@ -653,7 +659,7 @@ export class GnAnalyticsPanel extends LitElement {
 
     return html`
       <div class="chart-container">
-        <svg viewBox="0 0 ${chartW} ${totalH}" preserveAspectRatio="xMinYMid meet" role="img" aria-label="Commits by day of week">
+        <svg viewBox="0 0 ${chartW} ${totalH}" preserveAspectRatio="xMinYMid meet" role="img" aria-label=${msg('Commits by day of week')}>
           ${days.map((d, i) => {
             const x = i * (barW + gap);
             const h = (d.commits / max) * chartH;
@@ -661,7 +667,7 @@ export class GnAnalyticsPanel extends LitElement {
             return svg`
               <rect class="chart-bar" x="${x}" y="${y}" width="${barW}" height="${h}"
                 fill="var(--color-success)" rx="2">
-                <title>${d.day}: ${d.commits} commits</title>
+                <title>${msg(str`${d.day}: ${d.commits} commits`)}</title>
               </rect>
               <text class="chart-label" x="${x + barW / 2}" y="${totalH}" text-anchor="middle">${d.day.slice(0, 3)}</text>
             `;
@@ -682,7 +688,7 @@ export class GnAnalyticsPanel extends LitElement {
 
     return html`
       <div class="chart-container">
-        <svg viewBox="0 0 ${chartW} ${totalH}" preserveAspectRatio="xMinYMid meet" role="img" aria-label="Commits by hour of day">
+        <svg viewBox="0 0 ${chartW} ${totalH}" preserveAspectRatio="xMinYMid meet" role="img" aria-label=${msg('Commits by hour of day')}>
           ${hours.map((h, i) => {
             const x = i * (barW + gap);
             const barH = (h.commits / max) * chartH;
@@ -691,7 +697,9 @@ export class GnAnalyticsPanel extends LitElement {
             return svg`
               <rect class="chart-bar" x="${x}" y="${y}" width="${barW}" height="${barH}"
                 fill="var(--color-warning)" rx="1">
-                <title>${String(h.hour).padStart(2, '0')}:00 – ${h.commits} commits</title>
+                <title>${msg(
+                  str`${String(h.hour).padStart(2, '0')}:00 – ${h.commits} commits`,
+                )}</title>
               </rect>
               ${showLabel
                 ? svg`<text class="chart-label" x="${x + barW / 2}" y="${totalH}" text-anchor="middle">${h.hour}</text>`
@@ -712,7 +720,7 @@ export class GnAnalyticsPanel extends LitElement {
 
     return html`
       <div class="section">
-        <div class="section-header">Top Contributors</div>
+        <div class="section-header">${msg('Top Contributors')}</div>
         <div class="section-body">
           <div class="contributor-list">
             ${contributors.slice(0, 15).map(
@@ -721,7 +729,9 @@ export class GnAnalyticsPanel extends LitElement {
                   <div class="contributor-info">
                     <div class="contributor-name">${c.name}</div>
                     <div class="contributor-stats">
-                      <span class="contributor-commits">${c.commits} commits</span>
+                      <span class="contributor-commits">
+                        ${msg(str`${c.commits} commits`)}
+                      </span>
                       <span class="contributor-lines">
                         <span class="lines-added">+${this.formatCompactNumber(c.linesAdded)}</span>
                         <span class="lines-deleted">-${this.formatCompactNumber(c.linesDeleted)}</span>
@@ -755,7 +765,7 @@ export class GnAnalyticsPanel extends LitElement {
     );
     if (rest.length > 0) {
       items.push({
-        extension: 'Other',
+        extension: msg('Other'),
         fileCount: rest.reduce((s, f) => s + f.fileCount, 0),
         totalLines: rest.reduce((s, f) => s + f.totalLines, 0),
         color: CHART_COLORS[topN % CHART_COLORS.length],
@@ -766,7 +776,7 @@ export class GnAnalyticsPanel extends LitElement {
 
     return html`
       <div class="section">
-        <div class="section-header">File Types</div>
+        <div class="section-header">${msg('File Types')}</div>
         <div class="section-body">
           <div class="file-types-layout">
             <div class="donut-container">${this.renderDonut(items, total)}</div>
@@ -776,7 +786,9 @@ export class GnAnalyticsPanel extends LitElement {
                   <div class="file-type-row">
                     <span class="file-type-color" style="background: ${ft.color}"></span>
                     <span class="file-type-ext">${ft.extension}</span>
-                    <span class="file-type-count">${ft.fileCount} files</span>
+                    <span class="file-type-count">
+                      ${msg(str`${ft.fileCount} files`)}
+                    </span>
                   </div>
                 `,
               )}
@@ -825,13 +837,13 @@ export class GnAnalyticsPanel extends LitElement {
 
       return svg`
         <path d="${d}" fill="${item.color}">
-          <title>${item.extension}: ${item.fileCount} files</title>
+          <title>${msg(str`${item.extension}: ${item.fileCount} files`)}</title>
         </path>
       `;
     });
 
     return html`
-      <svg viewBox="0 0 ${size} ${size}" width="100" height="100" role="img" aria-label="File type distribution">
+      <svg viewBox="0 0 ${size} ${size}" width="100" height="100" role="img" aria-label=${msg('File type distribution')}>
         ${paths}
       </svg>
     `;

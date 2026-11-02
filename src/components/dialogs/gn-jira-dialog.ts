@@ -5,6 +5,7 @@
 
 import { LitElement, html, css, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
+import { localized, msg, str } from '@lit/localize';
 import { sharedStyles } from '../../styles/shared-styles.ts';
 import * as gitService from '../../services/git.service.ts';
 import {
@@ -28,6 +29,7 @@ import { pushOverlay, removeOverlay, isTopOverlay } from '../../utils/overlay-st
 type JiraTab = 'issues' | 'settings';
 
 @customElement('gn-jira-dialog')
+@localized()
 export class GnJiraDialog extends LitElement {
   static styles = [
     sharedStyles,
@@ -375,7 +377,7 @@ export class GnJiraDialog extends LitElement {
         this.projectKey = '';
         this.hasSavedConfig = false;
         if (!configResult.success) {
-          this.error = configResult.error?.message ?? 'Failed to load Jira configuration';
+          this.error = configResult.error?.message ?? msg('Failed to load Jira configuration');
         }
       }
 
@@ -389,14 +391,14 @@ export class GnJiraDialog extends LitElement {
       } else {
         this.issues = [];
         if (!issuesResult.success && this.hasSavedConfig && !this.error) {
-          this.error = issuesResult.error?.message ?? 'Failed to load Jira issues';
+          this.error = issuesResult.error?.message ?? msg('Failed to load Jira issues');
         }
       }
     } catch (err) {
       if (this.repositoryPath !== targetRepo) return;
       this.issues = [];
       if (!this.error) {
-        this.error = err instanceof Error ? err.message : 'Failed to load Jira data';
+        this.error = err instanceof Error ? err.message : msg('Failed to load Jira data');
       }
     } finally {
       if (this.repositoryPath === targetRepo) {
@@ -430,10 +432,10 @@ export class GnJiraDialog extends LitElement {
       const config = this.buildConfigFromForm();
       const result = await testJiraConnection(this.repositoryPath, config);
       if (result.success && result.data !== false) {
-        this.success = 'Successfully connected to Jira';
+        this.success = msg('Successfully connected to Jira');
         showToast(this.success, 'success');
       } else {
-        this.error = result.error?.message ?? 'Failed to connect to Jira';
+        this.error = result.error?.message ?? msg('Failed to connect to Jira');
         showToast(this.error, 'error');
       }
     } finally {
@@ -446,7 +448,7 @@ export class GnJiraDialog extends LitElement {
     this.success = null;
     const config = this.buildConfigFromForm();
     if (!config.baseUrl || !config.email || !config.apiToken) {
-      this.error = 'Base URL, email, and API token are required';
+      this.error = msg('Base URL, email, and API token are required');
       showToast(this.error, 'error');
       return;
     }
@@ -456,7 +458,7 @@ export class GnJiraDialog extends LitElement {
       const result = await saveJiraConfig(this.repositoryPath, config);
       if (result.success) {
         this.hasSavedConfig = true;
-        this.success = 'Jira configuration saved';
+        this.success = msg('Jira configuration saved');
         showToast(this.success, 'success');
         this.dispatchEvent(
           new CustomEvent('jira-config-changed', {
@@ -466,7 +468,7 @@ export class GnJiraDialog extends LitElement {
           }),
         );
       } else {
-        this.error = result.error?.message ?? 'Failed to save Jira configuration';
+        this.error = result.error?.message ?? msg('Failed to save Jira configuration');
         showToast(this.error, 'error');
       }
     } finally {
@@ -488,7 +490,7 @@ export class GnJiraDialog extends LitElement {
         this.hasSavedConfig = false;
         this.issues = [];
         this.issueTransitions = {};
-        this.success = 'Jira configuration deleted';
+        this.success = msg('Jira configuration deleted');
         showToast(this.success, 'success');
         this.dispatchEvent(
           new CustomEvent('jira-config-changed', {
@@ -498,7 +500,7 @@ export class GnJiraDialog extends LitElement {
           }),
         );
       } else {
-        this.error = result.error?.message ?? 'Failed to delete Jira configuration';
+        this.error = result.error?.message ?? msg('Failed to delete Jira configuration');
         showToast(this.error, 'error');
       }
     } finally {
@@ -524,14 +526,14 @@ export class GnJiraDialog extends LitElement {
       } else {
         this.issues = [];
         this.issueTransitions = {};
-        this.error = result.error?.message ?? 'Failed to load Jira issues';
+        this.error = result.error?.message ?? msg('Failed to load Jira issues');
         showToast(this.error, 'error');
       }
     } catch (err) {
       if (this.repositoryPath !== targetRepo) return;
       this.issues = [];
       this.issueTransitions = {};
-      this.error = err instanceof Error ? err.message : 'Failed to load Jira issues';
+      this.error = err instanceof Error ? err.message : msg('Failed to load Jira issues');
       showToast(this.error, 'error');
     } finally {
       if (this.repositoryPath === targetRepo) {
@@ -556,7 +558,7 @@ export class GnJiraDialog extends LitElement {
         checkout: true,
       });
       if (result.success) {
-        this.success = `Created branch ${branchName}`;
+        this.success = msg(str`Created branch ${branchName}`);
         showToast(this.success, 'success');
         this.dispatchEvent(
           new CustomEvent('branch-created', {
@@ -566,7 +568,7 @@ export class GnJiraDialog extends LitElement {
           }),
         );
       } else {
-        this.error = result.error?.message ?? `Failed to create branch ${branchName}`;
+        this.error = result.error?.message ?? msg(str`Failed to create branch ${branchName}`);
         showToast(this.error, 'error');
       }
     } finally {
@@ -588,12 +590,12 @@ export class GnJiraDialog extends LitElement {
           [issueKey]: result.data,
         };
       } else {
-        this.error = result.error?.message ?? `Failed to load transitions for ${issueKey}`;
+        this.error = result.error?.message ?? msg(str`Failed to load transitions for ${issueKey}`);
         showToast(this.error, 'error');
       }
     } catch (err) {
       if (this.repositoryPath !== targetRepo) return;
-      this.error = err instanceof Error ? err.message : `Failed to load transitions for ${issueKey}`;
+      this.error = err instanceof Error ? err.message : msg(str`Failed to load transitions for ${issueKey}`);
       showToast(this.error, 'error');
     } finally {
       if (this.repositoryPath === targetRepo) {
@@ -617,11 +619,11 @@ export class GnJiraDialog extends LitElement {
         transitionId,
       );
       if (result.success) {
-        this.success = `Transitioned ${issueKey}`;
+        this.success = msg(str`Transitioned ${issueKey}`);
         showToast(this.success, 'success');
         await this.handleRefreshIssues();
       } else {
-        this.error = result.error?.message ?? `Failed to transition ${issueKey}`;
+        this.error = result.error?.message ?? msg(str`Failed to transition ${issueKey}`);
         showToast(this.error, 'error');
       }
     } finally {
@@ -640,7 +642,7 @@ export class GnJiraDialog extends LitElement {
         <input
           class="jql-input"
           type="text"
-          placeholder="Search JQL or project key..."
+          placeholder=${msg('Search JQL or project key...')}
           .value=${this.jqlFilter}
           @input=${(e: Event) => {
             this.jqlFilter = (e.target as HTMLInputElement).value;
@@ -656,12 +658,12 @@ export class GnJiraDialog extends LitElement {
           ?disabled=${this.loading}
           @click=${() => void this.handleRefreshIssues()}
         >
-          Refresh
+          ${msg('Refresh')}
         </button>
       </div>
 
       ${this.issues.length === 0
-        ? html`<div class="empty-state">No Jira issues found</div>`
+        ? html`<div class="empty-state">${msg('No Jira issues found')}</div>`
         : html`
             <div class="issue-list">
               ${this.issues.map((issue) => {
@@ -688,26 +690,26 @@ export class GnJiraDialog extends LitElement {
                         ?disabled=${this.loading}
                         @click=${() => void this.handleCreateBranch(issue)}
                       >
-                        Create Branch
+                        ${msg('Create Branch')}
                       </button>
                       <button
                         class="btn load-transitions-btn"
                         ?disabled=${this.loading}
                         @click=${() => void this.handleLoadTransitions(issue.key)}
                       >
-                        Status Transitions
+                        ${msg('Status Transitions')}
                       </button>
                       ${transitions
                         ? html`
                             <select
                               class="transition-select"
-                              aria-label="Transition ${issue.key}"
+                              aria-label=${msg(str`Transition ${issue.key}`)}
                               @change=${(e: Event) => {
                                 const val = (e.target as HTMLSelectElement).value;
                                 void this.handleTransitionIssue(issue.key, val);
                               }}
                             >
-                              <option value="">Select status...</option>
+                              <option value="">${msg('Select status...')}</option>
                               ${transitions.map(
                                 (t) => html`<option value=${t.id}>${t.name}</option>`,
                               )}
@@ -738,7 +740,7 @@ export class GnJiraDialog extends LitElement {
   private renderSettingsTab() {
     return html`
       <div class="form-group">
-        <label class="form-label" for="jira-base-url">Jira Base URL</label>
+        <label class="form-label" for="jira-base-url">${msg('Jira Base URL')}</label>
         <input
           id="jira-base-url"
           name="baseUrl"
@@ -753,7 +755,7 @@ export class GnJiraDialog extends LitElement {
       </div>
 
       <div class="form-group">
-        <label class="form-label" for="jira-email">Email</label>
+        <label class="form-label" for="jira-email">${msg('Email')}</label>
         <input
           id="jira-email"
           name="email"
@@ -768,13 +770,13 @@ export class GnJiraDialog extends LitElement {
       </div>
 
       <div class="form-group">
-        <label class="form-label" for="jira-api-token">API Token</label>
+        <label class="form-label" for="jira-api-token">${msg('API Token')}</label>
         <input
           id="jira-api-token"
           name="apiToken"
           class="form-input"
           type="password"
-          placeholder="Enter Jira API token"
+          placeholder=${msg('Enter Jira API token')}
           .value=${this.apiToken}
           @input=${(e: Event) => {
             this.apiToken = (e.target as HTMLInputElement).value;
@@ -783,7 +785,7 @@ export class GnJiraDialog extends LitElement {
       </div>
 
       <div class="form-group">
-        <label class="form-label" for="jira-project-key">Project Key (optional)</label>
+        <label class="form-label" for="jira-project-key">${msg('Project Key (optional)')}</label>
         <input
           id="jira-project-key"
           name="projectKey"
@@ -803,21 +805,21 @@ export class GnJiraDialog extends LitElement {
           ?disabled=${this.loading}
           @click=${() => void this.handleTestConnection()}
         >
-          Test Connection
+          ${msg('Test Connection')}
         </button>
         <button
           class="btn btn-danger delete-config-btn"
           ?disabled=${this.loading}
           @click=${() => void this.handleDeleteConfig()}
         >
-          Delete
+          ${msg('Delete')}
         </button>
         <button
           class="btn btn-primary save-config-btn"
           ?disabled=${this.loading}
           @click=${() => void this.handleSaveConfig()}
         >
-          Save
+          ${msg('Save')}
         </button>
       </div>
     `;
@@ -826,10 +828,10 @@ export class GnJiraDialog extends LitElement {
   render() {
     return html`
       <div class="overlay" @click=${() => this.close()}></div>
-      <div class="dialog" role="dialog" aria-label="Jira Integration">
+      <div class="dialog" role="dialog" aria-label=${msg('Jira Integration')}>
         <div class="header">
-          <span class="header-title">Jira Issues</span>
-          <button class="close-btn" @click=${() => this.close()} title="Close">
+          <span class="header-title">${msg('Jira Issues')}</span>
+          <button class="close-btn" @click=${() => this.close()} title=${msg('Close')}>
             ✕
           </button>
         </div>
@@ -842,7 +844,7 @@ export class GnJiraDialog extends LitElement {
               this.activeTab = 'issues';
             }}
           >
-            Issues
+            ${msg('Issues')}
           </button>
           <button
             class="tab-btn ${this.activeTab === 'settings' ? 'active' : ''}"
@@ -851,7 +853,7 @@ export class GnJiraDialog extends LitElement {
               this.activeTab = 'settings';
             }}
           >
-            Settings
+            ${msg('Settings')}
           </button>
         </div>
 

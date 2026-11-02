@@ -93,6 +93,7 @@ const mockInvoke: MockInvoke = async (command: string, args?: unknown) => {
 import '../gn-settings-dialog.ts';
 import type { GnSettingsDialog } from '../gn-settings-dialog.ts';
 import { uiStore } from '../../../stores/ui.store.ts';
+import { setAppLocale } from '../../../i18n/index.ts';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -459,5 +460,141 @@ describe('gn-settings-dialog MCP settings', () => {
         el.shadowRoot?.querySelector<HTMLButtonElement>('button.mcp-token-reveal')?.disabled
       ).to.be.true;
     });
+  });
+});
+
+/**
+ * Layout in a translated locale.
+ *
+ * Chinese setting names and descriptions are long, and the flex row used to
+ * let the controls beside them shrink: "已禁用" became a one-character-wide
+ * column (已 / 禁 / 用 stacked) and "启动" did the same. These assertions pin
+ * the fix — the label gives way, the controls do not.
+ */
+describe('gn-settings-dialog MCP layout in Chinese', () => {
+  beforeEach(async () => {
+    await setAppLocale('zh');
+  });
+
+  afterEach(async () => {
+    await setAppLocale('en');
+  });
+
+  async function openDialog(): Promise<GnSettingsDialog> {
+    const el = await fixture<GnSettingsDialog>(html`<gn-settings-dialog></gn-settings-dialog>`);
+    await (el as any).loadMcpStatus();
+    await el.updateComplete;
+    return el;
+  }
+
+  function rowWith(el: GnSettingsDialog, text: string): HTMLElement {
+    const row = Array.from(el.shadowRoot!.querySelectorAll<HTMLElement>('.setting-row')).find(
+      (candidate) => candidate.textContent?.includes(text)
+    );
+    expect(row, `expected a settings row containing "${text}"`).to.exist;
+    return row!;
+  }
+
+  it('keeps the status pill and toggle on one line', async () => {
+    const el = await openDialog();
+    const row = rowWith(el, '上下文代理');
+
+    const status = row.querySelector<HTMLElement>('.status-indicator')!;
+    const toggle = row.querySelector<HTMLElement>('button.mcp-toggle')!;
+    expect(status, 'the MCP row must show its status').to.exist;
+    expect(toggle, 'the MCP row must offer its action').to.exist;
+
+    // One text line each, not a vertical stack of characters.
+    for (const control of [status, toggle]) {
+      expect(getComputedStyle(control).whiteSpace).to.equal('nowrap');
+      expect(control.getBoundingClientRect().height).to.be.lessThan(40);
+    }
+
+    // The row itself never overflows the dialog horizontally.
+    expect(row.scrollWidth).to.be.at.most(row.clientWidth + 1);
+  });
+
+  it('gives the access token its own line instead of squeezing the token or the buttons', async () => {
+    // Real backend tokens are 43 characters (`AUTH_TOKEN_LEN` in
+    // src-tauri/src/services/ai/mcp/server.rs). A 12-character fixture would
+    // hide exactly the overflow this row had: 43 bullets are wider than the
+    // row, so the masked value wrapped and pushed Regenerate onto a new line.
+    mcpConfig = { enabled: false, port: 3001, allowedOrigins: [], authToken: 'a'.repeat(43) };
+    const el = await openDialog();
+    const row = rowWith(el, '访问令牌');
+
+    expect(row.classList.contains('setting-row-stacked')).to.be.true;
+
+    const label = row.querySelector<HTMLElement>('.setting-label')!;
+    const controls = row.querySelector<HTMLElement>('.mcp-token-controls')!;
+    const tokenValue = controls.querySelector<HTMLElement>('.mcp-token-value')!;
+    const buttons = Array.from(controls.querySelectorAll<HTMLElement>('button'));
+    const labelRect = label.getBoundingClientRect();
+    const controlsRect = controls.getBoundingClientRect();
+
+    // The mask is capped, so the hidden value stays on one line...
+    expect(tokenValue.textContent?.trim()).to.match(/^•+$/);
+    expect(tokenValue.textContent?.trim().length).to.be.at.most(12);
+
+    // Stacked: the controls start on the line below the label, use the
+    // dialog's full width, and keep token + three buttons on ONE line.
+    expect(controlsRect.top).to.be.at.least(labelRect.bottom - 1);
+    expect(controlsRect.width).to.be.at.least(400);
+
+    for (const control of [tokenValue, ...buttons]) {
+      expect(
+        control.getBoundingClientRect().height,
+        `${control.tagName} wrapped`
+      ).to.be.lessThan(40);
+    }
+    expect(new Set(buttons.map((b) => Math.round(b.getBoundingClientRect().top))).size).to.equal(1);
+
+    // Revealing the real 43-character token may wrap the token box, but the
+    // three actions must still share one row.
+    el.shadowRoot!.querySelector<HTMLButtonElement>('button.mcp-token-reveal')!.click();
+    await el.updateComplete;
+    expect(tokenValue.textContent).to.contain('a'.repeat(43));
+    for (const button of buttons) {
+      expect(button.getBoundingClientRect().height).to.be.lessThan(40);
+    }
+    expect(new Set(buttons.map((b) => Math.round(b.getBoundingClientRect().top))).size).to.equal(1);
+
+    expect(row.scrollWidth).to.be.at.most(row.clientWidth + 1);
+  });
+
+  it('wraps long error text instead of overflowing the dialog', async () => {
+    // Standalone text rows (backend error, update error) are not controls: the
+    // flex row must let them wrap rather than stretch to max-content and run
+    // past the dialog.
+    const longError =
+      'Failed to bind to 127.0.0.1:3001: Address already in use — another process is listening on that port (stop it or pick a different port in Settings)';
+    mcpStatus = { running: false, port: 3001, url: null, lastError: longError };
+    mcpConfig = { enabled: true, port: 3001, allowedOrigins: [], authToken: '' };
+    const el = await openDialog();
+
+    const mcpErrorRow = rowWith(el, 'Address already in use');
+    expect(mcpErrorRow.scrollWidth).to.be.at.most(mcpErrorRow.clientWidth + 1);
+    expect(mcpErrorRow.querySelector<HTMLElement>('.error-text')!.getBoundingClientRect().height)
+      .to.be.greaterThan(20);
+
+    // ...and the About row's update error gets the same treatment.
+    (el as any).updateStatus = 'failed';
+    (el as any).updateError = longError;
+    await el.updateComplete;
+    const aboutRow = Array.from(el.shadowRoot!.querySelectorAll<HTMLElement>('.setting-row')).find(
+      (row) => row.querySelector('.version-info')
+    )!;
+    expect(aboutRow.scrollWidth).to.be.at.most(aboutRow.clientWidth + 1);
+    expect(aboutRow.querySelector<HTMLElement>('.error-text')!.getBoundingClientRect().height)
+      .to.be.greaterThan(20);
+  });
+
+  it('keeps the client-configuration Copy button on one line', async () => {
+    const el = await openDialog();
+    const row = rowWith(el, 'MCP 客户端配置');
+    const copy = row.querySelector<HTMLElement>('button.mcp-snippet-copy')!;
+
+    expect(copy.getBoundingClientRect().height).to.be.lessThan(40);
+    expect(getComputedStyle(copy).whiteSpace).to.equal('nowrap');
   });
 });

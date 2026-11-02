@@ -5,6 +5,7 @@
 
 import { LitElement, html, css, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
+import { localized, msg, str } from '@lit/localize';
 import { sharedStyles } from '../../styles/shared-styles.ts';
 import * as gitService from '../../services/git.service.ts';
 import { showToast } from '../../services/notification.service.ts';
@@ -23,7 +24,7 @@ import { containsDeepActiveElement } from '../../utils/focus.ts';
 // and report the refusal, so the operation stays serialized; only the
 // affordance stays live.
 import { tryAcquireRefOp, releaseRefOp } from '../../utils/ref-lock.ts';
-import { REBASE_PAUSED_MESSAGE, skippedCommitsSuffix } from '../../utils/rebase-messages.ts';
+import { rebasePausedMessage, skippedCommitsSuffix } from '../../utils/rebase-messages.ts';
 
 /**
  * Context threaded through a conflicted git-flow finish so the dialog can COMPLETE
@@ -49,6 +50,7 @@ export interface GitflowFinishContext {
 }
 
 @customElement('gn-conflict-resolution-dialog')
+@localized()
 export class GnConflictResolutionDialog extends LitElement {
   static styles = [
     sharedStyles,
@@ -608,13 +610,13 @@ export class GnConflictResolutionDialog extends LitElement {
         }
       } else {
         console.error('Failed to load conflicts:', result.error);
-        showToast('Failed to load conflicts', 'error');
+        showToast(msg('Failed to load conflicts'), 'error');
         this.conflicts = [];
         this.loadFailed = true;
       }
     } catch (err) {
       console.error('Failed to load conflicts:', err);
-      showToast('Failed to load conflicts', 'error');
+      showToast(msg('Failed to load conflicts'), 'error');
       this.conflicts = [];
       this.loadFailed = true;
     } finally {
@@ -689,8 +691,10 @@ export class GnConflictResolutionDialog extends LitElement {
         let proceed = false;
         try {
           proceed = await showConfirm(
-            'Discard in-progress resolution?',
-            'The external tool works on the file as saved on disk — your unsaved picks here will be replaced by its result.',
+            msg('Discard in-progress resolution?'),
+            msg(
+              'The external tool works on the file as saved on disk — your unsaved picks here will be replaced by its result.'
+            ),
             'warning',
           );
         } finally {
@@ -725,20 +729,23 @@ export class GnConflictResolutionDialog extends LitElement {
           c.path === conflictPath ? (fresh ?? { ...c }) : c
         );
         if (stillConflicted) {
-          showToast('File still has conflicts', 'warning');
+          showToast(msg('File still has conflicts'), 'warning');
         } else {
           this.resolvedFiles = new Set([...this.resolvedFiles, conflictPath]);
           this.requestUpdate();
-          showToast('Merge tool completed', 'success');
+          showToast(msg('Merge tool completed'), 'success');
           if (wasSelected) {
             this.advanceToNextUnresolved();
           }
         }
       } else {
-        showToast(result.data?.message ?? result.error?.message ?? 'Merge tool failed', 'error');
+        showToast(
+          result.data?.message ?? result.error?.message ?? msg('Merge tool failed'),
+          'error',
+        );
       }
     } catch {
-      showToast('Failed to launch merge tool', 'error');
+      showToast(msg('Failed to launch merge tool'), 'error');
     } finally {
       this.launchingExternalTool = null;
     }
@@ -755,8 +762,10 @@ export class GnConflictResolutionDialog extends LitElement {
     const editor = this.shadowRoot?.querySelector('gn-merge-editor') as GnMergeEditor | null;
     if (!editor?.hasUnsavedResolutions()) return true;
     return showConfirm(
-      'Discard in-progress resolution?',
-      'This file has conflict resolutions that are not saved yet — switching files discards them. Use Mark Resolved to keep them.',
+      msg('Discard in-progress resolution?'),
+      msg(
+        'This file has conflict resolutions that are not saved yet — switching files discards them. Use Mark Resolved to keep them.'
+      ),
       'warning',
     );
   }
@@ -769,7 +778,7 @@ export class GnConflictResolutionDialog extends LitElement {
    */
   private navBlockedByResolve(): boolean {
     if (this.editorResolveDepth === 0) return false;
-    showToast('Wait for the current resolve to finish', 'info');
+    showToast(msg('Wait for the current resolve to finish'), 'info');
     return true;
   }
 
@@ -894,8 +903,12 @@ export class GnConflictResolutionDialog extends LitElement {
     // remains; other finishes are idempotently re-runnable.
     showToast(
       this.gitflowFinish && this.squashMerge
-        ? 'The squash commit is already on develop and cannot be rolled back — delete the feature branch from the branch list to finish'
-        : 'The merge is already committed and cannot be rolled back — retry the finish from the Git Flow panel',
+        ? msg(
+            'The squash commit is already on develop and cannot be rolled back — delete the feature branch from the branch list to finish'
+          )
+        : msg(
+            'The merge is already committed and cannot be rolled back — retry the finish from the Git Flow panel'
+          ),
       'warning'
     );
     this.dispatchEvent(
@@ -937,7 +950,7 @@ export class GnConflictResolutionDialog extends LitElement {
     // run beside an abort that is restoring the working tree.
     const lockedRepo = this.repositoryPath;
     if (!tryAcquireRefOp(lockedRepo)) {
-      showToast('Another operation is already running in this repository.', 'warning');
+      showToast(msg('Another operation is already running in this repository.'), 'warning');
       return;
     }
 
@@ -977,7 +990,7 @@ export class GnConflictResolutionDialog extends LitElement {
           const refetch = await gitService.getConflicts(this.repositoryPath);
           if (!refetch.success || !refetch.data) {
             showToast(
-              refetch.error?.message ?? 'Could not read conflicts — nothing was restored',
+              refetch.error?.message ?? msg('Could not read conflicts — nothing was restored'),
               'error',
             );
             this.aborting = false;
@@ -1012,10 +1025,10 @@ export class GnConflictResolutionDialog extends LitElement {
           if (result.success) {
             showToast(
               restoredCount === 0
-                ? 'Nothing needed restoring'
+                ? msg('Nothing needed restoring')
                 : this.stashSourceCertain
-                  ? 'Conflicted files restored — your changes remain in the stash'
-                  : 'Conflicted files restored to their committed (HEAD) state',
+                  ? msg('Conflicted files restored — your changes remain in the stash')
+                  : msg('Conflicted files restored to their committed (HEAD) state'),
               'info',
             );
           }
@@ -1028,7 +1041,9 @@ export class GnConflictResolutionDialog extends LitElement {
           // Only the in-progress develop merge was rolled back — the master
           // merge and version tag from this finish are already committed.
           showToast(
-            'The develop merge was aborted, but the master merge and version tag from this finish are already committed',
+            msg(
+              'The develop merge was aborted, but the master merge and version tag from this finish are already committed'
+            ),
             'warning',
           );
         } else {
@@ -1037,7 +1052,7 @@ export class GnConflictResolutionDialog extends LitElement {
           // confirmation, so the more deliberate of the two — said nothing at
           // all for merge/rebase/cherry-pick/revert. Only the stash arm above
           // and the gitflow arm spoke.
-          showToast(`Aborted ${this.getOperationTitle().toLowerCase()}`, 'success');
+          showToast(msg(str`Aborted ${this.getOperationAction()}`), 'success');
         }
         this.dispatchEvent(
           new CustomEvent('operation-aborted', {
@@ -1053,7 +1068,7 @@ export class GnConflictResolutionDialog extends LitElement {
         // without this the full-screen dialog is inescapable. Treat it as
         // concluded and close.
         showToast(
-          `This ${this.getOperationTitle().toLowerCase()} was already concluded outside the app`,
+          msg(str`This ${this.getOperationAction()} was already concluded outside the app`),
           'warning',
         );
         this.dispatchEvent(
@@ -1062,12 +1077,15 @@ export class GnConflictResolutionDialog extends LitElement {
         this.close();
       } else {
         console.error('Failed to abort:', result.error);
-        showToast(result.error?.message ?? `Failed to abort ${this.getOperationTitle()}`, 'error');
+        showToast(
+          result.error?.message ?? msg(str`Failed to abort ${this.getOperationTitle()}`),
+          'error',
+        );
         this.aborting = false; // Allow retry
       }
     } catch (err) {
       console.error('Failed to abort:', err);
-      showToast(`Failed to abort ${this.getOperationTitle()}`, 'error');
+      showToast(msg(str`Failed to abort ${this.getOperationTitle()}`), 'error');
       this.aborting = false; // Allow retry
     } finally {
       releaseRefOp(lockedRepo);
@@ -1103,7 +1121,7 @@ export class GnConflictResolutionDialog extends LitElement {
     // tree and must not run beside a discard or a reset.
     const lockedRepo = this.repositoryPath;
     if (!tryAcquireRefOp(lockedRepo)) {
-      showToast('Another operation is already running in this repository.', 'warning');
+      showToast(msg('Another operation is already running in this repository.'), 'warning');
       return;
     }
 
@@ -1118,9 +1136,10 @@ export class GnConflictResolutionDialog extends LitElement {
       // nothing to lose, so it stays a single click there.
       if (this.conflicts.length > 0 || this.resolvedFiles.size > 0) {
         const confirmed = await showConfirm(
-          `Skip ${this.getOperationTitle().toLowerCase()}?`,
-          `This commit will not be applied and the conflict resolutions for it are ` +
-            `discarded. Commits already applied stay, and the rest of the range continues.`,
+          msg(str`Skip ${this.getOperationAction()}?`),
+          msg(
+            'This commit will not be applied and the conflict resolutions for it are discarded. Commits already applied stay, and the rest of the range continues.'
+          ),
           'warning',
         );
         if (!confirmed) return;
@@ -1132,7 +1151,7 @@ export class GnConflictResolutionDialog extends LitElement {
           : await gitService.skipRevert({ path: this.repositoryPath });
 
       if (result.success) {
-        showToast(`Skipped ${this.getOperationTitle().toLowerCase()}`, 'success');
+        showToast(msg(str`Skipped ${this.getOperationAction()}`), 'success');
         this.dispatchEvent(
           new CustomEvent('operation-completed', { bubbles: true, composed: true })
         );
@@ -1155,12 +1174,12 @@ export class GnConflictResolutionDialog extends LitElement {
         }
       }
       showToast(
-        result.error?.message ?? `Failed to skip ${this.getOperationTitle().toLowerCase()}`,
+        result.error?.message ?? msg(str`Failed to skip ${this.getOperationAction()}`),
         'error',
       );
     } catch (err) {
       console.error('Failed to skip:', err);
-      showToast(`Failed to skip ${this.getOperationTitle().toLowerCase()}`, 'error');
+      showToast(msg(str`Failed to skip ${this.getOperationAction()}`), 'error');
     } finally {
       this.skipping = false;
       releaseRefOp(lockedRepo);
@@ -1195,8 +1214,8 @@ export class GnConflictResolutionDialog extends LitElement {
   private handleStashNotApplied(): void {
     showToast(
       this.stashSourceCertain
-        ? 'The stash was not applied — your changes are still in the stash'
-        : 'No conflicted files remain — nothing to resolve',
+        ? msg('The stash was not applied — your changes are still in the stash')
+        : msg('No conflicted files remain — nothing to resolve'),
       this.stashSourceCertain ? 'warning' : 'info',
     );
     this.dispatchEvent(
@@ -1239,7 +1258,7 @@ export class GnConflictResolutionDialog extends LitElement {
     // sidebar and graph control otherwise reads the lock as free.
     const lockedContinueRepo = this.repositoryPath;
     if (!tryAcquireRefOp(lockedContinueRepo)) {
-      showToast('Another operation is already running in this repository.', 'warning');
+      showToast(msg('Another operation is already running in this repository.'), 'warning');
       return;
     }
 
@@ -1253,8 +1272,10 @@ export class GnConflictResolutionDialog extends LitElement {
       const editor = this.shadowRoot?.querySelector('gn-merge-editor') as GnMergeEditor | null;
       if (editor?.hasUnsavedResolutions()) {
         const proceed = await showConfirm(
-          'Complete without the latest changes?',
-          'This file has picks or edits that were not saved with Mark Resolved — completing uses the last saved content and discards them.',
+          msg('Complete without the latest changes?'),
+          msg(
+            'This file has picks or edits that were not saved with Mark Resolved — completing uses the last saved content and discards them.'
+          ),
           'warning',
         );
         if (!proceed) return;
@@ -1282,7 +1303,7 @@ export class GnConflictResolutionDialog extends LitElement {
     // conflicted. Never proceed (or drop the stash) in that state — keep the
     // dialog open so the user can Retry.
     if (this.loadFailed) {
-      showToast('Could not load conflicts. Please retry.', 'error');
+      showToast(msg('Could not load conflicts. Please retry.'), 'error');
       return;
     }
 
@@ -1302,7 +1323,13 @@ export class GnConflictResolutionDialog extends LitElement {
 
     if (unresolvedCount > 0) {
       showToast(
-        `Please resolve all ${unresolvedCount} remaining conflict(s) before continuing.`,
+        unresolvedCount === 1
+          ? msg(
+              str`Please resolve all ${unresolvedCount} remaining conflict before continuing.`
+            )
+          : msg(
+              str`Please resolve all ${unresolvedCount} remaining conflicts before continuing.`
+            ),
         'warning'
       );
       return;
@@ -1329,7 +1356,7 @@ export class GnConflictResolutionDialog extends LitElement {
             // next Continue, exactly as the initial execute does.
             if (result.error?.code === 'REBASE_PAUSED') {
               showToast(
-                REBASE_PAUSED_MESSAGE,
+                rebasePausedMessage(),
                 'warning',
                 8000,
               );
@@ -1349,7 +1376,7 @@ export class GnConflictResolutionDialog extends LitElement {
             }
             // No new conflicts, but the operation genuinely failed — surface the
             // error and keep the dialog open instead of falsely reporting success.
-            showToast(result.error?.message ?? 'Failed to continue rebase', 'error');
+            showToast(result.error?.message ?? msg('Failed to continue rebase'), 'error');
             return;
           }
           completionSuffix = skippedCommitsSuffix(result.data);
@@ -1366,7 +1393,10 @@ export class GnConflictResolutionDialog extends LitElement {
                 return;
               }
             }
-            showToast(result.error?.message ?? 'Failed to continue cherry-pick', 'error');
+            showToast(
+              result.error?.message ?? msg('Failed to continue cherry-pick'),
+              'error',
+            );
             return;
           }
           break;
@@ -1382,7 +1412,7 @@ export class GnConflictResolutionDialog extends LitElement {
                 return;
               }
             }
-            showToast(result.error?.message ?? 'Failed to continue revert', 'error');
+            showToast(result.error?.message ?? msg('Failed to continue revert'), 'error');
             return;
           }
           break;
@@ -1405,7 +1435,7 @@ export class GnConflictResolutionDialog extends LitElement {
                   return;
                 }
               }
-              showToast(result.error?.message ?? 'Failed to complete merge', 'error');
+              showToast(result.error?.message ?? msg('Failed to complete merge'), 'error');
               return;
             }
             this.mergeCommitted = true;
@@ -1441,7 +1471,7 @@ export class GnConflictResolutionDialog extends LitElement {
             }
             if (dropIndex === null) {
               showToast(
-                'Could not verify the stash entry — it was left in the stash list',
+                msg('Could not verify the stash entry — it was left in the stash list'),
                 'warning',
               );
             }
@@ -1457,7 +1487,9 @@ export class GnConflictResolutionDialog extends LitElement {
                 // dead-end on an already-applied stash.
                 console.error('Failed to drop stash:', result.error);
                 showToast(
-                  `${result.error?.message ?? 'Failed to drop stash'} — it was left in the stash list`,
+                  msg(
+                    str`${result.error?.message ?? msg('Failed to drop stash')} — it was left in the stash list`
+                  ),
                   'warning',
                 );
               }
@@ -1472,7 +1504,10 @@ export class GnConflictResolutionDialog extends LitElement {
       // commit was created — the same gesture that, had it failed, produces a
       // red toast. (The paused-rebase branch above returns before this and
       // carries its own, different message.)
-      showToast(`${this.getOperationTitle()} completed${completionSuffix}`, 'success');
+      showToast(
+        msg(str`${this.getOperationTitle()} completed`) + completionSuffix,
+        'success'
+      );
       this.dispatchEvent(
         new CustomEvent('operation-completed', {
           bubbles: true,
@@ -1482,7 +1517,7 @@ export class GnConflictResolutionDialog extends LitElement {
       this.close();
     } catch (err) {
       console.error('Failed to continue:', err);
-      showToast('Failed to continue', 'error');
+      showToast(msg('Failed to continue'), 'error');
     }
   }
 
@@ -1510,7 +1545,9 @@ export class GnConflictResolutionDialog extends LitElement {
         // the finish — but an unrecorded squash makes a retry duplicate it, so
         // the user has to be told rather than finding out on the retry.
         showToast(
-          `${recorded.error?.message ?? 'Failed to record the completed squash'} — the squash commit landed; do not re-run the squash finish for "${ctx.name}"`,
+          msg(
+            str`${recorded.error?.message ?? msg('Failed to record the completed squash')} — the squash commit landed; do not re-run the squash finish for "${ctx.name}"`
+          ),
           'warning',
         );
       }
@@ -1522,7 +1559,9 @@ export class GnConflictResolutionDialog extends LitElement {
           // branch rule) as "finish incomplete" left the dialog stuck on a
           // fully-resolved conflict list with no way forward but closing it.
           showToast(
-            `${del.error?.message ?? 'Failed to delete feature branch'} — the squash commit landed`,
+            msg(
+              str`${del.error?.message ?? msg('Failed to delete feature branch')} — the squash commit landed`
+            ),
             'warning',
           );
         }
@@ -1589,7 +1628,10 @@ export class GnConflictResolutionDialog extends LitElement {
           return false;
         }
       }
-      showToast(result.error?.message ?? 'Failed to complete Git Flow finish', 'error');
+      showToast(
+        result.error?.message ?? msg('Failed to complete Git Flow finish'),
+        'error',
+      );
       return false;
     }
 
@@ -1616,17 +1658,42 @@ export class GnConflictResolutionDialog extends LitElement {
   private getOperationTitle(): string {
     switch (this.operationType) {
       case 'merge':
-        return 'Merge';
+        return msg('Merge');
       case 'rebase':
-        return 'Rebase';
+        return msg('Rebase');
       case 'cherry-pick':
-        return 'Cherry-pick';
+        return msg('Cherry-pick');
       case 'revert':
-        return 'Revert';
+        return msg('Revert');
       case 'stash':
-        return 'Stash';
+        return msg('Stash');
       default:
-        return 'Merge';
+        return msg('Merge');
+    }
+  }
+
+  /**
+   * The lower-case operation name used mid-sentence ("Aborted merge").
+   *
+   * A separate set of messages from `getOperationTitle()`: it used to be
+   * `.toLowerCase()` applied to the title, which mangles translated titles
+   * (German nouns, for one), so each grammatical position gets its own
+   * message the translator can inflect.
+   */
+  private getOperationAction(): string {
+    switch (this.operationType) {
+      case 'merge':
+        return msg('merge');
+      case 'rebase':
+        return msg('rebase');
+      case 'cherry-pick':
+        return msg('cherry-pick');
+      case 'revert':
+        return msg('revert');
+      case 'stash':
+        return msg('stash');
+      default:
+        return msg('merge');
     }
   }
 
@@ -1650,10 +1717,14 @@ export class GnConflictResolutionDialog extends LitElement {
         <div class="header">
           <div>
             <div class="header-title">
-              Resolve ${this.getOperationTitle()} Conflicts
+              ${msg(str`Resolve ${this.getOperationTitle()} Conflicts`)}
             </div>
             <div class="header-subtitle">
-              ${this.resolvedCount} of ${this.totalCount} file${this.totalCount === 1 ? '' : 's'} resolved${this.repositoryName ? ` · ${this.repositoryName}` : ''}
+              ${this.totalCount === 1
+                ? msg(str`${this.resolvedCount} of ${this.totalCount} file resolved`)
+                : msg(str`${this.resolvedCount} of ${this.totalCount} files resolved`)}${
+                this.repositoryName ? ` · ${this.repositoryName}` : ''
+              }
             </div>
           </div>
           <div class="header-actions">
@@ -1662,18 +1733,18 @@ export class GnConflictResolutionDialog extends LitElement {
                 class="nav-btn"
                 @click=${this.handlePrevious}
                 ?disabled=${this.selectedIndex === 0 || this.editorResolveDepth > 0}
-                title="Previous file (Alt+Up)"
+                title=${msg('Previous file (Alt+Up)')}
               >
-                ← Prev
+                ${msg('← Prev')}
               </button>
               <button
                 class="nav-btn"
                 @click=${this.handleNext}
                 ?disabled=${this.selectedIndex >= this.conflicts.length - 1 ||
                 this.editorResolveDepth > 0}
-                title="Next file (Alt+Down)"
+                title=${msg('Next file (Alt+Down)')}
               >
-                Next →
+                ${msg('Next →')}
               </button>
             </div>
           </div>
@@ -1682,15 +1753,17 @@ export class GnConflictResolutionDialog extends LitElement {
         <div class="content">
           <div class="file-list">
             <div class="file-list-header">
-              Conflicted Files (${this.totalCount})
+              ${msg(str`Conflicted Files (${this.totalCount})`)}
               ${this.detectedMergeTool ? html`
                 <div style="font-size: 10px; text-transform: none; letter-spacing: normal; font-weight: normal; margin-top: 4px; color: var(--color-text-muted);">
-                  ${this.detectedMergeTool} detected. Configure in Settings for external editing.
+                  ${msg(
+                    str`${this.detectedMergeTool} detected. Configure in Settings for external editing.`
+                  )}
                 </div>
               ` : nothing}
             </div>
             ${this.loading
-              ? html`<div class="loading">Loading...</div>`
+              ? html`<div class="loading">${msg('Loading...')}</div>`
               : this.conflicts.map(
                   (conflict, index) => html`
                     <div
@@ -1719,9 +1792,11 @@ export class GnConflictResolutionDialog extends LitElement {
                           this.skipping ||
                           this.editorToolActive ||
                           this.editorResolveDepth > 0}
-                          title="Open in external merge tool"
+                          title=${msg('Open in external merge tool')}
                         >
-                          ${this.launchingExternalTool === conflict.path ? '...' : 'External'}
+                          ${this.launchingExternalTool === conflict.path
+                            ? '...'
+                            : msg('External')}
                         </button>
                       ` : nothing}
                     </div>
@@ -1754,21 +1829,21 @@ export class GnConflictResolutionDialog extends LitElement {
               : html`
                   <div class="empty-state">
                     ${this.loading
-                      ? 'Loading conflicts...'
+                      ? msg('Loading conflicts...')
                       : this.loadFailed
                         ? html`
-                            <div>Failed to load conflicts.</div>
+                            <div>${msg('Failed to load conflicts.')}</div>
                             <button
                               class="btn btn-primary"
                               style="margin-top: var(--spacing-md);"
                               @click=${this.handleRetryLoad}
                             >
-                              Retry
+                              ${msg('Retry')}
                             </button>
                           `
                         : this.conflicts.length === 0
-                          ? 'No conflicts to resolve'
-                          : 'Select a file to resolve'}
+                          ? msg('No conflicts to resolve')
+                          : msg('Select a file to resolve')}
                   </div>
                 `}
           </div>
@@ -1778,7 +1853,7 @@ export class GnConflictResolutionDialog extends LitElement {
           <div class="footer-info">
             ${this.selectedConflict
               ? html`<strong>${this.selectedConflict.path}</strong>`
-              : 'No file selected'}
+              : msg('No file selected')}
           </div>
           <div class="footer-actions">
             <button
@@ -1792,7 +1867,7 @@ export class GnConflictResolutionDialog extends LitElement {
                 this.editorResolveDepth > 0 ||
                 this.showAbortConfirm}
             >
-              Abort ${this.getOperationTitle()}
+              ${msg(str`Abort ${this.getOperationTitle()}`)}
             </button>
             ${this.operationType === 'cherry-pick' || this.operationType === 'revert'
               ? html`
@@ -1806,9 +1881,11 @@ export class GnConflictResolutionDialog extends LitElement {
                       this.editorToolActive ||
                       this.editorResolveDepth > 0 ||
                       this.showAbortConfirm}
-                    title="Do not apply this commit; keep the picks already applied and continue with the rest"
+                    title=${msg(
+                      'Do not apply this commit; keep the picks already applied and continue with the rest'
+                    )}
                   >
-                    Skip ${this.getOperationTitle()}
+                    ${msg(str`Skip ${this.getOperationTitle()}`)}
                   </button>
                 `
               : nothing}
@@ -1829,10 +1906,10 @@ export class GnConflictResolutionDialog extends LitElement {
                 (this.operationType === 'stash' && this.conflicts.length === 0)}
             >
               ${this.operationType === 'merge'
-                ? 'Complete Merge'
+                ? msg('Complete Merge')
                 : this.operationType === 'stash'
-                  ? 'Complete'
-                  : `Continue ${this.getOperationTitle()}`}
+                  ? msg('Complete')
+                  : msg(str`Continue ${this.getOperationTitle()}`)}
             </button>
           </div>
         </div>
@@ -1841,18 +1918,24 @@ export class GnConflictResolutionDialog extends LitElement {
           ? html`
               <div class="confirm-overlay">
                 <div class="confirm-dialog">
-                  <div class="confirm-title">Abort ${this.getOperationTitle()}?</div>
+                  <div class="confirm-title">${msg(
+                    str`Abort ${this.getOperationTitle()}?`
+                  )}</div>
                   <div class="confirm-message">
                     ${this.operationType === 'stash'
                       ? this.stashSourceCertain
-                        ? 'The conflicted files will be reverted to their committed (HEAD) state, discarding the applied stash changes in those files. Any unrelated uncommitted changes are kept, and the stash entry itself remains in the stash list.'
-                        : 'The conflicted files will be reverted to their committed (HEAD) state, discarding those changes. If they did not come from a stash apply, they are not saved anywhere else — this cannot be undone.'
-                      : 'All resolved changes will be lost. This cannot be undone.'}
+                        ? msg(
+                            'The conflicted files will be reverted to their committed (HEAD) state, discarding the applied stash changes in those files. Any unrelated uncommitted changes are kept, and the stash entry itself remains in the stash list.'
+                          )
+                        : msg(
+                            'The conflicted files will be reverted to their committed (HEAD) state, discarding those changes. If they did not come from a stash apply, they are not saved anywhere else — this cannot be undone.'
+                          )
+                      : msg('All resolved changes will be lost. This cannot be undone.')}
                   </div>
                   <div class="confirm-actions">
-                    <button class="btn" @click=${this.handleAbortCancel}>Cancel</button>
+                    <button class="btn" @click=${this.handleAbortCancel}>${msg('Cancel')}</button>
                     <button class="btn btn-danger" @click=${this.handleAbortConfirm}>
-                      Abort
+                      ${msg('Abort')}
                     </button>
                   </div>
                 </div>

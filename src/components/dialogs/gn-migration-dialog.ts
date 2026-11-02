@@ -5,6 +5,7 @@
 
 import { LitElement, html, css, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
+import { localized, msg, str } from '@lit/localize';
 import { sharedStyles } from '../../styles/shared-styles.ts';
 import * as unifiedProfileService from '../../services/unified-profile.service.ts';
 import { unifiedProfileStore } from '../../stores/unified-profile.store.ts';
@@ -21,6 +22,7 @@ import { pushOverlay, removeOverlay, isTopOverlay } from '../../utils/overlay-st
 type ViewMode = 'intro' | 'preview' | 'migrating' | 'complete';
 
 @customElement('gn-migration-dialog')
+@localized()
 export class GnMigrationDialog extends LitElement {
   static styles = [
     sharedStyles,
@@ -511,10 +513,8 @@ export class GnMigrationDialog extends LitElement {
 
       this.viewMode = 'preview';
     } catch (error) {
-      showToast(
-        `Failed to load migration preview: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        'error'
-      );
+      const reason = error instanceof Error ? error.message : msg('Unknown error');
+      showToast(msg(str`Failed to load migration preview: ${reason}`), 'error');
     } finally {
       this.isLoading = false;
     }
@@ -533,13 +533,11 @@ export class GnMigrationDialog extends LitElement {
 
       if (result.success) {
         unifiedProfileStore.getState().setNeedsMigration(false);
-        showToast('Migration completed successfully', 'success');
+        showToast(msg('Migration completed successfully'), 'success');
       }
     } catch (error) {
-      showToast(
-        `Migration failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        'error'
-      );
+      const reason = error instanceof Error ? error.message : msg('Unknown error');
+      showToast(msg(str`Migration failed: ${reason}`), 'error');
       this.viewMode = 'preview'; // Go back to preview on error
     } finally {
       unifiedProfileStore.getState().setMigrating(false);
@@ -598,13 +596,13 @@ export class GnMigrationDialog extends LitElement {
   private getTitle(): string {
     switch (this.viewMode) {
       case 'intro':
-        return 'Upgrade to Unified Profiles';
+        return msg('Upgrade to Unified Profiles');
       case 'preview':
-        return 'Review Migration';
+        return msg('Review Migration');
       case 'migrating':
-        return 'Migrating...';
+        return msg('Migrating...');
       case 'complete':
-        return 'Migration Complete';
+        return msg('Migration Complete');
     }
   }
 
@@ -629,10 +627,11 @@ export class GnMigrationDialog extends LitElement {
           <circle cx="12" cy="7" r="4"></circle>
           <path d="M16 11l2 2 4-4"></path>
         </svg>
-        <div class="intro-title">Unified Profiles Are Here!</div>
+        <div class="intro-title">${msg('Unified Profiles Are Here!')}</div>
         <div class="intro-description">
-          We've improved how profiles and integration accounts work together.
-          Now, switching profiles automatically switches your platform accounts too.
+          ${msg(
+            "We've improved how profiles and integration accounts work together. Now, switching profiles automatically switches your platform accounts too."
+          )}
         </div>
 
         <div class="feature-list">
@@ -640,19 +639,19 @@ export class GnMigrationDialog extends LitElement {
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="20 6 9 17 4 12"></polyline>
             </svg>
-            <span><strong>One switch, everything changes</strong> - Profile includes identity AND platform accounts</span>
+            <span><strong>${msg('One switch, everything changes')}</strong> ${msg('- Profile includes identity AND platform accounts')}</span>
           </div>
           <div class="feature-item">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="20 6 9 17 4 12"></polyline>
             </svg>
-            <span><strong>Multiple accounts per platform</strong> - Add several GitHub accounts to one profile</span>
+            <span><strong>${msg('Multiple accounts per platform')}</strong> ${msg('- Add several GitHub accounts to one profile')}</span>
           </div>
           <div class="feature-item">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="20 6 9 17 4 12"></polyline>
             </svg>
-            <span><strong>Smarter context</strong> - Integration dialogs only show relevant accounts</span>
+            <span><strong>${msg('Smarter context')}</strong> ${msg('- Integration dialogs only show relevant accounts')}</span>
           </div>
         </div>
       </div>
@@ -664,13 +663,13 @@ export class GnMigrationDialog extends LitElement {
       return html`
         <div class="migrating-content">
           <div class="spinner"></div>
-          <div>Loading preview...</div>
+          <div>${msg('Loading preview...')}</div>
         </div>
       `;
     }
 
     if (!this.preview) {
-      return html`<div class="empty-preview">No migration data available</div>`;
+      return html`<div class="empty-preview">${msg('No migration data available')}</div>`;
     }
 
     const { profiles, unmatchedAccounts } = this.preview;
@@ -678,16 +677,16 @@ export class GnMigrationDialog extends LitElement {
     if (profiles.length === 0 && unmatchedAccounts.length === 0) {
       return html`
         <div class="empty-preview">
-          <p>No profiles or accounts to migrate.</p>
+          <p>${msg('No profiles or accounts to migrate.')}</p>
           <p style="font-size: var(--font-size-sm); margin-top: var(--spacing-sm);">
-            You can create profiles from the profile manager first, then come back here.
+            ${msg('You can create profiles from the profile manager first, then come back here.')}
           </p>
           <div style="margin-top: var(--spacing-md); display: flex; gap: var(--spacing-sm); justify-content: center;">
             <button class="btn" @click=${this.handleOpenProfileManager}>
-              Open Profile Manager
+              ${msg('Open Profile Manager')}
             </button>
             <button class="btn" @click=${this.loadPreview}>
-              Refresh
+              ${msg('Refresh')}
             </button>
           </div>
         </div>
@@ -701,16 +700,16 @@ export class GnMigrationDialog extends LitElement {
             <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
             <circle cx="12" cy="7" r="4"></circle>
           </svg>
-          Your Profiles
+          ${msg('Your Profiles')}
         </div>
         <div class="section-description">
-          Each profile will include its matched integration accounts.
+          ${msg('Each profile will include its matched integration accounts.')}
         </div>
 
         ${profiles.map((profile) => this.renderProfilePreview(profile))}
 
         ${profiles.length === 0
-          ? html`<div class="empty-preview" style="padding: var(--spacing-md);">No existing profiles found</div>`
+          ? html`<div class="empty-preview" style="padding: var(--spacing-md);">${msg('No existing profiles found')}</div>`
           : nothing}
       </div>
 
@@ -724,27 +723,29 @@ export class GnMigrationDialog extends LitElement {
                     <line x1="12" y1="8" x2="12" y2="12"></line>
                     <line x1="12" y1="16" x2="12.01" y2="16"></line>
                   </svg>
-                  Accounts Needing Assignment
+                  ${msg('Accounts Needing Assignment')}
                 </div>
                 ${profiles.length === 0
                   ? html`
                       <div class="section-description" style="color: var(--color-text-secondary); margin-bottom: var(--spacing-sm);">
-                        These accounts will be migrated as shared global accounts. Create a
-                        profile afterwards to set a default.
+                        ${msg(
+                          'These accounts will be migrated as shared global accounts. Create a profile afterwards to set a default.'
+                        )}
                       </div>
                       ${unmatchedAccounts.map((account) =>
                         this.renderUnmatchedAccount(account, profiles)
                       )}
                       <div style="margin-top: var(--spacing-sm);">
                         <button class="btn" @click=${this.handleOpenProfileManager}>
-                          Open Profile Manager
+                          ${msg('Open Profile Manager')}
                         </button>
                       </div>
                     `
                   : html`
                       <div class="section-description" style="color: var(--color-text-secondary); margin-bottom: var(--spacing-sm);">
-                        These accounts couldn't be auto-matched. Choose which profile each should
-                        belong to.
+                        ${msg(
+                          "These accounts couldn't be auto-matched. Choose which profile each should belong to."
+                        )}
                       </div>
                       ${unmatchedAccounts.map((account) =>
                         this.renderUnmatchedAccount(account, profiles)
@@ -768,7 +769,7 @@ export class GnMigrationDialog extends LitElement {
           </div>
         </div>
         <div class="matched-accounts">
-          <div class="matched-accounts-title">Matched Accounts</div>
+          <div class="matched-accounts-title">${msg('Matched Accounts')}</div>
           ${profile.matchedAccounts.length > 0
             ? profile.matchedAccounts.map(
                 (account) => html`
@@ -778,7 +779,7 @@ export class GnMigrationDialog extends LitElement {
                   </span>
                 `
               )
-            : html`<div class="no-accounts">No accounts matched to this profile</div>`}
+            : html`<div class="no-accounts">${msg('No accounts matched to this profile')}</div>`}
         </div>
       </div>
     `;
@@ -798,7 +799,7 @@ export class GnMigrationDialog extends LitElement {
           </div>
         </div>
         ${profiles.length === 0
-          ? html`<span class="account-tag">Shared global account</span>`
+          ? html`<span class="account-tag">${msg('Shared global account')}</span>`
           : html`
               <select
                 class="profile-select"
@@ -826,9 +827,9 @@ export class GnMigrationDialog extends LitElement {
     return html`
       <div class="migrating-content">
         <div class="spinner"></div>
-        <div class="intro-title">Migrating Your Data</div>
+        <div class="intro-title">${msg('Migrating Your Data')}</div>
         <div class="intro-description">
-          Please wait while we upgrade your profiles and accounts...
+          ${msg('Please wait while we upgrade your profiles and accounts...')}
         </div>
       </div>
     `;
@@ -850,10 +851,11 @@ export class GnMigrationDialog extends LitElement {
           <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
           <polyline points="22 4 12 14.01 9 11.01"></polyline>
         </svg>
-        <div class="intro-title">All Done!</div>
+        <div class="intro-title">${msg('All Done!')}</div>
         <div class="intro-description">
-          Your profiles and accounts have been unified. You can now manage everything
-          from the profile manager.
+          ${msg(
+            'Your profiles and accounts have been unified. You can now manage everything from the profile manager.'
+          )}
         </div>
 
         ${result
@@ -861,11 +863,11 @@ export class GnMigrationDialog extends LitElement {
               <div class="stats">
                 <div class="stat">
                   <div class="stat-value">${result.profilesMigrated}</div>
-                  <div class="stat-label">Profiles</div>
+                  <div class="stat-label">${msg('Profiles')}</div>
                 </div>
                 <div class="stat">
                   <div class="stat-value">${result.accountsMigrated}</div>
-                  <div class="stat-label">Accounts</div>
+                  <div class="stat-label">${msg('Accounts')}</div>
                 </div>
               </div>
             `
@@ -875,6 +877,23 @@ export class GnMigrationDialog extends LitElement {
   }
 
   private renderCompleteWithErrors(result: UnifiedMigrationResult) {
+    // Each count gets its own two full messages: a suffix hack like
+    // `profile${n === 1 ? '' : 's'}` cannot be translated, and neither can a
+    // noun phrase built by concatenation. The outer sentence then takes the
+    // pluralised phrases as values.
+    const profiles =
+      result.profilesMigrated === 1
+        ? msg(str`${result.profilesMigrated} profile`)
+        : msg(str`${result.profilesMigrated} profiles`);
+    const accounts =
+      result.accountsMigrated === 1
+        ? msg(str`${result.accountsMigrated} account`)
+        : msg(str`${result.accountsMigrated} accounts`);
+    const skipped =
+      result.errors.length === 1
+        ? msg(str`${result.errors.length} item could not be migrated and was skipped`)
+        : msg(str`${result.errors.length} items could not be migrated and were skipped`);
+
     return html`
       <div class="complete-content">
         <svg class="warning-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -882,18 +901,13 @@ export class GnMigrationDialog extends LitElement {
           <line x1="12" y1="9" x2="12" y2="13"></line>
           <line x1="12" y1="17" x2="12.01" y2="17"></line>
         </svg>
-        <div class="intro-title">Migration Completed With Issues</div>
+        <div class="intro-title">${msg('Migration Completed With Issues')}</div>
         <div class="intro-description">
-          We migrated ${result.profilesMigrated}
-          ${result.profilesMigrated === 1 ? 'profile' : 'profiles'} and
-          ${result.accountsMigrated}
-          ${result.accountsMigrated === 1 ? 'account' : 'accounts'}, but
-          ${result.errors.length} ${result.errors.length === 1 ? 'item' : 'items'}
-          could not be migrated and ${result.errors.length === 1 ? 'was' : 'were'} skipped.
+          ${msg(str`We migrated ${profiles} and ${accounts}, but ${skipped}.`)}
         </div>
 
         <div class="error-section">
-          <div class="error-section-title">Skipped items</div>
+          <div class="error-section-title">${msg('Skipped items')}</div>
           <ul class="error-list">
             ${result.errors.map((err) => html`<li class="error-item">${err}</li>`)}
           </ul>
@@ -906,19 +920,19 @@ export class GnMigrationDialog extends LitElement {
     switch (this.viewMode) {
       case 'intro':
         return html`
-          <button class="btn btn-text" @click=${this.handleSkip}>Skip for now</button>
+          <button class="btn btn-text" @click=${this.handleSkip}>${msg('Skip for now')}</button>
           <div class="footer-right">
             <button class="btn btn-primary" @click=${this.handleContinue} ?disabled=${this.isLoading}>
-              ${this.isLoading ? 'Loading...' : 'Continue'}
+              ${this.isLoading ? msg('Loading...') : msg('Continue')}
             </button>
           </div>
         `;
       case 'preview':
         return html`
-          <button class="btn btn-text" @click=${this.handleSkip}>Cancel</button>
+          <button class="btn btn-text" @click=${this.handleSkip}>${msg('Cancel')}</button>
           <div class="footer-right">
             <button class="btn btn-primary" @click=${this.handleContinue}>
-              Start Migration
+              ${msg('Start Migration')}
             </button>
           </div>
         `;
@@ -926,7 +940,7 @@ export class GnMigrationDialog extends LitElement {
         return html`
           <div></div>
           <div class="footer-right">
-            <button class="btn btn-primary" disabled>Migrating...</button>
+            <button class="btn btn-primary" disabled>${msg('Migrating...')}</button>
           </div>
         `;
       case 'complete': {
@@ -937,11 +951,11 @@ export class GnMigrationDialog extends LitElement {
             ${hadErrors
               ? html`
                   <button class="btn" @click=${this.handleOpenProfileManager}>
-                    Review in Profile Manager
+                    ${msg('Review in Profile Manager')}
                   </button>
                 `
               : nothing}
-            <button class="btn btn-primary" @click=${this.handleContinue}>Done</button>
+            <button class="btn btn-primary" @click=${this.handleContinue}>${msg('Done')}</button>
           </div>
         `;
       }

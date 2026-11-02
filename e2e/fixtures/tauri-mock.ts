@@ -737,6 +737,18 @@ function createMockHandler(mocks: typeof defaultMockData) {
 }
 
 /**
+ * How `setupTauriMocks` prepares the page beyond the IPC mocks.
+ */
+export interface SetupTauriMocksOptions {
+  /**
+   * Persist an English language choice before the app boots. Defaults to true
+   * so the existing specs keep asserting the English source strings; pass
+   * `false` to exercise a genuinely fresh install (which opens in 中文).
+   */
+  seedLanguage?: boolean;
+}
+
+/**
  * Setup Tauri mocks on a Playwright page
  *
  * @param page - Playwright page instance
@@ -744,9 +756,25 @@ function createMockHandler(mocks: typeof defaultMockData) {
  */
 export async function setupTauriMocks(
   page: Page,
-  customMocks?: Partial<typeof defaultMockData>
+  customMocks?: Partial<typeof defaultMockData>,
+  options: SetupTauriMocksOptions = {}
 ): Promise<void> {
   const mocks = { ...defaultMockData, ...customMocks };
+
+  if (options.seedLanguage !== false) {
+    // The app now opens a fresh install in Chinese (see settings.store.ts), but
+    // these specs assert the English source strings. Seed an explicit English
+    // choice — only when nothing is stored, so a reload keeps whatever the test
+    // switched to.
+    await page.addInitScript(() => {
+      if (!localStorage.getItem('gitnado-settings')) {
+        localStorage.setItem(
+          'gitnado-settings',
+          JSON.stringify({ state: { language: 'en' }, version: 8 })
+        );
+      }
+    });
+  }
 
   // Inject the mock before any page scripts run
   await page.addInitScript(
@@ -1521,10 +1549,11 @@ export async function initializeRepositoryStore(
  */
 export async function setupOpenRepository(
   page: Page,
-  customMocks?: Partial<typeof defaultMockData>
+  customMocks?: Partial<typeof defaultMockData>,
+  options: SetupTauriMocksOptions = {}
 ): Promise<void> {
   // First set up Tauri IPC mocks
-  await setupTauriMocks(page, customMocks);
+  await setupTauriMocks(page, customMocks, options);
 
   // Navigate to the app
   await page.goto('/');

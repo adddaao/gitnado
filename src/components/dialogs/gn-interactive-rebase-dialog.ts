@@ -6,6 +6,7 @@
 
 import { LitElement, html, css, nothing } from 'lit';
 import { customElement, state, property, query } from 'lit/decorators.js';
+import { localized, msg, str } from '@lit/localize';
 import { sharedStyles } from '../../styles/shared-styles.ts';
 import * as gitService from '../../services/git.service.ts';
 import { showToast } from '../../services/notification.service.ts';
@@ -17,7 +18,7 @@ import {
   releaseRefOp,
   RefLockController,
 } from '../../utils/ref-lock.ts';
-import { REBASE_PAUSED_MESSAGE } from '../../utils/rebase-messages.ts';
+import { rebasePausedMessage } from '../../utils/rebase-messages.ts';
 
 interface EditableRebaseCommit extends RebaseCommit {
   action: RebaseAction;
@@ -35,6 +36,7 @@ interface PreviewCommit {
 }
 
 @customElement('gn-interactive-rebase-dialog')
+@localized()
 export class GnInteractiveRebaseDialog extends LitElement {
   static styles = [
     sharedStyles,
@@ -576,9 +578,9 @@ export class GnInteractiveRebaseDialog extends LitElement {
       // instead: say so, and keep Start Rebase disabled.
       if (!this.commits.some((c) => c.oid === options.rewordCommitOid)) {
         this.rewordRefused = true;
-        this.warning =
-          'This commit is not part of the rebase plan, so its message cannot be ' +
-          'rewritten here. Merge commits cannot be reworded by rebase.';
+        this.warning = msg(
+          'This commit is not part of the rebase plan, so its message cannot be rewritten here. Merge commits cannot be reworded by rebase.',
+        );
         return;
       }
 
@@ -590,12 +592,13 @@ export class GnInteractiveRebaseDialog extends LitElement {
       if (this.mergeCountInRange > 0) {
         this.rewordRefused = true;
         this.warning =
-          `This commit cannot be reworded here: the range contains ` +
-          `${this.mergeCountInRange} merge ` +
-          `${this.mergeCountInRange === 1 ? 'commit' : 'commits'}, and rebasing ` +
-          `would flatten ${this.mergeCountInRange === 1 ? 'it' : 'them'} and ` +
-          `rewrite the merged-in commits. Reword it from an interactive rebase ` +
-          `you start deliberately instead.`;
+          this.mergeCountInRange === 1
+            ? msg(
+                str`This commit cannot be reworded here: the range contains ${this.mergeCountInRange} merge commit, and rebasing would flatten it and rewrite the merged-in commits. Reword it from an interactive rebase you start deliberately instead.`,
+              )
+            : msg(
+                str`This commit cannot be reworded here: the range contains ${this.mergeCountInRange} merge commits, and rebasing would flatten them and rewrite the merged-in commits. Reword it from an interactive rebase you start deliberately instead.`,
+              );
         return;
       }
       this.commits = this.commits.map((c) =>
@@ -658,10 +661,10 @@ export class GnInteractiveRebaseDialog extends LitElement {
         // flattens the topology and rewrites the merged-in side commits.
         this.mergeCountInRange = result.data?.mergeCount ?? 0;
       } else {
-        this.error = result.error?.message ?? 'Failed to load commits';
+        this.error = result.error?.message ?? msg('Failed to load commits');
       }
     } catch (err) {
-      this.error = err instanceof Error ? err.message : 'Unknown error occurred';
+      this.error = err instanceof Error ? err.message : msg('Unknown error occurred');
     } finally {
       this.loading = false;
     }
@@ -720,9 +723,12 @@ export class GnInteractiveRebaseDialog extends LitElement {
     // Show warning if some commits couldn't find their targets
     if (unmatchedCommits.length > 0) {
       const commitList = unmatchedCommits.join(', ');
-      this.warning = unmatchedCommits.length === 1
-        ? `Commit ${commitList} couldn't find its target and was kept as pick.`
-        : `Commits ${commitList} couldn't find their targets and were kept as picks.`;
+      this.warning =
+        unmatchedCommits.length === 1
+          ? msg(str`Commit ${commitList} couldn't find its target and was kept as pick.`)
+          : msg(
+              str`Commits ${commitList} couldn't find their targets and were kept as picks.`,
+            );
     } else {
       this.warning = '';
     }
@@ -753,7 +759,7 @@ export class GnInteractiveRebaseDialog extends LitElement {
           shortId: commit.shortId,
           summary: commit.summary,
           isSquashed: false,
-          error: `Cannot ${commit.action}: no previous commit to combine with`,
+          error: msg(str`Cannot ${commit.action}: no previous commit to combine with`),
         });
         i++;
         continue;
@@ -786,7 +792,7 @@ export class GnInteractiveRebaseDialog extends LitElement {
       let summary = commit.summary;
       if (commit.action === 'reword' && commit.newMessage !== undefined) {
         const firstLine = commit.newMessage.split('\n')[0].trim();
-        summary = firstLine || '(empty message)';
+        summary = firstLine || msg('(empty message)');
       }
 
       preview.push({
@@ -923,7 +929,7 @@ export class GnInteractiveRebaseDialog extends LitElement {
     // against the tree this rebase is rewriting.
     const lockedRepo = this.pinnedRepoPath ?? this.repositoryPath;
     if (!tryAcquireRefOp(lockedRepo)) {
-      this.error = 'Another operation is already running in this repository.';
+      this.error = msg('Another operation is already running in this repository.');
       return;
     }
 
@@ -974,7 +980,7 @@ export class GnInteractiveRebaseDialog extends LitElement {
         // Every plain-rebase route toasts this. The interactive one — the most
         // consequential of the four, since it rewrites history wholesale — was
         // the only one that closed without a word.
-        showToast(`Rebased onto ${this.onto}`, 'success');
+        showToast(msg(str`Rebased onto ${this.onto}`), 'success');
         this.dispatchEvent(new CustomEvent('rebase-complete', {
           // Same pinning as the conflict sibling below: the refresh must
           // target the repo the rebase ran on, not whichever tab is active
@@ -996,7 +1002,7 @@ export class GnInteractiveRebaseDialog extends LitElement {
             // "Continue" — so following the old text literally left Abort as
             // the most obvious button, which discards the rebase this message
             // exists to protect.
-            REBASE_PAUSED_MESSAGE,
+            rebasePausedMessage(),
             'warning',
             8000,
           );
@@ -1009,13 +1015,13 @@ export class GnInteractiveRebaseDialog extends LitElement {
             composed: true,
             detail: { operationType: 'rebase', repositoryPath: repoPath },
           }));
-          showToast('Rebase paused — resolve conflicts to continue', 'warning');
+          showToast(msg('Rebase paused — resolve conflicts to continue'), 'warning');
         } else {
-          this.error = result.error?.message ?? 'Failed to execute rebase';
+          this.error = result.error?.message ?? msg('Failed to execute rebase');
         }
       }
     } catch (err) {
-      this.error = err instanceof Error ? err.message : 'Unknown error occurred';
+      this.error = err instanceof Error ? err.message : msg('Unknown error occurred');
     } finally {
       this.executing = false;
       releaseRefOp(lockedRepo);
@@ -1091,8 +1097,8 @@ export class GnInteractiveRebaseDialog extends LitElement {
             <textarea
               class="reword-input"
               rows="2"
-              placeholder="Enter new commit message..."
-              aria-label="New commit message for ${commit.shortId}"
+              placeholder=${msg('Enter new commit message...')}
+              aria-label=${msg(str`New commit message for ${commit.shortId}`)}
               .value=${commit.newMessage ?? this.fullMessage(commit)}
               @input=${(e: Event) => this.handleRewordChange(index, e)}
               ?disabled=${this.executing}
@@ -1124,7 +1130,7 @@ export class GnInteractiveRebaseDialog extends LitElement {
     const preview = this.generatePreview();
 
     if (preview.length === 0) {
-      return html`<div class="preview-empty">All commits will be dropped</div>`;
+      return html`<div class="preview-empty">${msg('All commits will be dropped')}</div>`;
     }
 
     return html`
@@ -1135,10 +1141,12 @@ export class GnInteractiveRebaseDialog extends LitElement {
             ${commit.error ? commit.error : commit.summary}
           </span>
           ${commit.squashedFrom ? html`
-            <span class="squash-badge">+${commit.squashedFrom.length} squashed</span>
+            <span class="squash-badge">
+              ${msg(str`+${commit.squashedFrom.length} squashed`)}
+            </span>
           ` : nothing}
           ${commit.error ? html`
-            <span class="error-badge">Error</span>
+            <span class="error-badge">${msg('Error')}</span>
           ` : nothing}
         </div>
       `)}
@@ -1150,16 +1158,18 @@ export class GnInteractiveRebaseDialog extends LitElement {
 
     return html`
       <gn-modal
-        modalTitle="Interactive Rebase"
+        modalTitle=${msg('Interactive Rebase')}
         @close=${this.handleModalClose}
       >
         <div class="form">
           <div class="header-row">
             <div class="header-info">
-              Rebasing current branch onto <strong>${this.onto}</strong>
+              ${msg(html`Rebasing current branch onto <strong>${this.onto}</strong>`)}
               ${this.commits.length > 0 ? html`
                 <span class="commit-count">
-                  (${this.commits.length} commit${this.commits.length !== 1 ? 's' : ''})
+                  ${this.commits.length === 1
+                    ? msg(str`(${this.commits.length} commit)`)
+                    : msg(str`(${this.commits.length} commits)`)}
                 </span>
               ` : nothing}
             </div>
@@ -1167,33 +1177,35 @@ export class GnInteractiveRebaseDialog extends LitElement {
               <button
                 class="btn-small ${this.showPreview ? 'active' : ''}"
                 @click=${this.togglePreview}
-                title="Toggle preview panel"
+                title=${msg('Toggle preview panel')}
               >
-                Preview
+                ${msg('Preview')}
               </button>
             </div>
           </div>
 
           ${this.canApplyAutosquash ? html`
             <div class="autosquash-banner">
-              <span>Found commits with <code>fixup!</code> or <code>squash!</code> prefixes</span>
+              <span>${msg(
+                html`Found commits with <code>fixup!</code> or <code>squash!</code> prefixes`,
+              )}</span>
               <button
                 @click=${this.applyAutosquash}
-                aria-label="Automatically reorder and mark fixup! and squash! commits"
+                aria-label=${msg('Automatically reorder and mark fixup! and squash! commits')}
               >
-                Apply Autosquash
+                ${msg('Apply Autosquash')}
               </button>
             </div>
           ` : nothing}
 
           ${this.loading ? html`
-            <div class="loading">Loading commits...</div>
+            <div class="loading">${msg('Loading commits...')}</div>
           ` : this.commits.length === 0 ? html`
-            <div class="empty">No commits to rebase</div>
+            <div class="empty">${msg('No commits to rebase')}</div>
           ` : html`
             <div class="main-content ${!this.showPreview ? 'preview-hidden' : ''}">
               <div class="editor-section">
-                <div class="section-title">Rebase Plan</div>
+                <div class="section-title">${msg('Rebase Plan')}</div>
                 <div class="commits-list">
                   ${this.commits.map((commit, index) => this.renderCommitRow(commit, index))}
                 </div>
@@ -1201,7 +1213,7 @@ export class GnInteractiveRebaseDialog extends LitElement {
 
               ${this.showPreview ? html`
                 <div class="preview-section">
-                  <div class="section-title">Preview Result</div>
+                  <div class="section-title">${msg('Preview Result')}</div>
                   <div class="preview-list">
                     ${this.renderPreview()}
                   </div>
@@ -1211,24 +1223,24 @@ export class GnInteractiveRebaseDialog extends LitElement {
 
             <div class="stats-row">
               <div class="stat">
-                <span>Resulting:</span>
+                <span>${msg('Resulting:')}</span>
                 <span class="stat-value">${stats.kept}</span>
               </div>
               ${stats.squashed > 0 ? html`
                 <div class="stat">
-                  <span>Squashed:</span>
+                  <span>${msg('Squashed:')}</span>
                   <span class="stat-value">${stats.squashed}</span>
                 </div>
               ` : nothing}
               ${stats.dropped > 0 ? html`
                 <div class="stat">
-                  <span>Dropped:</span>
+                  <span>${msg('Dropped:')}</span>
                   <span class="stat-value">${stats.dropped}</span>
                 </div>
               ` : nothing}
               ${stats.reworded > 0 ? html`
                 <div class="stat">
-                  <span>Reworded:</span>
+                  <span>${msg('Reworded:')}</span>
                   <span class="stat-value">${stats.reworded}</span>
                 </div>
               ` : nothing}
@@ -1238,27 +1250,31 @@ export class GnInteractiveRebaseDialog extends LitElement {
           <div class="help-section">
             <div class="help-text">
               <ul>
-                <li><strong>pick</strong> - use commit as-is</li>
-                <li><strong>reword</strong> - use commit, but edit message</li>
-                <li><strong>edit</strong> - pause to amend commit</li>
-                <li><strong>squash</strong> - meld into previous commit</li>
-                <li><strong>fixup</strong> - like squash, but discard message</li>
-                <li><strong>drop</strong> - remove commit</li>
+                <li>${msg(html`<strong>pick</strong> - use commit as-is`)}</li>
+                <li>${msg(html`<strong>reword</strong> - use commit, but edit message`)}</li>
+                <li>${msg(html`<strong>edit</strong> - pause to amend commit`)}</li>
+                <li>${msg(html`<strong>squash</strong> - meld into previous commit`)}</li>
+                <li>${msg(html`<strong>fixup</strong> - like squash, but discard message`)}</li>
+                <li>${msg(html`<strong>drop</strong> - remove commit`)}</li>
               </ul>
             </div>
             <div class="keyboard-hints">
-              <div>Drag rows to reorder commits</div>
+              <div>${msg('Drag rows to reorder commits')}</div>
             </div>
           </div>
 
           ${this.mergeCountInRange > 0 && !this.rewordRefused
-            ? html`<div class="warning-message">
-                This range contains ${this.mergeCountInRange} merge
-                ${this.mergeCountInRange === 1 ? 'commit' : 'commits'}, which are not
-                listed below. Rebasing will flatten
-                ${this.mergeCountInRange === 1 ? 'it' : 'them'} and rewrite the
-                commits that were merged in.
-              </div>`
+            ? this.mergeCountInRange === 1
+              ? html`<div class="warning-message">
+                  ${msg(
+                    str`This range contains ${this.mergeCountInRange} merge commit, which are not listed below. Rebasing will flatten it and rewrite the commits that were merged in.`,
+                  )}
+                </div>`
+              : html`<div class="warning-message">
+                  ${msg(
+                    str`This range contains ${this.mergeCountInRange} merge commits, which are not listed below. Rebasing will flatten them and rewrite the commits that were merged in.`,
+                  )}
+                </div>`
             : nothing}
           ${this.warning
             ? html`<div class="warning-message">${this.warning}</div>`
@@ -1275,14 +1291,14 @@ export class GnInteractiveRebaseDialog extends LitElement {
             @click=${this.close}
             ?disabled=${this.executing}
           >
-            Cancel
+            ${msg('Cancel')}
           </button>
           <button
             class="btn btn-primary"
             @click=${this.handleExecute}
             ?disabled=${!this.canExecute || this.lock.busy}
           >
-            ${this.executing ? 'Rebasing...' : 'Start Rebase'}
+            ${this.executing ? msg('Rebasing...') : msg('Start Rebase')}
           </button>
         </div>
       </gn-modal>

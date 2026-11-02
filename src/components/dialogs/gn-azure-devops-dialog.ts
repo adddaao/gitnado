@@ -5,6 +5,7 @@
 
 import { LitElement, html, css, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
+import { localized, msg, str } from '@lit/localize';
 import { sharedStyles } from '../../styles/shared-styles.ts';
 import * as gitService from '../../services/git.service.ts';
 import { invokeCommand } from '../../services/tauri-api.ts';
@@ -63,8 +64,9 @@ const PIPELINE_RUNS_PAGE_SIZE = 20;
 const PULL_REQUESTS_PAGE_SIZE = 100;
 
 /** Shown when a PAT connect succeeded but writing the keyring git credential did not. */
-const GIT_CRED_WRITE_FAILED_TOAST =
-  'Connected, but saving git credentials failed — push/pull may prompt for credentials';
+function gitCredWriteFailedToast(): string {
+  return msg('Connected, but saving git credentials failed — push/pull may prompt for credentials');
+}
 
 /** OAuth tokens carried from an Entra sign-in through org resolution to persistence. */
 interface EntraTokens {
@@ -74,6 +76,7 @@ interface EntraTokens {
 }
 
 @customElement('gn-azure-devops-dialog')
+@localized()
 export class GnAzureDevOpsDialog extends LitElement {
   static styles = [
     sharedStyles,
@@ -875,7 +878,7 @@ export class GnAzureDevOpsDialog extends LitElement {
       if (this.entraFlowGeneration !== this.entraGeneration) return;
       if (state.status === 'error') {
         this.oauthPending = false;
-        this.error = state.error ?? 'Microsoft sign-in failed';
+        this.error = state.error ?? msg('Microsoft sign-in failed');
         showToast(this.error, 'error');
       }
     });
@@ -1045,7 +1048,7 @@ export class GnAzureDevOpsDialog extends LitElement {
       }
     } catch (err) {
       if (generation !== this.loadGeneration) return;
-      this.error = err instanceof Error ? err.message : 'Failed to load data';
+      this.error = err instanceof Error ? err.message : msg('Failed to load data');
     } finally {
       if (generation === this.loadGeneration) {
         this.isLoading = false;
@@ -1202,7 +1205,7 @@ export class GnAzureDevOpsDialog extends LitElement {
     try {
       await this.checkStoredToken();
     } catch (err) {
-      this.error = err instanceof Error ? err.message : 'Failed to read the stored token';
+      this.error = err instanceof Error ? err.message : msg('Failed to read the stored token');
       return;
     }
 
@@ -1272,7 +1275,7 @@ export class GnAzureDevOpsDialog extends LitElement {
     } else if (!result.success) {
       // A genuine backend failure (not merely "this isn't an Azure DevOps repo",
       // which surfaces as success with null data) must not fail silently.
-      this.error = result.error?.message ?? 'Failed to detect Azure DevOps repository';
+      this.error = result.error?.message ?? msg('Failed to detect Azure DevOps repository');
     }
   }
 
@@ -1308,10 +1311,10 @@ export class GnAzureDevOpsDialog extends LitElement {
       if (result.success && result.data) {
         this.pullRequests = result.data;
       } else {
-        this.error = result.error?.message ?? 'Failed to load pull requests';
+        this.error = result.error?.message ?? msg('Failed to load pull requests');
       }
     } catch (err) {
-      this.error = err instanceof Error ? err.message : 'Failed to load pull requests';
+      this.error = err instanceof Error ? err.message : msg('Failed to load pull requests');
     } finally {
       this.isLoading = false;
     }
@@ -1352,11 +1355,11 @@ export class GnAzureDevOpsDialog extends LitElement {
           [prId]: result.data,
         };
       } else if (!gitService.isNetworkGateRefusal(result.error)) {
-        this.error = result.error?.message ?? 'Failed to load PR comments';
+        this.error = result.error?.message ?? msg('Failed to load PR comments');
         showToast(this.error, 'error');
       }
     } catch (err) {
-      this.error = err instanceof Error ? err.message : 'Failed to load PR comments';
+      this.error = err instanceof Error ? err.message : msg('Failed to load PR comments');
       showToast(this.error, 'error');
     } finally {
       this.loadingCommentsForPr = null;
@@ -1392,14 +1395,14 @@ export class GnAzureDevOpsDialog extends LitElement {
         this.commentBodyInput = '';
         this.commentFilePathInput = '';
         this.commentLineInput = '';
-        showToast('Comment posted', 'success');
+        showToast(msg('Comment posted'), 'success');
         await this.loadPrComments(prId);
       } else if (!gitService.isNetworkGateRefusal(result.error)) {
-        this.error = result.error?.message ?? 'Failed to post PR comment';
+        this.error = result.error?.message ?? msg('Failed to post PR comment');
         showToast(this.error, 'error');
       }
     } catch (err) {
-      this.error = err instanceof Error ? err.message : 'Failed to post PR comment';
+      this.error = err instanceof Error ? err.message : msg('Failed to post PR comment');
       showToast(this.error, 'error');
     } finally {
       this.postingCommentForPr = null;
@@ -1426,10 +1429,10 @@ export class GnAzureDevOpsDialog extends LitElement {
       if (result.success && result.data) {
         this.workItems = result.data;
       } else if (!result.success) {
-        this.error = result.error?.message ?? 'Failed to load work items';
+        this.error = result.error?.message ?? msg('Failed to load work items');
       }
     } catch (err) {
-      this.error = err instanceof Error ? err.message : 'Failed to load work items';
+      this.error = err instanceof Error ? err.message : msg('Failed to load work items');
     }
   }
 
@@ -1453,10 +1456,10 @@ export class GnAzureDevOpsDialog extends LitElement {
       if (result.success && result.data) {
         this.pipelineRuns = result.data;
       } else if (!result.success) {
-        this.error = result.error?.message ?? 'Failed to load pipeline runs';
+        this.error = result.error?.message ?? msg('Failed to load pipeline runs');
       }
     } catch (err) {
-      this.error = err instanceof Error ? err.message : 'Failed to load pipeline runs';
+      this.error = err instanceof Error ? err.message : msg('Failed to load pipeline runs');
     }
   }
 
@@ -1516,7 +1519,7 @@ export class GnAzureDevOpsDialog extends LitElement {
         const orgsResult = await gitService.listAdoOrganizations(tokens.accessToken);
         if (generation !== this.entraGeneration) return; // dialog closed/cancelled
         if (!orgsResult.success || !orgsResult.data) {
-          this.error = orgsResult.error?.message ?? 'Failed to list Azure DevOps organizations';
+          this.error = orgsResult.error?.message ?? msg('Failed to list Azure DevOps organizations');
           showToast(this.error, 'error');
           return;
         }
@@ -1529,7 +1532,7 @@ export class GnAzureDevOpsDialog extends LitElement {
           this.needsOrgSelection = true;
           return;
         } else {
-          this.error = 'No Azure DevOps organizations found for this Microsoft account';
+          this.error = msg('No Azure DevOps organizations found for this Microsoft account');
           showToast(this.error, 'error');
           return;
         }
@@ -1538,7 +1541,7 @@ export class GnAzureDevOpsDialog extends LitElement {
       await this.finalizeEntraLogin(tokens, org, generation);
     } catch (err) {
       if (generation !== this.entraGeneration) return;
-      this.error = err instanceof Error ? err.message : 'Failed to complete Microsoft sign-in';
+      this.error = err instanceof Error ? err.message : msg('Failed to complete Microsoft sign-in');
       showToast(this.error, 'error');
     } finally {
       // Only reset shared state if this flow is still current — a superseding
@@ -1572,7 +1575,7 @@ export class GnAzureDevOpsDialog extends LitElement {
         this.availableOrgs = [];
       }
     } catch (err) {
-      this.error = err instanceof Error ? err.message : 'Failed to complete Microsoft sign-in';
+      this.error = err instanceof Error ? err.message : msg('Failed to complete Microsoft sign-in');
       showToast(this.error, 'error');
       // Keep the picker + tokens so the user can retry or choose another org.
     } finally {
@@ -1650,8 +1653,8 @@ export class GnAzureDevOpsDialog extends LitElement {
           ...createEmptyIntegrationAccount('azure-devops', organization),
           id: generateId(),
           name: user?.displayName
-            ? `Azure DevOps (${user.displayName})`
-            : `Azure DevOps (${organization})`,
+            ? msg(str`Azure DevOps (${user.displayName})`)
+            : msg(str`Azure DevOps (${organization})`),
           isDefault: this.accounts.length === 0,
           cachedUser,
         };
@@ -1687,12 +1690,12 @@ export class GnAzureDevOpsDialog extends LitElement {
         this.lastSyncedGitCredKey = `${organization}::${accessToken}`;
       } else {
         log.warn('Failed to store Azure DevOps git credentials for push/pull:', cred1.error ?? cred2.error);
-        showToast('Signed in, but saving git credentials failed — push/pull may prompt for credentials', 'error');
+        showToast(msg('Signed in, but saving git credentials failed — push/pull may prompt for credentials'), 'error');
       }
 
       this.connectionStatus = result.data;
       this.syncSharedConnectionStatus(true);
-      showToast('Connected to Azure DevOps via Microsoft Entra ID', 'success');
+      showToast(msg('Connected to Azure DevOps via Microsoft Entra ID'), 'success');
 
       // Populate the PR / work-item / pipeline tabs immediately (mirror the PAT
       // path) so they aren't empty until the user clicks each tab.
@@ -1700,8 +1703,8 @@ export class GnAzureDevOpsDialog extends LitElement {
         await this.loadAllData(accessToken);
       }
     } else {
-      this.error = 'Connection verification failed';
-      showToast('OAuth token received but connection verification failed', 'error');
+      this.error = msg('Connection verification failed');
+      showToast(msg('OAuth token received but connection verification failed'), 'error');
     }
   }
 
@@ -1780,7 +1783,7 @@ export class GnAzureDevOpsDialog extends LitElement {
       // Otherwise use the stored token
       const token = await this.getSelectedAccountToken();
       if (!token) {
-        this.error = 'No stored token found';
+        this.error = msg('No stored token found');
         return;
       }
 
@@ -1789,7 +1792,7 @@ export class GnAzureDevOpsDialog extends LitElement {
       // Verify the stored token works
       const verifyResult = await gitService.checkAdoConnectionWithToken(organization, token);
       if (!verifyResult.success || !verifyResult.data?.connected) {
-        this.error = verifyResult.error?.message ?? 'Connection failed - token may have expired';
+        this.error = verifyResult.error?.message ?? msg('Connection failed - token may have expired');
         return;
       }
 
@@ -1811,7 +1814,7 @@ export class GnAzureDevOpsDialog extends LitElement {
       // failed keyring write must be surfaced rather than silently reporting Connected.
       // Non-fatal: the connection itself succeeded.
       if (!(await this.syncGitCredentials(organization, token))) {
-        showToast(GIT_CRED_WRITE_FAILED_TOAST, 'error');
+        showToast(gitCredWriteFailedToast(), 'error');
       }
 
       // Load data if connected and repo detected
@@ -1819,7 +1822,7 @@ export class GnAzureDevOpsDialog extends LitElement {
         await this.loadAllData(token);
       }
     } catch (err) {
-      this.error = err instanceof Error ? err.message : 'Failed to connect';
+      this.error = err instanceof Error ? err.message : msg('Failed to connect');
     } finally {
       this.isLoading = false;
     }
@@ -1840,7 +1843,7 @@ export class GnAzureDevOpsDialog extends LitElement {
       let verifyResult;
       try {
         const timeoutPromise = new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('Connection timed out - please try again')), 15000)
+          setTimeout(() => reject(new Error(msg('Connection timed out - please try again'))), 15000)
         );
         verifyResult = await Promise.race([
           gitService.checkAdoConnectionWithToken(organization, tokenToSave),
@@ -1848,13 +1851,15 @@ export class GnAzureDevOpsDialog extends LitElement {
         ]);
       } catch (ipcError) {
         log.error('handleSaveToken: IPC error:', ipcError);
-        this.error = `Connection failed: ${ipcError instanceof Error ? ipcError.message : String(ipcError)}`;
+        this.error = msg(
+          str`Connection failed: ${ipcError instanceof Error ? ipcError.message : String(ipcError)}`,
+        );
         this.isLoading = false;
         return;
       }
       log.debug('handleSaveToken: verifyResult:', verifyResult);
       if (!verifyResult.success || !verifyResult.data?.connected) {
-        this.error = verifyResult.error?.message ?? 'Invalid token or connection failed';
+        this.error = verifyResult.error?.message ?? msg('Invalid token or connection failed');
         this.isLoading = false;
         return;
       }
@@ -1880,7 +1885,9 @@ export class GnAzureDevOpsDialog extends LitElement {
         const newAccount: IntegrationAccount = {
           ...createEmptyIntegrationAccount('azure-devops', organization),
           id: generateId(),
-          name: user?.displayName ? `Azure DevOps (${user.displayName})` : `Azure DevOps (${organization})`,
+          name: user?.displayName
+            ? msg(str`Azure DevOps (${user.displayName})`)
+            : msg(str`Azure DevOps (${organization})`),
           isDefault: this.accounts.length === 0,
           cachedUser: user ? {
             username: user.displayName,
@@ -1915,7 +1922,7 @@ export class GnAzureDevOpsDialog extends LitElement {
       if (await this.syncGitCredentials(organization, tokenToSave)) {
         log.debug(`Stored git credentials in keyring for dev.azure.com and ${organization}.visualstudio.com`);
       } else {
-        showToast(GIT_CRED_WRITE_FAILED_TOAST, 'error');
+        showToast(gitCredWriteFailedToast(), 'error');
       }
 
       // Load data if connected and repo detected
@@ -1924,7 +1931,7 @@ export class GnAzureDevOpsDialog extends LitElement {
         await this.loadAllData(tokenToSave);
       }
     } catch (err) {
-      this.error = err instanceof Error ? err.message : 'Failed to connect';
+      this.error = err instanceof Error ? err.message : msg('Failed to connect');
       this.tokenInput = tokenToSave;
     } finally {
       this.isLoading = false;
@@ -1960,7 +1967,7 @@ export class GnAzureDevOpsDialog extends LitElement {
       this.workItems = [];
       this.pipelineRuns = [];
     } catch (err) {
-      this.error = err instanceof Error ? err.message : 'Failed to disconnect';
+      this.error = err instanceof Error ? err.message : msg('Failed to disconnect');
       showToast(this.error, 'error');
     } finally {
       this.isLoading = false;
@@ -1971,10 +1978,12 @@ export class GnAzureDevOpsDialog extends LitElement {
     if (!this.selectedAccountId) return;
 
     const selected = this.accounts.find((a) => a.id === this.selectedAccountId);
-    const accountName = selected?.name ?? 'this account';
+    const accountName = selected?.name ?? msg('this account');
     const confirmed = await showConfirm(
-      'Delete Azure DevOps Integration',
-      `Delete ${accountName}? The stored token will be removed and any profile that uses this account as its default will lose that reference.`,
+      msg('Delete Azure DevOps Integration'),
+      msg(
+        str`Delete ${accountName}? The stored token will be removed and any profile that uses this account as its default will lose that reference.`
+      ),
       'warning',
     );
     if (!confirmed) return;
@@ -2014,12 +2023,14 @@ export class GnAzureDevOpsDialog extends LitElement {
         this.lastSyncedGitCredKey = null;
         gitService.resetAdoGitCredentialSyncCache();
       } catch (tokenErr) {
-        const msg =
+        const message =
           tokenErr instanceof Error
-            ? `Account deleted, but its stored token could not be removed: ${tokenErr.message}`
-            : 'Account deleted, but its stored token could not be removed.';
-        this.error = msg;
-        showToast(msg, 'error');
+            ? msg(
+                str`Account deleted, but its stored token could not be removed: ${tokenErr.message}`,
+              )
+            : msg('Account deleted, but its stored token could not be removed.');
+        this.error = message;
+        showToast(message, 'error');
       }
 
       // If there are remaining accounts, reload data for the first one
@@ -2027,7 +2038,7 @@ export class GnAzureDevOpsDialog extends LitElement {
         await this.loadInitialData();
       }
     } catch (err) {
-      this.error = err instanceof Error ? err.message : 'Failed to delete integration';
+      this.error = err instanceof Error ? err.message : msg('Failed to delete integration');
       showToast(this.error, 'error');
     } finally {
       this.isLoading = false;
@@ -2053,7 +2064,7 @@ export class GnAzureDevOpsDialog extends LitElement {
     if (result.success && result.data) {
       this.createPrDescription = result.data.body;
     } else {
-      showToast(result.error?.message ?? 'Failed to generate description', 'error');
+      showToast(result.error?.message ?? msg('Failed to generate description'), 'error');
     }
     this.generatingPrDescription = false;
   }
@@ -2091,12 +2102,12 @@ export class GnAzureDevOpsDialog extends LitElement {
         this.createPrDraft = false;
         this.activeTab = 'pull-requests';
         await this.loadPullRequests();
-        showToast('Pull request created successfully', 'success');
+        showToast(msg('Pull request created successfully'), 'success');
       } else {
-        this.error = result.error?.message ?? 'Failed to create pull request';
+        this.error = result.error?.message ?? msg('Failed to create pull request');
       }
     } catch (err) {
-      this.error = err instanceof Error ? err.message : 'Failed to create pull request';
+      this.error = err instanceof Error ? err.message : msg('Failed to create pull request');
     } finally {
       this.isLoading = false;
     }
@@ -2145,12 +2156,12 @@ export class GnAzureDevOpsDialog extends LitElement {
         if (!this.workItems.some((w) => w.id === created.id)) {
           this.workItems = [created, ...this.workItems];
         }
-        showToast('Work item created successfully', 'success');
+        showToast(msg('Work item created successfully'), 'success');
       } else {
-        this.error = result.error?.message ?? 'Failed to create work item';
+        this.error = result.error?.message ?? msg('Failed to create work item');
       }
     } catch (err) {
-      this.error = err instanceof Error ? err.message : 'Failed to create work item';
+      this.error = err instanceof Error ? err.message : msg('Failed to create work item');
     } finally {
       this.isLoading = false;
     }
@@ -2213,10 +2224,10 @@ export class GnAzureDevOpsDialog extends LitElement {
           </div>
           <div class="connection-actions">
             <button class="btn btn-danger" @click=${this.handleDisconnect} ?disabled=${this.isLoading}>
-              Disconnect
+              ${msg('Disconnect')}
             </button>
             <button class="btn btn-danger-outline" @click=${this.handleDeleteIntegration} ?disabled=${this.isLoading}>
-              Delete
+              ${msg('Delete')}
             </button>
           </div>
         </div>
@@ -2230,11 +2241,11 @@ export class GnAzureDevOpsDialog extends LitElement {
           <button
             style="flex:1;padding:8px;border:none;cursor:pointer;font-size:13px;background:${this.authMethod === 'oauth' ? 'var(--color-accent)' : 'transparent'};color:${this.authMethod === 'oauth' ? 'white' : 'var(--color-text-secondary)'}"
             @click=${() => this.setAuthMethod('oauth')}
-          >Sign in with Microsoft</button>
+          >${msg('Sign in with Microsoft')}</button>
           <button
             style="flex:1;padding:8px;border:none;border-left:1px solid var(--color-border);cursor:pointer;font-size:13px;background:${this.authMethod === 'pat' ? 'var(--color-accent)' : 'transparent'};color:${this.authMethod === 'pat' ? 'white' : 'var(--color-text-secondary)'}"
             @click=${() => this.setAuthMethod('pat')}
-          >Personal Access Token</button>
+          >${msg('Personal Access Token')}</button>
         </div>
 
         ${this.authMethod === 'oauth' ? html`
@@ -2242,23 +2253,25 @@ export class GnAzureDevOpsDialog extends LitElement {
           ${this.oauthPending ? html`
             <div style="display:flex;align-items:center;gap:8px;padding:12px;color:var(--color-text-secondary)">
               <div style="width:16px;height:16px;border:2px solid var(--color-border);border-top-color:var(--color-accent);border-radius:50%;animation:spin 0.8s linear infinite"></div>
-              ${this.isLoading ? 'Connecting to Azure DevOps...' : 'Complete sign-in in your browser...'}
-              <button class="btn" @click=${this.handleCancelEntraOAuth}>Cancel</button>
+              ${this.isLoading
+                ? msg('Connecting to Azure DevOps...')
+                : msg('Complete sign-in in your browser...')}
+              <button class="btn" @click=${this.handleCancelEntraOAuth}>${msg('Cancel')}</button>
             </div>
           ` : this.needsOrgSelection ? html`
             <div class="form-group">
-              <label>Select an organization</label>
+              <label>${msg('Select an organization')}</label>
               ${this.availableOrgs.map(org => html`
                 <button class="btn" @click=${() => this.handleSelectOrg(org)} ?disabled=${this.isLoading}>${org.name}</button>
               `)}
               ${this.isLoading ? html`
                 <div style="display:flex;align-items:center;gap:8px;padding-top:4px;color:var(--color-text-secondary)">
                   <div style="width:16px;height:16px;border:2px solid var(--color-border);border-top-color:var(--color-accent);border-radius:50%;animation:spin 0.8s linear infinite"></div>
-                  Connecting...
+                  ${msg('Connecting...')}
                 </div>
               ` : nothing}
               <div class="btn-row">
-                <button class="btn" @click=${this.handleCancelOrgSelection} ?disabled=${this.isLoading}>Cancel</button>
+                <button class="btn" @click=${this.handleCancelOrgSelection} ?disabled=${this.isLoading}>${msg('Cancel')}</button>
               </div>
             </div>
           ` : html`
@@ -2267,7 +2280,7 @@ export class GnAzureDevOpsDialog extends LitElement {
                 class="ms-signin-btn"
                 @click=${this.handleStartEntraOAuth}
                 ?disabled=${this.isLoading || this.oauthPending}
-                aria-label="Sign in with Microsoft"
+                aria-label=${msg('Sign in with Microsoft')}
               >
                 <svg width="21" height="21" viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
                   <rect x="1" y="1" width="9" height="9" fill="#f25022" />
@@ -2275,17 +2288,17 @@ export class GnAzureDevOpsDialog extends LitElement {
                   <rect x="11" y="1" width="9" height="9" fill="#7fba00" />
                   <rect x="11" y="11" width="9" height="9" fill="#ffb900" />
                 </svg>
-                Sign in with Microsoft
+                ${msg('Sign in with Microsoft')}
               </button>
             </div>
             <span class="help-text">
-              Signs in with your Microsoft work or school account via the browser. No setup required.
+              ${msg('Signs in with your Microsoft work or school account via the browser. No setup required.')}
             </span>
           `}
         ` : html`
           <!-- PAT Form -->
           <div class="form-group">
-            <label>Organization</label>
+            <label>${msg('Organization')}</label>
             <input
               type="text"
               placeholder="my-organization"
@@ -2293,12 +2306,12 @@ export class GnAzureDevOpsDialog extends LitElement {
               @input=${(e: Event) => this.organizationInput = (e.target as HTMLInputElement).value}
             />
             <span class="help-text">
-              Your Azure DevOps organization name (from dev.azure.com/{organization})
+              ${msg('Your Azure DevOps organization name (from dev.azure.com/{organization})')}
             </span>
           </div>
 
           <div class="form-group">
-            <label>Personal Access Token (org-scoped)</label>
+            <label>${msg('Personal Access Token (org-scoped)')}</label>
             <input
               type="password"
               placeholder=${this.hasStoredToken ? '••••••••••••••••••••••••••••••••' : 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'}
@@ -2307,16 +2320,22 @@ export class GnAzureDevOpsDialog extends LitElement {
             />
             <span class="help-text">
               ${this.hasStoredToken
-                ? html`Token saved securely. Enter a new token to update, or click Connect to use the saved token.`
-                : html`Create an <strong>organization-scoped</strong> token at
-                  <a
-                    class="help-link"
-                    href="https://dev.azure.com/${this.organizationInput || '{org}'}/_usersSettings/tokens"
-                    @click=${handleExternalLink}
-                  >Azure DevOps Settings</a>.
-                  Required scopes: <strong>Code (Read & Write)</strong>, <strong>Work Items (Read)</strong>, <strong>Build (Read)</strong>, and <strong>User Profile (Read)</strong>.
-                  <br><br>
-                  <em>Note: Global PATs are deprecated (March 2026) and will stop working December 2026. Use organization-scoped tokens instead.</em>`
+                ? msg(
+                    'Token saved securely. Enter a new token to update, or click Connect to use the saved token.',
+                  )
+                : html`${msg(
+                      html`Create an <strong>organization-scoped</strong> token at
+                        <a
+                          class="help-link"
+                          href="https://dev.azure.com/${this.organizationInput || '{org}'}/_usersSettings/tokens"
+                          @click=${handleExternalLink}
+                        >Azure DevOps Settings</a>.`,
+                    )}
+                    ${msg(
+                      html`Required scopes: <strong>Code (Read & Write)</strong>, <strong>Work Items (Read)</strong>, <strong>Build (Read)</strong>, and <strong>User Profile (Read)</strong>.`,
+                    )}
+                    <br><br>
+                    <em>${msg('Note: Global PATs are deprecated (March 2026) and will stop working December 2026. Use organization-scoped tokens instead.')}</em>`}
               }
             </span>
           </div>
@@ -2327,7 +2346,7 @@ export class GnAzureDevOpsDialog extends LitElement {
                 @click=${this.handleDeleteIntegration}
                 ?disabled=${this.isLoading}
               >
-                Delete Integration
+                ${msg('Delete Integration')}
               </button>
             ` : nothing}
             <button
@@ -2335,7 +2354,7 @@ export class GnAzureDevOpsDialog extends LitElement {
               @click=${this.tokenInput.trim() ? this.handleSaveToken : this.handleConnectWithStoredToken}
               ?disabled=${this.isLoading || !this.organizationInput.trim() || (!this.tokenInput.trim() && !this.hasStoredToken)}
             >
-              Connect
+              ${msg('Connect')}
             </button>
           </div>
         `}
@@ -2350,7 +2369,7 @@ export class GnAzureDevOpsDialog extends LitElement {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"></path>
           </svg>
-          <p>Connect to Azure DevOps to view pull requests</p>
+          <p>${msg('Connect to Azure DevOps to view pull requests')}</p>
         </div>
       `;
     }
@@ -2363,7 +2382,7 @@ export class GnAzureDevOpsDialog extends LitElement {
             <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
             <line x1="12" y1="17" x2="12.01" y2="17"></line>
           </svg>
-          <p>No Azure DevOps repository detected</p>
+          <p>${msg('No Azure DevOps repository detected')}</p>
         </div>
       `;
     }
@@ -2378,17 +2397,17 @@ export class GnAzureDevOpsDialog extends LitElement {
     return html`
       <div class="filter-row">
         <select class="filter-select" @change=${this.handlePrFilterChange}>
-          <option value="active" ?selected=${this.prFilter === 'active'}>Active</option>
-          <option value="completed" ?selected=${this.prFilter === 'completed'}>Completed</option>
-          <option value="abandoned" ?selected=${this.prFilter === 'abandoned'}>Abandoned</option>
-          <option value="all" ?selected=${this.prFilter === 'all'}>All</option>
+          <option value="active" ?selected=${this.prFilter === 'active'}>${msg('Active')}</option>
+          <option value="completed" ?selected=${this.prFilter === 'completed'}>${msg('Completed')}</option>
+          <option value="abandoned" ?selected=${this.prFilter === 'abandoned'}>${msg('Abandoned')}</option>
+          <option value="all" ?selected=${this.prFilter === 'all'}>${msg('All')}</option>
         </select>
         <button class="btn" @click=${() => this.activeTab = 'create-pr'}>
-          + New PR
+          ${msg('+ New PR')}
         </button>
       </div>
 
-      ${this.isLoading ? html`<div class="loading">Loading pull requests...</div>` : ''}
+      ${this.isLoading ? html`<div class="loading">${msg('Loading pull requests...')}</div>` : ''}
 
       ${!this.isLoading && this.pullRequests.length === 0 ? html`
         <div class="empty-state">
@@ -2397,7 +2416,13 @@ export class GnAzureDevOpsDialog extends LitElement {
             <circle cx="6" cy="6" r="3"></circle>
             <path d="M6 21V9a9 9 0 0 0 9 9"></path>
           </svg>
-          <p>No ${this.prFilter} pull requests</p>
+          <p>${this.prFilter === 'active'
+            ? msg('No active pull requests')
+            : this.prFilter === 'completed'
+              ? msg('No completed pull requests')
+              : this.prFilter === 'abandoned'
+                ? msg('No abandoned pull requests')
+                : msg('No all pull requests')}</p>
         </div>
       ` : ''}
 
@@ -2409,9 +2434,9 @@ export class GnAzureDevOpsDialog extends LitElement {
               <div class="pr-info">
                 <div class="pr-title">${pr.title}</div>
                 <div class="pr-meta">
-                  <span class="pr-state ${pr.isDraft ? 'draft' : pr.status}">${pr.isDraft ? 'Draft' : pr.status}</span>
+                  <span class="pr-state ${pr.isDraft ? 'draft' : pr.status}">${pr.isDraft ? msg('Draft') : pr.status}</span>
                   <span class="pr-branch">${pr.sourceRefName} → ${pr.targetRefName}</span>
-                  <span>by ${pr.createdBy.displayName}</span>
+                  <span>${msg(str`by ${pr.createdBy.displayName}`)}</span>
                   <span>${this.formatDate(pr.creationDate)}</span>
                 </div>
               </div>
@@ -2419,10 +2444,12 @@ export class GnAzureDevOpsDialog extends LitElement {
                 <button
                   class="btn pr-comments-toggle"
                   data-testid="pr-comments-toggle-${pr.pullRequestId}"
-                  title="Review comments"
+                  title=${msg('Review comments')}
                   @click=${() => this.togglePrComments(pr.pullRequestId)}
                 >
-                  Comments${this.prComments[pr.pullRequestId] ? ` (${this.prComments[pr.pullRequestId].length})` : ''}
+                  ${this.prComments[pr.pullRequestId]
+                    ? msg(str`Comments (${this.prComments[pr.pullRequestId].length})`)
+                    : msg('Comments')}
                 </button>
               </div>
             </div>
@@ -2432,12 +2459,12 @@ export class GnAzureDevOpsDialog extends LitElement {
       </div>
       ${this.pullRequests.length >= PULL_REQUESTS_PAGE_SIZE ? html`
         <p class="help-text capped-list-hint" style="text-align:center;padding-top:8px">
-          Showing the first ${PULL_REQUESTS_PAGE_SIZE} pull requests; more may exist.
+          ${msg(str`Showing the first ${PULL_REQUESTS_PAGE_SIZE} pull requests; more may exist.`)}
           <a
             class="help-link"
             href="https://dev.azure.com/${this.detectedRepo.organization}/${this.detectedRepo.project}/_git/${this.detectedRepo.repository}/pullrequests${prListQuery}"
             @click=${handleExternalLink}
-          >Open in Azure DevOps</a> for the full list.
+          >${msg('Open in Azure DevOps')}</a> ${msg('for the full list.')}
         </p>
       ` : nothing}
     `;
@@ -2451,9 +2478,9 @@ export class GnAzureDevOpsDialog extends LitElement {
     return html`
       <div class="pr-comments-drawer" data-testid="pr-comments-drawer-${prId}" @click=${(e: Event) => e.stopPropagation()}>
         ${isLoadingComments ? html`
-          <div class="pr-comments-empty">Loading comments...</div>
+          <div class="pr-comments-empty">${msg('Loading comments...')}</div>
         ` : comments.length === 0 ? html`
-          <div class="pr-comments-empty">No comments yet</div>
+          <div class="pr-comments-empty">${msg('No comments yet')}</div>
         ` : html`
           <div class="pr-comments-list">
             ${comments.map(c => html`
@@ -2475,7 +2502,7 @@ export class GnAzureDevOpsDialog extends LitElement {
             <input
               type="text"
               class="pr-comment-file-input"
-              placeholder="File path (optional, for inline comment)"
+              placeholder=${msg('File path (optional, for inline comment)')}
               .value=${this.commentFilePathInput}
               @input=${(e: Event) => {
                 this.commentFilePathInput = (e.target as HTMLInputElement).value;
@@ -2485,7 +2512,7 @@ export class GnAzureDevOpsDialog extends LitElement {
               type="number"
               min="1"
               class="pr-comment-line-input"
-              placeholder="Line #"
+              placeholder=${msg('Line #')}
               .value=${this.commentLineInput}
               @input=${(e: Event) => {
                 this.commentLineInput = (e.target as HTMLInputElement).value;
@@ -2496,7 +2523,7 @@ export class GnAzureDevOpsDialog extends LitElement {
             <textarea
               class="pr-comment-body-input"
               rows="2"
-              placeholder="Write a review comment..."
+              placeholder=${msg('Write a review comment...')}
               .value=${this.commentBodyInput}
               @input=${(e: Event) => {
                 this.commentBodyInput = (e.target as HTMLTextAreaElement).value;
@@ -2508,7 +2535,7 @@ export class GnAzureDevOpsDialog extends LitElement {
               ?disabled=${!this.commentBodyInput.trim() || isPosting}
               @click=${() => this.handleAddPrComment(prId)}
             >
-              ${isPosting ? 'Posting...' : 'Post Comment'}
+              ${isPosting ? msg('Posting...') : msg('Post Comment')}
             </button>
           </div>
         </div>
@@ -2523,7 +2550,7 @@ export class GnAzureDevOpsDialog extends LitElement {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"></path>
           </svg>
-          <p>Connect to Azure DevOps to view work items</p>
+          <p>${msg('Connect to Azure DevOps to view work items')}</p>
         </div>
       `;
     }
@@ -2536,7 +2563,7 @@ export class GnAzureDevOpsDialog extends LitElement {
             <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
             <line x1="12" y1="17" x2="12.01" y2="17"></line>
           </svg>
-          <p>No Azure DevOps repository detected</p>
+          <p>${msg('No Azure DevOps repository detected')}</p>
         </div>
       `;
     }
@@ -2545,7 +2572,7 @@ export class GnAzureDevOpsDialog extends LitElement {
       return html`
         <div class="filter-row">
           <button class="btn" @click=${() => this.activeTab = 'create-work-item'}>
-            + New Work Item
+            ${msg('+ New Work Item')}
           </button>
         </div>
         <div class="empty-state">
@@ -2553,7 +2580,7 @@ export class GnAzureDevOpsDialog extends LitElement {
             <path d="M9 11l3 3L22 4"></path>
             <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
           </svg>
-          <p>No work items assigned to you</p>
+          <p>${msg('No work items assigned to you')}</p>
         </div>
       `;
     }
@@ -2561,7 +2588,7 @@ export class GnAzureDevOpsDialog extends LitElement {
     return html`
       <div class="filter-row">
         <button class="btn" @click=${() => this.activeTab = 'create-work-item'}>
-          + New Work Item
+          ${msg('+ New Work Item')}
         </button>
       </div>
       <div class="pr-list">
@@ -2573,7 +2600,7 @@ export class GnAzureDevOpsDialog extends LitElement {
               <div class="work-item-meta">
                 <span class="work-item-type ${this.getWorkItemTypeClass(item.workItemType)}">${item.workItemType}</span>
                 <span class="work-item-state">${item.state}</span>
-                ${item.assignedTo ? html`<span>Assigned to ${item.assignedTo.displayName}</span>` : ''}
+                ${item.assignedTo ? html`<span>${msg(str`Assigned to ${item.assignedTo.displayName}`)}</span>` : ''}
                 <span>${this.formatDate(item.createdDate)}</span>
               </div>
             </div>
@@ -2582,12 +2609,12 @@ export class GnAzureDevOpsDialog extends LitElement {
       </div>
       ${this.workItems.length >= WORK_ITEMS_PAGE_SIZE ? html`
         <p class="help-text capped-list-hint" style="text-align:center;padding-top:8px">
-          Showing your ${WORK_ITEMS_PAGE_SIZE} most recent.
+          ${msg(str`Showing your ${WORK_ITEMS_PAGE_SIZE} most recent.`)}
           ${this.detectedRepo ? html`<a
             class="help-link"
             href="https://dev.azure.com/${this.detectedRepo.organization}/${this.detectedRepo.project}/_workitems/"
             @click=${handleExternalLink}
-          >Open in Azure DevOps</a> for the full list.` : nothing}
+          >${msg('Open in Azure DevOps')}</a> ${msg('for the full list.')}` : nothing}
         </p>
       ` : nothing}
     `;
@@ -2600,7 +2627,7 @@ export class GnAzureDevOpsDialog extends LitElement {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"></path>
           </svg>
-          <p>Connect to Azure DevOps to view pipelines</p>
+          <p>${msg('Connect to Azure DevOps to view pipelines')}</p>
         </div>
       `;
     }
@@ -2613,7 +2640,7 @@ export class GnAzureDevOpsDialog extends LitElement {
             <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
             <line x1="12" y1="17" x2="12.01" y2="17"></line>
           </svg>
-          <p>No Azure DevOps repository detected</p>
+          <p>${msg('No Azure DevOps repository detected')}</p>
         </div>
       `;
     }
@@ -2624,7 +2651,7 @@ export class GnAzureDevOpsDialog extends LitElement {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M22 12h-4l-3 9L9 3l-3 9H2"></path>
           </svg>
-          <p>No pipeline runs found</p>
+          <p>${msg('No pipeline runs found')}</p>
         </div>
       `;
     }
@@ -2647,12 +2674,12 @@ export class GnAzureDevOpsDialog extends LitElement {
       </div>
       ${this.pipelineRuns.length >= PIPELINE_RUNS_PAGE_SIZE ? html`
         <p class="help-text capped-list-hint" style="text-align:center;padding-top:8px">
-          Showing the ${PIPELINE_RUNS_PAGE_SIZE} most recent pipeline runs; more may exist.
+          ${msg(str`Showing the ${PIPELINE_RUNS_PAGE_SIZE} most recent pipeline runs; more may exist.`)}
           <a
             class="help-link"
             href="https://dev.azure.com/${this.detectedRepo.organization}/${this.detectedRepo.project}/_build?view=runs"
             @click=${handleExternalLink}
-          >Open in Azure DevOps</a> for the full list.
+          >${msg('Open in Azure DevOps')}</a> ${msg('for the full list.')}
         </p>
       ` : nothing}
     `;
@@ -2662,35 +2689,35 @@ export class GnAzureDevOpsDialog extends LitElement {
     return html`
       <div class="token-form">
         <div class="form-group">
-          <label>Title</label>
+          <label>${msg('Title')}</label>
           <input
             type="text"
-            placeholder="Pull request title"
+            placeholder=${msg('Pull request title')}
             .value=${this.createPrTitle}
             @input=${(e: Event) => this.createPrTitle = (e.target as HTMLInputElement).value}
           />
         </div>
         <div class="form-group">
           <div style="display:flex;align-items:center;justify-content:space-between">
-            <label>Description</label>
+            <label>${msg('Description')}</label>
             <button
               class="btn btn-sm"
               style="font-size:12px;padding:2px 8px;display:flex;align-items:center;gap:4px"
               @click=${this.handleGeneratePrDescription}
               ?disabled=${this.generatingPrDescription || !this.createPrSource || !this.createPrTarget}
-              title="Generate description using AI"
+              title=${msg('Generate description using AI')}
             >
-              ${this.generatingPrDescription ? 'Generating...' : html`<svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a3.5 3.5 0 0 0-3.5 3.5c0 1.193.603 2.26 1.5 2.898V9.5a1 1 0 0 0 .293.707l1 1a1 1 0 0 0 1.414 0l1-1A1 1 0 0 0 10 9.5V7.398A3.496 3.496 0 0 0 11.5 4.5 3.5 3.5 0 0 0 8 1z"/></svg> AI Generate`}
+              ${this.generatingPrDescription ? msg('Generating...') : html`<svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a3.5 3.5 0 0 0-3.5 3.5c0 1.193.603 2.26 1.5 2.898V9.5a1 1 0 0 0 .293.707l1 1a1 1 0 0 0 1.414 0l1-1A1 1 0 0 0 10 9.5V7.398A3.496 3.496 0 0 0 11.5 4.5 3.5 3.5 0 0 0 8 1z"/></svg> ${msg('AI Generate')}`}
             </button>
           </div>
           <textarea
-            placeholder="Describe your changes..."
+            placeholder=${msg('Describe your changes...')}
             .value=${this.createPrDescription}
             @input=${(e: Event) => this.createPrDescription = (e.target as HTMLTextAreaElement).value}
           ></textarea>
         </div>
         <div class="form-group">
-          <label>Source Branch</label>
+          <label>${msg('Source Branch')}</label>
           <input
             type="text"
             placeholder="feature/my-branch"
@@ -2699,7 +2726,7 @@ export class GnAzureDevOpsDialog extends LitElement {
           />
         </div>
         <div class="form-group">
-          <label>Target Branch</label>
+          <label>${msg('Target Branch')}</label>
           <input
             type="text"
             placeholder="main"
@@ -2715,19 +2742,19 @@ export class GnAzureDevOpsDialog extends LitElement {
               .checked=${this.createPrDraft}
               @change=${(e: Event) => this.createPrDraft = (e.target as HTMLInputElement).checked}
             />
-            <label for="pr-draft">Create as draft</label>
+            <label for="pr-draft">${msg('Create as draft')}</label>
           </div>
         </div>
         <div class="btn-row">
           <button class="btn" @click=${() => this.activeTab = 'pull-requests'}>
-            Cancel
+            ${msg('Cancel')}
           </button>
           <button
             class="btn btn-primary"
             @click=${this.handleCreatePr}
             ?disabled=${this.isLoading || !this.createPrTitle.trim() || !this.createPrSource.trim() || !this.createPrTarget.trim()}
           >
-            Create Pull Request
+            ${msg('Create Pull Request')}
           </button>
         </div>
       </div>
@@ -2738,7 +2765,7 @@ export class GnAzureDevOpsDialog extends LitElement {
     return html`
       <div class="token-form">
         <div class="form-group">
-          <label>Type</label>
+          <label>${msg('Type')}</label>
           <select
             class="filter-select"
             @change=${(e: Event) => this.createWorkItemType = (e.target as HTMLSelectElement).value}
@@ -2751,32 +2778,32 @@ export class GnAzureDevOpsDialog extends LitElement {
           </select>
         </div>
         <div class="form-group">
-          <label>Title</label>
+          <label>${msg('Title')}</label>
           <input
             type="text"
-            placeholder="Work item title"
+            placeholder=${msg('Work item title')}
             .value=${this.createWorkItemTitle}
             @input=${(e: Event) => this.createWorkItemTitle = (e.target as HTMLInputElement).value}
           />
         </div>
         <div class="form-group">
-          <label>Description</label>
+          <label>${msg('Description')}</label>
           <textarea
-            placeholder="Describe the work item..."
+            placeholder=${msg('Describe the work item...')}
             .value=${this.createWorkItemDescription}
             @input=${(e: Event) => this.createWorkItemDescription = (e.target as HTMLTextAreaElement).value}
           ></textarea>
         </div>
         <div class="btn-row">
           <button class="btn" @click=${() => this.activeTab = 'work-items'}>
-            Cancel
+            ${msg('Cancel')}
           </button>
           <button
             class="btn btn-primary"
             @click=${this.handleCreateWorkItem}
             ?disabled=${this.isLoading || !this.createWorkItemTitle.trim()}
           >
-            Create Work Item
+            ${msg('Create Work Item')}
           </button>
         </div>
       </div>
@@ -2793,7 +2820,7 @@ export class GnAzureDevOpsDialog extends LitElement {
         </svg>
         <div>
           <div class="repo-name">${decodeURIComponent(this.detectedRepo.organization)}/${decodeURIComponent(this.detectedRepo.project)}/${decodeURIComponent(this.detectedRepo.repository)}</div>
-          <div class="repo-remote">via ${this.detectedRepo.remoteName}</div>
+          <div class="repo-remote">${msg(str`via ${this.detectedRepo.remoteName}`)}</div>
         </div>
       </div>
     `;
@@ -2822,12 +2849,12 @@ export class GnAzureDevOpsDialog extends LitElement {
       <gn-modal
         .open=${this.open}
         ?backButton=${this.backButton}
-        modalTitle="Azure DevOps"
+        modalTitle=${msg('Azure DevOps')}
         @close=${this.handleClose}
       >
         <div class="content">
           ${this.attachToProfileName
-            ? html`<div class="attach-breadcrumb" data-testid="attach-breadcrumb">Adding to <strong>${this.attachToProfileName}</strong></div>`
+            ? html`<div class="attach-breadcrumb" data-testid="attach-breadcrumb">${msg('Adding to')} <strong>${this.attachToProfileName}</strong></div>`
             : nothing}
           ${this.renderDetectedRepo()}
 
@@ -2846,25 +2873,25 @@ export class GnAzureDevOpsDialog extends LitElement {
               class="tab ${this.activeTab === 'connection' ? 'active' : ''}"
               @click=${() => this.activeTab = 'connection'}
             >
-              Connection
+              ${msg('Connection')}
             </button>
             <button
               class="tab ${this.activeTab === 'pull-requests' ? 'active' : ''}"
               @click=${() => { this.activeTab = 'pull-requests'; this.loadPullRequests(); }}
             >
-              Pull Requests
+              ${msg('Pull Requests')}
             </button>
             <button
               class="tab ${this.activeTab === 'work-items' ? 'active' : ''}"
               @click=${() => { this.activeTab = 'work-items'; this.loadWorkItems(); }}
             >
-              My Work Items
+              ${msg('My Work Items')}
             </button>
             <button
               class="tab ${this.activeTab === 'pipelines' ? 'active' : ''}"
               @click=${() => { this.activeTab = 'pipelines'; this.loadPipelineRuns(); }}
             >
-              Pipelines
+              ${msg('Pipelines')}
             </button>
           </div>
 

@@ -7,12 +7,38 @@ import { createStore } from 'zustand/vanilla';
 import { persist } from 'zustand/middleware';
 import type { DiffWhitespaceMode } from '../types/api.types.ts';
 import { msg } from '@lit/localize';
-import { detectSystemLocale, resolveLocale, setAppLocale, type Locale } from '../i18n/index.ts';
+import { resolveLocale, setAppLocale, type Locale } from '../i18n/index.ts';
 
 export type Theme = 'dark' | 'light' | 'system';
 export type FontSize = 'small' | 'medium' | 'large';
 export type Density = 'compact' | 'comfortable' | 'spacious';
 export type GraphColorScheme = 'default' | 'pastel' | 'vibrant' | 'monochrome' | 'high-contrast';
+
+/**
+ * Language the AI prompts (and therefore the text the model writes back) use.
+ *
+ * Deliberately separate from the UI `language`: a 中文 interface may still want
+ * English commit messages, and vice versa. The values are the wire format the
+ * backend prompt selector understands.
+ */
+export type AiPromptLanguage = 'zh' | 'en';
+
+/**
+ * Bounds for the right sidebar's commit panel height, in CSS pixels.
+ *
+ * The lower bound keeps the message box, the Vibe/Split buttons and the Commit
+ * button usable; the upper bound keeps the staged-file list from disappearing
+ * under the drag handle on a short window. A hand-edited persisted value is
+ * clamped on migration too (see `migrateSettings`).
+ */
+export const MIN_COMMIT_PANEL_HEIGHT = 140;
+export const MAX_COMMIT_PANEL_HEIGHT = 640;
+
+/** Clamp any user- or storage-supplied commit panel height into range. */
+export function clampCommitPanelHeight(value: number): number {
+  if (!Number.isFinite(value)) return 320;
+  return Math.min(MAX_COMMIT_PANEL_HEIGHT, Math.max(MIN_COMMIT_PANEL_HEIGHT, Math.trunc(value)));
+}
 
 /**
  * Bounds for `diffContextLines`. git's own default is 3; 20 is plenty of
@@ -32,10 +58,11 @@ export function clampDiffContextLines(value: number): number {
 /**
  * Labels for the whitespace modes the backend implements, in menu order.
  *
- * Source-locale labels, for the surfaces that have not been migrated to
- * `msg()` yet (the diff view's own toolbar). Localised surfaces call
- * `getDiffWhitespaceModes()` instead — the two lists carry the same modes in
- * the same order.
+ * The SOURCE-LOCALE labels: every rendered surface calls
+ * `getDiffWhitespaceModes()` instead, because a module-level list of `msg()`
+ * results would freeze at the startup locale. This constant is the English
+ * reference the store's own tests compare that function against, so the two
+ * lists must carry the same modes in the same order.
  */
 export const DIFF_WHITESPACE_MODES: { value: DiffWhitespaceMode; label: string }[] = [
   { value: 'none', label: 'Show all whitespace' },
@@ -112,6 +139,20 @@ export interface SettingsState {
   confirmNetworkOps: boolean;     // Prompt before fetch/push/pull
   remoteAllowlist: string[];      // If non-empty, only these domains are allowed
 
+  // AI quick settings
+  /** Language the AI prompts and the text they generate use. */
+  aiPromptLanguage: AiPromptLanguage;
+  /**
+   * Whether the compact 简/英 prompt-language switch is shown in the commit
+   * panel. Off hides the shortcut only — the language itself stays settable in
+   * Settings.
+   */
+  showPromptLanguageSwitch: boolean;
+
+  // Layout
+  /** Height in px of the commit panel in the right sidebar's Changes tab. */
+  commitPanelHeight: number;
+
   // System tray & notifications
   minimizeToTray: boolean;
   showNativeNotifications: boolean;
@@ -148,14 +189,49 @@ export interface SettingsState {
   setOfflineMode: (enabled: boolean) => void;
   setConfirmNetworkOps: (enabled: boolean) => void;
   setRemoteAllowlist: (domains: string[]) => void;
+  setAiPromptLanguage: (language: AiPromptLanguage) => void;
+  setShowPromptLanguageSwitch: (show: boolean) => void;
+  setCommitPanelHeight: (height: number) => void;
   setMinimizeToTray: (enabled: boolean) => void;
   setShowNativeNotifications: (enabled: boolean) => void;
   resetToDefaults: () => void;
 }
 
+/**
+ * The storage key the settings blob is persisted under.
+ *
+ * Kept next to the store because two things read it: zustand's persist
+ * middleware, and `hasPersistedSettings()` — which needs to know whether a
+ * blob exists before deciding whose job it is to apply the UI language.
+ */
+const SETTINGS_STORAGE_KEY = 'gitnado-settings';
+
+/**
+ * Whether this install has ever persisted settings.
+ *
+ * A fresh install has no blob, and its language default (中文) is applied once,
+ * by `applyPersistedLocale()` at app start. Applying that default from the
+ * store's rehydration path instead would switch the locale of anything that so
+ * much as imports this module — a component rendered in isolation, a unit test
+ * asserting the English source strings — before the app entry ever asked for it.
+ */
+function hasPersistedSettings(): boolean {
+  try {
+    const blob = globalThis.localStorage?.getItem(SETTINGS_STORAGE_KEY);
+    return blob !== null && blob !== undefined;
+  } catch {
+    // Storage can be unavailable (or throw) in a sandboxed context; treat that
+    // as "no persisted settings" rather than failing store creation.
+    return false;
+  }
+}
+
 const defaultSettings = {
-  // The system language when we ship it, English otherwise.
-  language: detectSystemLocale(),
+  // Chinese, for a fresh install. The app used to start in the OS language when
+  // we shipped it; the product now ships Chinese-first, so a new install opens
+  // in 中文 whatever the system language is. An existing install keeps the
+  // language it has persisted (see `migrateSettings` and the startup apply).
+  language: 'zh' as Locale,
   theme: 'dark' as Theme,
   fontSize: 'medium' as FontSize,
   fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, sans-serif',
@@ -195,6 +271,16 @@ const defaultSettings = {
   remoteAllowlist: [] as string[],
   minimizeToTray: false,
   showNativeNotifications: true,
+  // Follows the Chinese-first product default: a fresh install should not write
+  // English commit messages from a 中文 interface. Existing installs keep the
+  // prompts they have always had — see the v9 migration.
+  aiPromptLanguage: 'zh' as AiPromptLanguage,
+  // On by default: it is the quickest way to flip the language for one commit,
+  // and off would ship the feature invisible on a fresh install.
+  showPromptLanguageSwitch: true,
+  // Tall enough for the message box plus the Commit button on a fresh install,
+  // short enough to leave the staged-file list the majority of the sidebar.
+  commitPanelHeight: 320,
 };
 
 const LEGACY_DIFF_WORD_WRAP_KEY = 'gitnado-diff-word-wrap';
@@ -263,21 +349,34 @@ export function migrateSettings(persisted: unknown, fromVersion: number): Settin
     delete (state as Record<string, unknown>).defaultRemoteName;
   }
   if (fromVersion < 8 && state.language === undefined) {
-    // v8 adds `language`, whose fresh-install default is the OS language.
-    // Every pre-v8 blob predates the key, and every one of those installs has
-    // only ever rendered in English — so letting the shallow merge fill the
-    // gap from the default would switch a French-locale machine's whole UI to
-    // French on the first launch after an upgrade, unasked and with no prompt.
-    // Detecting the system locale is what a FIRST run does; an existing
-    // install keeps the language it has always had until the user picks
-    // another in Settings.
+    // v8 adds `language`. Every pre-v8 blob predates the key, and every one of
+    // those installs has only ever rendered in English — so letting the shallow
+    // merge fill the gap from the default (中文, see `defaultSettings`) would
+    // switch a whole existing UI to another language on the first launch after
+    // an upgrade, unasked. The default is what a FRESH install gets; an existing
+    // install keeps the language it has always had until the user picks another
+    // in Settings.
     state.language = 'en';
+  }
+  if (fromVersion < 9) {
+    // v9 adds the AI prompt language and its quick-switch visibility. Both keys
+    // are NEW, and every pre-v9 install has only ever sent English prompts, so
+    // the shallow merge must not hand it the fresh-install default (中文) and
+    // silently change the language of every AI-written commit message. The
+    // shortcut defaults on: off would ship the feature invisible on upgrade.
+    if (state.aiPromptLanguage === undefined) state.aiPromptLanguage = 'en';
+    if (state.showPromptLanguageSwitch === undefined) state.showPromptLanguageSwitch = true;
   }
   // A persisted context-line count predates any bound being enforced, and is
   // also the one setting a user could have hand-edited in storage. Applied on
   // every migration, not just one step, so no stored value escapes the bounds.
   if (state.diffContextLines !== undefined) {
     state.diffContextLines = clampDiffContextLines(Number(state.diffContextLines));
+  }
+  // Same story for the commit panel height: persisted before any bound existed,
+  // and hand-editable, so every upgrade re-clamps it.
+  if (state.commitPanelHeight !== undefined) {
+    state.commitPanelHeight = clampCommitPanelHeight(Number(state.commitPanelHeight));
   }
   return state as SettingsState;
 }
@@ -295,6 +394,15 @@ export const settingsStore = createStore<SettingsState>()(
         // to load must not come back on the next launch.
         const applied = await setAppLocale(resolveLocale(locale));
         set({ language: applied });
+        // The one place a language actually takes effect, so it is also where
+        // native chrome that lives outside the render tree — the application
+        // menu bar — hears about it. Dispatched on a plain Event, not a Zustand
+        // notification, so listeners can read the rendered locale synchronously.
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(
+            new CustomEvent('app-language-changed', { detail: { locale: applied } })
+          );
+        }
         return applied;
       },
 
@@ -377,6 +485,17 @@ export const settingsStore = createStore<SettingsState>()(
       setConfirmNetworkOps: (confirmNetworkOps) => set({ confirmNetworkOps }),
       setRemoteAllowlist: (remoteAllowlist) => set({ remoteAllowlist }),
 
+      setAiPromptLanguage: (aiPromptLanguage) => set({ aiPromptLanguage }),
+
+      setShowPromptLanguageSwitch: (showPromptLanguageSwitch) =>
+        set({ showPromptLanguageSwitch }),
+
+      // Clamped here rather than in the drag handler, so the divider, a
+      // hand-edited persisted value and any future control cannot disagree about
+      // what is in range.
+      setCommitPanelHeight: (commitPanelHeight) =>
+        set({ commitPanelHeight: clampCommitPanelHeight(commitPanelHeight) }),
+
       setMinimizeToTray: (minimizeToTray) => set({ minimizeToTray }),
 
       setShowNativeNotifications: (showNativeNotifications) => set({ showNativeNotifications }),
@@ -395,8 +514,8 @@ export const settingsStore = createStore<SettingsState>()(
       },
     }),
     {
-      name: 'gitnado-settings',
-      version: 8,
+      name: SETTINGS_STORAGE_KEY,
+      version: 9,
       // Changing a default only affects installs with no persisted state.
       // zustand's default merge is a shallow `{...defaults, ...persisted}`, and
       // the whole settings object is persisted the moment the user changes
@@ -413,14 +532,21 @@ export const settingsStore = createStore<SettingsState>()(
       // default flip to `false` must not reach it. See `migrateSettings`.
       //
       // `language` is a third shape again: the key is NEW, so no persisted blob
-      // has it, and its fresh-install default (the OS language) is exactly what
-      // an upgrade must not apply — see the v8 rule in `migrateSettings`.
+      // has it, and its fresh-install default (中文) is exactly what an upgrade
+      // must not apply — see the v8 rule in `migrateSettings`. `aiPromptLanguage`
+      // follows the same rule for the same reason: every pre-v9 install has
+      // only ever sent English prompts, so its fresh-install default (中文)
+      // would change every AI-written commit message on upgrade.
       migrate: migrateSettings,
       onRehydrateStorage: () => (state) => {
         if (state) {
-          // Goes through the action so a persisted locale we no longer ship is
-          // sanitised back to English instead of throwing on every render.
-          void state.setLanguage(state.language);
+          // Only an install with a persisted blob applies its language here,
+          // and through the action so a persisted locale we no longer ship is
+          // sanitised instead of throwing on every render. A fresh install has
+          // no blob: its Chinese default is applied by `applyPersistedLocale()`
+          // at app start, so merely importing this store (a component, a unit
+          // test) never switches the locale out from under the renderer.
+          if (hasPersistedSettings()) void state.setLanguage(state.language);
           applyTheme(state.theme);
           applyFontSize(state.fontSize);
           applyDensity(state.density);

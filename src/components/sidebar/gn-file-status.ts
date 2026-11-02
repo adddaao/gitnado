@@ -1,5 +1,6 @@
 import { LitElement, html, css, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
+import { localized, msg, str } from "@lit/localize";
 import { sharedStyles } from "../../styles/shared-styles.ts";
 import * as gitService from "../../services/git.service.ts";
 import * as watcherService from "../../services/watcher.service.ts";
@@ -61,13 +62,16 @@ function gitignoreExtensionPattern(path: string): string | null {
  * Both views read from HEAD, so a path that has never been committed has
  * nothing to show: its log is empty and `blame_file` fails outright.
  */
-const NO_HISTORY_REASON = "Not committed yet, so there is no history to show";
+function noHistoryReason(): string {
+  return msg("Not committed yet, so there is no history to show");
+}
 
 /**
  * File status component
  * Displays staged and unstaged changes with staging functionality
  */
 @customElement("gn-file-status")
+@localized()
 export class GnFileStatus extends LitElement {
   static styles = [
     sharedStyles,
@@ -1008,7 +1012,7 @@ export class GnFileStatus extends LitElement {
     if (result.success) {
       await this.loadStatus();
     } else {
-      showToast(result.error?.message ?? 'Failed to stage files', 'error');
+      showToast(result.error?.message ?? msg('Failed to stage files'), 'error');
     }
   }
 
@@ -1031,7 +1035,7 @@ export class GnFileStatus extends LitElement {
     if (result.success) {
       await this.loadStatus();
     } else {
-      showToast(result.error?.message ?? 'Failed to unstage files', 'error');
+      showToast(result.error?.message ?? msg('Failed to unstage files'), 'error');
     }
   }
 
@@ -1065,7 +1069,7 @@ export class GnFileStatus extends LitElement {
     // NOTHING visible — no toast, no error, not even a console line — because
     // this check sat above the one that speaks.
     if (this.discarding) {
-      showToast('Another operation is already running in this repository.', 'warning');
+      showToast(msg('Another operation is already running in this repository.'), 'warning');
       return;
     }
     // discard_changes does its own forced checkout against the same working
@@ -1073,7 +1077,7 @@ export class GnFileStatus extends LitElement {
     // per-repo lock — so this must join the shared one rather than guard only
     // itself. Claimed before the confirm, like its siblings.
     if (!tryAcquireRefOp(repoPath)) {
-      showToast('Another operation is already running in this repository.', 'warning');
+      showToast(msg('Another operation is already running in this repository.'), 'warning');
       return;
     }
     this.discarding = true;
@@ -1084,7 +1088,7 @@ export class GnFileStatus extends LitElement {
       if (result.success) {
         await this.loadStatus();
       } else {
-        showToast(result.error?.message ?? 'Failed to discard changes', 'error');
+        showToast(result.error?.message ?? msg('Failed to discard changes'), 'error');
       }
     } finally {
       this.discarding = false;
@@ -1547,7 +1551,7 @@ export class GnFileStatus extends LitElement {
 
       if (!result.success) {
         if (isCurrent) {
-          this.error = result.error?.message ?? "Failed to load status";
+          this.error = result.error?.message ?? msg("Failed to load status");
         }
         return;
       }
@@ -1604,7 +1608,7 @@ export class GnFileStatus extends LitElement {
       }
     } catch (err) {
       if (this.repositoryPath === loadedPath) {
-        this.error = err instanceof Error ? err.message : "Unknown error";
+        this.error = err instanceof Error ? err.message : msg("Unknown error");
       }
     } finally {
       // A stale load must not stomp the loading state of the load that the
@@ -1690,7 +1694,11 @@ export class GnFileStatus extends LitElement {
     const conflicted = files.filter((f) => f.isConflicted);
     if (conflicted.length > 0) {
       showToast(
-        `${conflicted.length} conflicted file${conflicted.length === 1 ? '' : 's'} skipped — resolve ${conflicted.length === 1 ? 'it' : 'them'} in the merge editor first`,
+        conflicted.length === 1
+          ? msg('1 conflicted file skipped — resolve it in the merge editor first')
+          : msg(
+              str`${conflicted.length} conflicted files skipped — resolve them in the merge editor first`,
+            ),
         'warning',
       );
     }
@@ -1708,7 +1716,13 @@ export class GnFileStatus extends LitElement {
     const conflicted = files.filter((f) => f.isConflicted);
     if (conflicted.length > 0) {
       showToast(
-        `${conflicted.length} conflicted file${conflicted.length === 1 ? '' : 's'} skipped — resolve ${conflicted.length === 1 ? 'it' : 'them'} in the merge editor (or abort the operation) instead`,
+        conflicted.length === 1
+          ? msg(
+              '1 conflicted file skipped — resolve it in the merge editor (or abort the operation) instead',
+            )
+          : msg(
+              str`${conflicted.length} conflicted files skipped — resolve them in the merge editor (or abort the operation) instead`,
+            ),
         'warning',
       );
     }
@@ -1750,40 +1764,100 @@ export class GnFileStatus extends LitElement {
     files: StatusEntry[],
     scope?: string,
   ): { title: string; message: string } {
+    // The count wording and the optional ` in "<scope>"` suffix each carry
+    // English the translator has to see, so every combination is its own
+    // message rather than a concatenation of untranslated fragments.
     const untracked = files.filter((f) => f.status === 'untracked').length;
     const tracked = files.length - untracked;
-    const where = scope ? ` in "${scope}"` : '';
-    const plural = (n: number) => (n === 1 ? '' : 's');
 
     if (files.length === 1) {
       return untracked === 1
         ? {
-            title: 'Delete Untracked File',
-            message: `Permanently delete the untracked file "${files[0].path}"? It is not in Git and cannot be recovered.`,
+            title: msg('Delete Untracked File'),
+            message: msg(
+              str`Permanently delete the untracked file "${files[0].path}"? It is not in Git and cannot be recovered.`,
+            ),
           }
         : {
-            title: 'Discard Changes',
-            message: `Discard changes to "${files[0].path}"? This cannot be undone.`,
+            title: msg('Discard Changes'),
+            message: msg(str`Discard changes to "${files[0].path}"? This cannot be undone.`),
           };
     }
 
     if (untracked === 0) {
       return {
-        title: 'Discard Changes',
-        message: `Discard changes to ${tracked} file${plural(tracked)}${where}? This cannot be undone.`,
+        title: msg('Discard Changes'),
+        message:
+          scope
+            ? msg(str`Discard changes to ${tracked} files in "${scope}"? This cannot be undone.`)
+            : msg(str`Discard changes to ${tracked} files? This cannot be undone.`),
       };
     }
 
     if (tracked === 0) {
       return {
-        title: 'Delete Untracked Files',
-        message: `Permanently delete ${untracked} untracked file${plural(untracked)}${where}? They are not in Git and cannot be recovered.`,
+        title: msg('Delete Untracked Files'),
+        message:
+          scope
+            ? msg(
+                str`Permanently delete ${untracked} untracked files in "${scope}"? They are not in Git and cannot be recovered.`,
+              )
+            : msg(
+                str`Permanently delete ${untracked} untracked files? They are not in Git and cannot be recovered.`,
+              ),
       };
     }
 
+    const title = msg('Discard Changes');
+    if (scope) {
+      if (tracked === 1) {
+        return {
+          title,
+          message:
+            untracked === 1
+              ? msg(
+                  str`Discard changes to ${tracked} file and permanently delete ${untracked} untracked file in "${scope}"? This cannot be undone.`,
+                )
+              : msg(
+                  str`Discard changes to ${tracked} file and permanently delete ${untracked} untracked files in "${scope}"? This cannot be undone.`,
+                ),
+        };
+      }
+      return {
+        title,
+        message:
+          untracked === 1
+            ? msg(
+                str`Discard changes to ${tracked} files and permanently delete ${untracked} untracked file in "${scope}"? This cannot be undone.`,
+              )
+            : msg(
+                str`Discard changes to ${tracked} files and permanently delete ${untracked} untracked files in "${scope}"? This cannot be undone.`,
+              ),
+      };
+    }
+    if (tracked === 1) {
+      return {
+        title,
+        message:
+          untracked === 1
+            ? msg(
+                str`Discard changes to ${tracked} file and permanently delete ${untracked} untracked file? This cannot be undone.`,
+              )
+            : msg(
+                str`Discard changes to ${tracked} file and permanently delete ${untracked} untracked files? This cannot be undone.`,
+              ),
+      };
+    }
     return {
-      title: 'Discard Changes',
-      message: `Discard changes to ${tracked} file${plural(tracked)} and permanently delete ${untracked} untracked file${plural(untracked)}${where}? This cannot be undone.`,
+      title,
+      message:
+        untracked === 1
+          ? msg(
+              str`Discard changes to ${tracked} files and permanently delete ${untracked} untracked file? This cannot be undone.`,
+            )
+          : msg(
+              str`Discard changes to ${tracked} files and permanently delete ${untracked} untracked files? This cannot be undone.`,
+            ),
     };
   }
 
@@ -1810,7 +1884,7 @@ export class GnFileStatus extends LitElement {
     if (result.success) {
       await this.loadStatus();
     } else {
-      showToast(result.error?.message ?? 'Failed to stage file', 'error');
+      showToast(result.error?.message ?? msg('Failed to stage file'), 'error');
     }
   }
 
@@ -1829,7 +1903,7 @@ export class GnFileStatus extends LitElement {
     if (result.success) {
       await this.loadStatus();
     } else {
-      showToast(result.error?.message ?? 'Failed to unstage file', 'error');
+      showToast(result.error?.message ?? msg('Failed to unstage file'), 'error');
     }
   }
 
@@ -1865,7 +1939,7 @@ export class GnFileStatus extends LitElement {
     // NOTHING visible — no toast, no error, not even a console line — because
     // this check sat above the one that speaks.
     if (this.discarding) {
-      showToast('Another operation is already running in this repository.', 'warning');
+      showToast(msg('Another operation is already running in this repository.'), 'warning');
       return;
     }
     // discard_changes does its own forced checkout against the same working
@@ -1873,7 +1947,7 @@ export class GnFileStatus extends LitElement {
     // per-repo lock — so this must join the shared one rather than guard only
     // itself. Claimed before the confirm, like its siblings.
     if (!tryAcquireRefOp(repoPath)) {
-      showToast('Another operation is already running in this repository.', 'warning');
+      showToast(msg('Another operation is already running in this repository.'), 'warning');
       return;
     }
     this.discarding = true;
@@ -1884,7 +1958,7 @@ export class GnFileStatus extends LitElement {
       if (result.success) {
         await this.loadStatus();
       } else {
-        showToast(result.error?.message ?? 'Failed to discard changes', 'error');
+        showToast(result.error?.message ?? msg('Failed to discard changes'), 'error');
       }
     } finally {
       this.discarding = false;
@@ -1929,14 +2003,17 @@ export class GnFileStatus extends LitElement {
    * keeps agreeing with that warning.
    */
   private reportFilteredScope(
-    verb: 'Staged' | 'Unstaged',
+    verb: string,
     acted: number,
     visible: number,
     total: number,
   ): void {
     if (!this.isFiltering || visible >= total) return;
+    const filterText = this.filterQuery.trim();
     showToast(
-      `${verb} ${acted} of ${total} file${total === 1 ? '' : 's'} — the filter "${this.filterQuery.trim()}" is hiding the rest`,
+      total === 1
+        ? msg(str`${verb} ${acted} of 1 file — the filter "${filterText}" is hiding the rest`)
+        : msg(str`${verb} ${acted} of ${total} files — the filter "${filterText}" is hiding the rest`),
       'info',
     );
   }
@@ -1949,8 +2026,11 @@ export class GnFileStatus extends LitElement {
    */
   private reportEmptyFilteredScope(verb: 'stage' | 'unstage', total: number): void {
     if (!this.isFiltering || total === 0) return;
+    const filterText = this.filterQuery.trim();
     showToast(
-      `Nothing to ${verb} — no file matches the filter "${this.filterQuery.trim()}"`,
+      verb === 'stage'
+        ? msg(str`Nothing to stage — no file matches the filter "${filterText}"`)
+        : msg(str`Nothing to unstage — no file matches the filter "${filterText}"`),
       'info',
     );
   }
@@ -1973,10 +2053,10 @@ export class GnFileStatus extends LitElement {
       // the toast claim files the separate "conflicted file skipped" warning
       // says were left alone. `files` is what the filter left visible, which is
       // the only thing that can decide whether the filter hid anything at all.
-      this.reportFilteredScope('Staged', paths.length, files.length, total);
+      this.reportFilteredScope(msg('Staged'), paths.length, files.length, total);
       await this.loadStatus();
     } else {
-      showToast(result.error?.message ?? 'Failed to stage files', 'error');
+      showToast(result.error?.message ?? msg('Failed to stage files'), 'error');
     }
   }
 
@@ -1995,10 +2075,10 @@ export class GnFileStatus extends LitElement {
       // `paths` is the set actually sent AND the whole visible set — nothing
       // is dropped on this path — so neither count can drift from what was
       // unstaged (as they did for the staging path above).
-      this.reportFilteredScope('Unstaged', paths.length, files.length, total);
+      this.reportFilteredScope(msg('Unstaged'), paths.length, files.length, total);
       await this.loadStatus();
     } else {
-      showToast(result.error?.message ?? 'Failed to unstage files', 'error');
+      showToast(result.error?.message ?? msg('Failed to unstage files'), 'error');
     }
   }
 
@@ -2073,7 +2153,7 @@ export class GnFileStatus extends LitElement {
       this.selectedFiles = newSelected;
       await this.loadStatus();
     } else {
-      showToast(result.error?.message ?? 'Failed to stage files', 'error');
+      showToast(result.error?.message ?? msg('Failed to stage files'), 'error');
     }
   }
 
@@ -2092,7 +2172,7 @@ export class GnFileStatus extends LitElement {
       this.selectedFiles = newSelected;
       await this.loadStatus();
     } else {
-      showToast(result.error?.message ?? 'Failed to unstage files', 'error');
+      showToast(result.error?.message ?? msg('Failed to unstage files'), 'error');
     }
   }
 
@@ -2118,7 +2198,7 @@ export class GnFileStatus extends LitElement {
     // NOTHING visible — no toast, no error, not even a console line — because
     // this check sat above the one that speaks.
     if (this.discarding) {
-      showToast('Another operation is already running in this repository.', 'warning');
+      showToast(msg('Another operation is already running in this repository.'), 'warning');
       return;
     }
     // discard_changes does its own forced checkout against the same working
@@ -2126,7 +2206,7 @@ export class GnFileStatus extends LitElement {
     // per-repo lock — so this must join the shared one rather than guard only
     // itself. Claimed before the confirm, like its siblings.
     if (!tryAcquireRefOp(repoPath)) {
-      showToast('Another operation is already running in this repository.', 'warning');
+      showToast(msg('Another operation is already running in this repository.'), 'warning');
       return;
     }
     this.discarding = true;
@@ -2140,7 +2220,7 @@ export class GnFileStatus extends LitElement {
         this.selectedFiles = newSelected;
         await this.loadStatus();
       } else {
-        showToast(result.error?.message ?? 'Failed to discard changes', 'error');
+        showToast(result.error?.message ?? msg('Failed to discard changes'), 'error');
       }
     } finally {
       this.discarding = false;
@@ -2179,7 +2259,7 @@ export class GnFileStatus extends LitElement {
     if (result.success) {
       await this.loadStatus();
     } else {
-      showToast(result.error?.message ?? 'Failed to stage file', 'error');
+      showToast(result.error?.message ?? msg('Failed to stage file'), 'error');
     }
   }
 
@@ -2193,7 +2273,7 @@ export class GnFileStatus extends LitElement {
     if (result.success) {
       await this.loadStatus();
     } else {
-      showToast(result.error?.message ?? 'Failed to unstage file', 'error');
+      showToast(result.error?.message ?? msg('Failed to unstage file'), 'error');
     }
   }
 
@@ -2214,10 +2294,10 @@ export class GnFileStatus extends LitElement {
     if (result.success) {
       // add_to_gitignore skips a pattern that is already present, so this reads
       // true whether the rule was written now or was already in the file.
-      showToast(`"${file.path}" is now ignored`, "success");
+      showToast(msg(str`"${file.path}" is now ignored`), "success");
       await this.loadStatus();
     } else {
-      showToast(result.error?.message ?? "Failed to update .gitignore", "error");
+      showToast(result.error?.message ?? msg("Failed to update .gitignore"), "error");
     }
   }
 
@@ -2269,7 +2349,7 @@ export class GnFileStatus extends LitElement {
    */
   private requestFileHistory(file: StatusEntry): void {
     if (!this.fileHasHistory(file)) {
-      showToast(`"${file.path}": ${NO_HISTORY_REASON}`, "warning");
+      showToast(msg(str`"${file.path}": ${noHistoryReason()}`), "warning");
       return;
     }
     this.dispatchEvent(
@@ -2291,12 +2371,12 @@ export class GnFileStatus extends LitElement {
    */
   private requestBlame(file: StatusEntry): void {
     if (!this.fileHasHistory(file)) {
-      showToast(`"${file.path}": ${NO_HISTORY_REASON}`, "warning");
+      showToast(msg(str`"${file.path}": ${noHistoryReason()}`), "warning");
       return;
     }
     if (file.status === "deleted") {
       showToast(
-        `"${file.path}" is deleted from the working tree, so there is nothing to blame`,
+        msg(str`"${file.path}" is deleted from the working tree, so there is nothing to blame`),
         "warning",
       );
       return;
@@ -2333,7 +2413,7 @@ export class GnFileStatus extends LitElement {
       await shellOpen(fullPath);
     } catch (err) {
       console.error("Failed to open file:", err);
-      showToast("Failed to open file in editor", "error");
+      showToast(msg("Failed to open file in editor"), "error");
     }
   }
 
@@ -2345,11 +2425,11 @@ export class GnFileStatus extends LitElement {
       const fullPath = await join(this.repositoryPath, file.path);
       const result = await gitService.revealInFileManager(fullPath);
       if (!result.success) {
-        showToast(result.error?.message ?? "Failed to reveal file in file manager", "error");
+        showToast(result.error?.message ?? msg("Failed to reveal file in file manager"), "error");
       }
     } catch (err) {
       console.error("Failed to reveal:", err);
-      showToast("Failed to reveal file in file manager", "error");
+      showToast(msg("Failed to reveal file in file manager"), "error");
     }
   }
 
@@ -2361,7 +2441,7 @@ export class GnFileStatus extends LitElement {
       await navigator.clipboard.writeText(file.path);
     } catch (err) {
       console.error("Failed to copy:", err);
-      showToast("Failed to copy file path to clipboard", "error");
+      showToast(msg("Failed to copy file path to clipboard"), "error");
     }
   }
 
@@ -2388,7 +2468,7 @@ export class GnFileStatus extends LitElement {
     // NOTHING visible — no toast, no error, not even a console line — because
     // this check sat above the one that speaks.
     if (this.discarding) {
-      showToast('Another operation is already running in this repository.', 'warning');
+      showToast(msg('Another operation is already running in this repository.'), 'warning');
       return;
     }
     // discard_changes does its own forced checkout against the same working
@@ -2396,7 +2476,7 @@ export class GnFileStatus extends LitElement {
     // per-repo lock — so this must join the shared one rather than guard only
     // itself. Claimed before the confirm, like its siblings.
     if (!tryAcquireRefOp(repoPath)) {
-      showToast('Another operation is already running in this repository.', 'warning');
+      showToast(msg('Another operation is already running in this repository.'), 'warning');
       return;
     }
     this.discarding = true;
@@ -2407,7 +2487,7 @@ export class GnFileStatus extends LitElement {
       if (result.success) {
         await this.loadStatus();
       } else {
-        showToast(result.error?.message ?? 'Failed to discard changes', 'error');
+        showToast(result.error?.message ?? msg('Failed to discard changes'), 'error');
       }
     } finally {
       this.discarding = false;
@@ -2440,7 +2520,7 @@ export class GnFileStatus extends LitElement {
         @click=${(e: MouseEvent) => this.handleFileClick(file, e)}
         @contextmenu=${(e: MouseEvent) =>
           this.handleContextMenu(e, file, staged)}
-        title="${file.path}${isPartial ? " (partially staged)" : ""}"
+        title=${isPartial ? msg(str`${file.path} (partially staged)`) : file.path}
         data-index="${index}"
       >
         ${isPartial ? html`<span class="partial-indicator"></span>` : nothing}
@@ -2450,15 +2530,15 @@ export class GnFileStatus extends LitElement {
         <span class="file-name-container">
           <span class="file-name">${name}</span>
           ${dir ? html`<span class="file-dir">${dir}</span>` : nothing}
-          ${isPartial ? html`<span class="partial-badge" title="This file has both staged and unstaged changes">partial</span>` : nothing}
+          ${isPartial ? html`<span class="partial-badge" title=${msg('This file has both staged and unstaged changes')}>${msg('partial')}</span>` : nothing}
         </span>
         <div class="file-actions">
           ${staged
             ? html`
                 <button
                   class="file-action"
-                  title="Unstage"
-                  aria-label="Unstage ${name}"
+                  title=${msg("Unstage")}
+                  aria-label=${msg(str`Unstage ${name}`)}
                   @click=${(e: Event) => this.handleUnstageFile(file, e)}
                 >
                   <svg
@@ -2476,8 +2556,8 @@ export class GnFileStatus extends LitElement {
             : html`
                 <button
                   class="file-action"
-                  title="Stage"
-                  aria-label="Stage ${name}"
+                  title=${msg("Stage")}
+                  aria-label=${msg(str`Stage ${name}`)}
                   @click=${(e: Event) => this.handleStageFile(file, e)}
                 >
                   <svg
@@ -2494,8 +2574,8 @@ export class GnFileStatus extends LitElement {
                 </button>
                 <button
                   class="file-action"
-                  title="Discard changes"
-                  aria-label="Discard changes for ${name}"
+                  title=${msg("Discard changes")}
+                  aria-label=${msg(str`Discard changes for ${name}`)}
                   ?disabled=${this.discarding || isRefOpRunning(this.repositoryPath)}
                   @click=${(e: Event) => this.handleDiscardFile(file, e)}
                 >
@@ -2542,20 +2622,20 @@ export class GnFileStatus extends LitElement {
           @click=${(e: MouseEvent) => this.handleFileClick(file, e)}
           @contextmenu=${(e: MouseEvent) =>
             this.handleContextMenu(e, file, staged)}
-          title="${file.path}${isPartial ? " (partially staged)" : ""}"
+          title=${isPartial ? msg(str`${file.path} (partially staged)`) : file.path}
           data-index="${index}"
         >
           ${isPartial ? html`<span class="partial-indicator"></span>` : nothing}
           <span class="file-status ${file.status}"
             >${this.getStatusLabel(file.status)}</span
           >
-          <span class="file-name"><span>${name}</span>${isPartial ? html`<span class="partial-badge">partial</span>` : nothing}</span>
+          <span class="file-name"><span>${name}</span>${isPartial ? html`<span class="partial-badge">${msg('partial')}</span>` : nothing}</span>
           <div class="file-actions">
             ${staged
               ? html`
                   <button
                     class="file-action"
-                    title="Unstage"
+                    title=${msg("Unstage")}
                     @click=${(e: Event) => this.handleUnstageFile(file, e)}
                   >
                     <svg
@@ -2573,7 +2653,7 @@ export class GnFileStatus extends LitElement {
               : html`
                   <button
                     class="file-action"
-                    title="Stage"
+                    title=${msg("Stage")}
                     @click=${(e: Event) => this.handleStageFile(file, e)}
                   >
                     <svg
@@ -2590,7 +2670,7 @@ export class GnFileStatus extends LitElement {
                   </button>
                   <button
                     class="file-action"
-                    title="Discard changes"
+                    title=${msg("Discard changes")}
                     ?disabled=${this.discarding || isRefOpRunning(this.repositoryPath)}
                     @click=${(e: Event) => this.handleDiscardFile(file, e)}
                   >
@@ -2623,7 +2703,9 @@ export class GnFileStatus extends LitElement {
         class="folder-item"
         style="--tree-depth: ${depth}"
         @click=${() => this.toggleFolder(path)}
-        title="${path} (${fileCount} file${fileCount !== 1 ? "s" : ""})"
+        title=${fileCount === 1
+          ? msg(str`${path} (1 file)`)
+          : msg(str`${path} (${fileCount} files)`)}
       >
         <svg
           class="chevron ${isExpanded ? "expanded" : ""}"
@@ -2652,8 +2734,8 @@ export class GnFileStatus extends LitElement {
             ? html`
                 <button
                   class="file-action"
-                  title="Unstage directory"
-                  aria-label="Unstage directory ${path}"
+                  title=${msg("Unstage directory")}
+                  aria-label=${msg(str`Unstage directory ${path}`)}
                   @click=${(e: Event) => this.handleUnstageDirectory(path, e)}
                 >
                   <svg
@@ -2671,8 +2753,8 @@ export class GnFileStatus extends LitElement {
             : html`
                 <button
                   class="file-action"
-                  title="Stage directory"
-                  aria-label="Stage directory ${path}"
+                  title=${msg("Stage directory")}
+                  aria-label=${msg(str`Stage directory ${path}`)}
                   @click=${(e: Event) => this.handleStageDirectory(path, e)}
                 >
                   <svg
@@ -2689,8 +2771,8 @@ export class GnFileStatus extends LitElement {
                 </button>
                 <button
                   class="file-action"
-                  title="Discard directory changes"
-                  aria-label="Discard changes for directory ${path}"
+                  title=${msg("Discard directory changes")}
+                  aria-label=${msg(str`Discard changes for directory ${path}`)}
                   ?disabled=${this.discarding || isRefOpRunning(this.repositoryPath)}
                   @click=${(e: Event) => this.handleDiscardDirectory(path, e)}
                 >
@@ -2747,33 +2829,33 @@ export class GnFileStatus extends LitElement {
     return html`
       <div class="selection-actions">
         <span class="selection-count"
-          >${selectedInSection.length} selected</span
+          >${msg(str`${selectedInSection.length} selected`)}</span
         >
         ${staged
           ? html`
               <button
                 class="selection-action-btn"
                 @click=${() => this.handleUnstageSelected()}
-                title="Unstage selected files"
+                title=${msg("Unstage selected files")}
               >
-                Unstage
+                ${msg("Unstage")}
               </button>
             `
           : html`
               <button
                 class="selection-action-btn"
                 @click=${() => this.handleStageSelected()}
-                title="Stage selected files"
+                title=${msg("Stage selected files")}
               >
-                Stage
+                ${msg("Stage")}
               </button>
               <button
                 class="selection-action-btn danger"
                 ?disabled=${this.discarding || isRefOpRunning(this.repositoryPath)}
                 @click=${() => this.handleDiscardSelected()}
-                title="Discard selected files"
+                title=${msg("Discard selected files")}
               >
-                Discard
+                ${msg("Discard")}
               </button>
             `}
       </div>
@@ -2832,7 +2914,7 @@ export class GnFileStatus extends LitElement {
     const canBlame = this.fileCanBlame(file);
 
     return html`
-      <div class="context-menu" role="menu" aria-label="File actions" style="left: ${x}px; top: ${y}px"
+      <div class="context-menu" role="menu" aria-label=${msg("File actions")} style="left: ${x}px; top: ${y}px"
         @keydown=${(e: KeyboardEvent) => this.handleContextMenuKeydown(e)}
       >
         ${isStaged
@@ -2850,7 +2932,7 @@ export class GnFileStatus extends LitElement {
                 >
                   <line x1="5" y1="12" x2="19" y2="12"></line>
                 </svg>
-                Unstage
+                ${msg("Unstage")}
               </button>
             `
           : html`
@@ -2868,7 +2950,7 @@ export class GnFileStatus extends LitElement {
                   <line x1="12" y1="5" x2="12" y2="19"></line>
                   <line x1="5" y1="12" x2="19" y2="12"></line>
                 </svg>
-                Stage
+                ${msg("Stage")}
               </button>
             `}
         <button class="context-menu-item" role="menuitem" @click=${this.handleContextViewDiff}>
@@ -2880,13 +2962,15 @@ export class GnFileStatus extends LitElement {
           >
             <path d="M12 3v18M3 12h18"></path>
           </svg>
-          View diff
+          ${msg("View diff")}
         </button>
         <button
           class="context-menu-item ${hasHistory ? "" : "disabled"}"
           role="menuitem"
           aria-disabled=${hasHistory ? "false" : "true"}
-          title=${hasHistory ? "Show every commit that touched this file (H)" : NO_HISTORY_REASON}
+          title=${hasHistory
+            ? msg("Show every commit that touched this file (H)")
+            : noHistoryReason()}
           @click=${this.handleContextViewHistory}
         >
           <svg
@@ -2898,14 +2982,16 @@ export class GnFileStatus extends LitElement {
             <circle cx="12" cy="12" r="10"></circle>
             <polyline points="12 6 12 12 16 14"></polyline>
           </svg>
-          File history
+          ${msg("File history")}
         </button>
         ${file.status !== "deleted"
           ? html`<button
               class="context-menu-item ${canBlame ? "" : "disabled"}"
               role="menuitem"
               aria-disabled=${canBlame ? "false" : "true"}
-              title=${canBlame ? "Show who last changed each line (B)" : NO_HISTORY_REASON}
+              title=${canBlame
+                ? msg("Show who last changed each line (B)")
+                : noHistoryReason()}
               @click=${this.handleContextViewBlame}
             >
               <svg
@@ -2917,7 +3003,7 @@ export class GnFileStatus extends LitElement {
                 <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
                 <circle cx="12" cy="12" r="3"></circle>
               </svg>
-              Blame
+              ${msg("Blame")}
             </button>`
           : nothing}
         <button
@@ -2937,7 +3023,7 @@ export class GnFileStatus extends LitElement {
             <polyline points="15 3 21 3 21 9"></polyline>
             <line x1="10" y1="14" x2="21" y2="3"></line>
           </svg>
-          Open in editor
+          ${msg("Open in editor")}
         </button>
         ${file.status !== "deleted"
           ? html`<button
@@ -2956,10 +3042,10 @@ export class GnFileStatus extends LitElement {
                 ></path>
               </svg>
               ${navigator.userAgent.includes("Win")
-                ? "Reveal in Explorer"
+                ? msg("Reveal in Explorer")
                 : navigator.userAgent.includes("Linux")
-                  ? "Reveal in File Manager"
-                  : "Reveal in Finder"}
+                  ? msg("Reveal in File Manager")
+                  : msg("Reveal in Finder")}
             </button>`
           : nothing}
         <button class="context-menu-item" role="menuitem" @click=${this.handleContextCopyPath}>
@@ -2974,7 +3060,7 @@ export class GnFileStatus extends LitElement {
               d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"
             ></path>
           </svg>
-          Copy file path
+          ${msg("Copy file path")}
         </button>
         ${!isStaged && file.status === "untracked"
           ? html`
@@ -2994,7 +3080,7 @@ export class GnFileStatus extends LitElement {
                   <circle cx="12" cy="12" r="10"></circle>
                   <line x1="4.9" y1="4.9" x2="19.1" y2="19.1"></line>
                 </svg>
-                Add to .gitignore
+                ${msg("Add to .gitignore")}
               </button>
               ${extensionPattern
                 ? html`
@@ -3012,7 +3098,7 @@ export class GnFileStatus extends LitElement {
                         <circle cx="12" cy="12" r="10"></circle>
                         <line x1="4.9" y1="4.9" x2="19.1" y2="19.1"></line>
                       </svg>
-                      Ignore all ${extensionPattern} files
+                      ${msg(str`Ignore all ${extensionPattern} files`)}
                     </button>
                   `
                 : nothing}
@@ -3039,7 +3125,7 @@ export class GnFileStatus extends LitElement {
               d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
             ></path>
           </svg>
-          Discard changes
+          ${msg("Discard changes")}
         </button>
         `}
       </div>
@@ -3069,8 +3155,8 @@ export class GnFileStatus extends LitElement {
         <input
           class="filter-input"
           type="text"
-          placeholder="Filter changed files..."
-          aria-label="Filter changed files by path"
+          placeholder=${msg("Filter changed files...")}
+          aria-label=${msg("Filter changed files by path")}
           .value=${this.filterQuery}
           @input=${this.handleFilterInput}
           @keydown=${this.handleFilterKeydown}
@@ -3079,8 +3165,8 @@ export class GnFileStatus extends LitElement {
           ? html`
               <button
                 class="filter-clear"
-                aria-label="Clear filter"
-                title="Clear filter (Esc)"
+                aria-label=${msg("Clear filter")}
+                title=${msg("Clear filter (Esc)")}
                 @click=${() => this.clearFilter()}
               >
                 <svg
@@ -3103,21 +3189,24 @@ export class GnFileStatus extends LitElement {
   /** Polite announcement of what the filter did, for screen readers. */
   private filterAnnouncement(matches: number, total: number): string {
     if (!this.isFiltering) return "";
+    const query = this.filterQuery.trim();
     if (matches === 0) {
-      return `No files match ${this.filterQuery.trim()}`;
+      return msg(str`No files match ${query}`);
     }
-    return `${matches} of ${total} file${total === 1 ? "" : "s"} match ${this.filterQuery.trim()}`;
+    return total === 1
+      ? msg(str`${matches} of 1 file match ${query}`)
+      : msg(str`${matches} of ${total} files match ${query}`);
   }
 
   private renderNoMatches() {
     return html`
       <div class="no-match-state">
         <div>
-          No files match
+          ${msg("No files match")}
           <span class="no-match-query">${this.filterQuery.trim()}</span>
         </div>
         <button class="no-match-clear" @click=${() => this.clearFilter()}>
-          Clear filter
+          ${msg("Clear filter")}
         </button>
       </div>
     `;
@@ -3125,7 +3214,7 @@ export class GnFileStatus extends LitElement {
 
   render() {
     if (this.loading) {
-      return html`<div class="loading">Loading changes...</div>`;
+      return html`<div class="loading">${msg("Loading changes...")}</div>`;
     }
 
     if (this.error) {
@@ -3144,8 +3233,8 @@ export class GnFileStatus extends LitElement {
             <path d="M22 11.08V12a10 10 0 11-5.93-9.14"></path>
             <polyline points="22 4 12 14.01 9 11.01"></polyline>
           </svg>
-          <div class="title">Working tree clean</div>
-          <div class="subtitle">No changes to commit</div>
+          <div class="title">${msg("Working tree clean")}</div>
+          <div class="subtitle">${msg("No changes to commit")}</div>
         </div>
       `;
     }
@@ -3159,6 +3248,19 @@ export class GnFileStatus extends LitElement {
     const filtering = this.isFiltering;
     const noMatches = filtering && staged.length === 0 && unstaged.length === 0;
 
+    // Built once per render so a section action's title and aria-label can
+    // never disagree, and so the plural branch is written once.
+    const stagedActionLabel = filtering
+      ? staged.length === 1
+        ? msg(str`Unstage ${staged.length} file matching the filter`)
+        : msg(str`Unstage ${staged.length} files matching the filter`)
+      : undefined;
+    const unstagedActionLabel = filtering
+      ? unstaged.length === 1
+        ? msg(str`Stage ${unstaged.length} file matching the filter`)
+        : msg(str`Stage ${unstaged.length} files matching the filter`)
+      : undefined;
+
     // The staged tree is needed twice below — once to render the staged rows,
     // once to count them for the unstaged section's index offset. Build it once.
     const stagedTree =
@@ -3169,9 +3271,9 @@ export class GnFileStatus extends LitElement {
       <div class="toolbar">
         <button
           class="view-toggle ${this.viewMode === "tree" ? "active" : ""}"
-          title="${this.viewMode === "tree"
-            ? "Switch to flat view"
-            : "Switch to tree view"}"
+          title=${this.viewMode === "tree"
+            ? msg("Switch to flat view")
+            : msg("Switch to tree view")}
           @click=${() => this.toggleViewMode()}
         >
           ${this.viewMode === "tree"
@@ -3190,7 +3292,7 @@ export class GnFileStatus extends LitElement {
                 <line x1="3" y1="12" x2="21" y2="12"></line>
                 <line x1="3" y1="18" x2="21" y2="18"></line>
               </svg>`}
-          <span>${this.viewMode === "tree" ? "Tree" : "Flat"}</span>
+          <span>${this.viewMode === "tree" ? msg("Tree") : msg("Flat")}</span>
         </button>
       </div>
 
@@ -3213,8 +3315,10 @@ export class GnFileStatus extends LitElement {
           tabindex="0"
           aria-expanded=${this.stagedExpanded}
           aria-label=${filtering
-            ? `Staged changes, ${staged.length} of ${this.stagedFiles.length} files match the filter`
-            : `Staged changes, ${this.stagedFiles.length} files`}
+            ? msg(
+                str`Staged changes, ${staged.length} of ${this.stagedFiles.length} files match the filter`,
+              )
+            : msg(str`Staged changes, ${this.stagedFiles.length} files`)}
           @click=${() => (this.stagedExpanded = !this.stagedExpanded)}
           @keydown=${(e: KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this.stagedExpanded = !this.stagedExpanded; } }}
         >
@@ -3227,14 +3331,16 @@ export class GnFileStatus extends LitElement {
           >
             <polyline points="9 18 15 12 9 6"></polyline>
           </svg>
-          <span class="section-title">Staged</span>
+          <span class="section-title">${msg("Staged")}</span>
           <span
             class="section-count"
             title=${filtering
-              ? `${staged.length} of ${this.stagedFiles.length} staged files match the filter`
-              : `${this.stagedFiles.length} staged files`}
+              ? msg(
+                  str`${staged.length} of ${this.stagedFiles.length} staged files match the filter`,
+                )
+              : msg(str`${this.stagedFiles.length} staged files`)}
             >${filtering
-              ? `${staged.length} of ${this.stagedFiles.length}`
+              ? msg(str`${staged.length} of ${this.stagedFiles.length}`)
               : this.stagedFiles.length}</span
           >
           ${staged.length > 0
@@ -3245,12 +3351,8 @@ export class GnFileStatus extends LitElement {
                 >
                   <button
                     class="section-action"
-                    title=${filtering
-                      ? `Unstage ${staged.length} file${staged.length === 1 ? "" : "s"} matching the filter`
-                      : "Unstage all"}
-                    aria-label=${filtering
-                      ? `Unstage ${staged.length} file${staged.length === 1 ? "" : "s"} matching the filter`
-                      : "Unstage all files"}
+                    title=${stagedActionLabel ?? msg("Unstage all")}
+                    aria-label=${stagedActionLabel ?? msg("Unstage all files")}
                     @click=${this.handleUnstageAllShown}
                   >
                     <svg
@@ -3282,8 +3384,10 @@ export class GnFileStatus extends LitElement {
           tabindex="0"
           aria-expanded=${this.unstagedExpanded}
           aria-label=${filtering
-            ? `Unstaged changes, ${unstaged.length} of ${this.unstagedFiles.length} files match the filter`
-            : `Unstaged changes, ${this.unstagedFiles.length} files`}
+            ? msg(
+                str`Unstaged changes, ${unstaged.length} of ${this.unstagedFiles.length} files match the filter`,
+              )
+            : msg(str`Unstaged changes, ${this.unstagedFiles.length} files`)}
           @click=${() => (this.unstagedExpanded = !this.unstagedExpanded)}
           @keydown=${(e: KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this.unstagedExpanded = !this.unstagedExpanded; } }}
         >
@@ -3296,14 +3400,16 @@ export class GnFileStatus extends LitElement {
           >
             <polyline points="9 18 15 12 9 6"></polyline>
           </svg>
-          <span class="section-title">Changes</span>
+          <span class="section-title">${msg("Changes")}</span>
           <span
             class="section-count"
             title=${filtering
-              ? `${unstaged.length} of ${this.unstagedFiles.length} changed files match the filter`
-              : `${this.unstagedFiles.length} changed files`}
+              ? msg(
+                  str`${unstaged.length} of ${this.unstagedFiles.length} changed files match the filter`,
+                )
+              : msg(str`${this.unstagedFiles.length} changed files`)}
             >${filtering
-              ? `${unstaged.length} of ${this.unstagedFiles.length}`
+              ? msg(str`${unstaged.length} of ${this.unstagedFiles.length}`)
               : this.unstagedFiles.length}</span
           >
           ${unstaged.length > 0
@@ -3314,12 +3420,8 @@ export class GnFileStatus extends LitElement {
                 >
                   <button
                     class="section-action"
-                    title=${filtering
-                      ? `Stage ${unstaged.length} file${unstaged.length === 1 ? "" : "s"} matching the filter`
-                      : "Stage all"}
-                    aria-label=${filtering
-                      ? `Stage ${unstaged.length} file${unstaged.length === 1 ? "" : "s"} matching the filter`
-                      : "Stage all files"}
+                    title=${unstagedActionLabel ?? msg("Stage all")}
+                    aria-label=${unstagedActionLabel ?? msg("Stage all files")}
                     @click=${this.handleStageAllShown}
                   >
                     <svg

@@ -5,11 +5,13 @@
 
 import { LitElement, html, css, nothing } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
+import { localized, msg, str } from '@lit/localize';
 import { sharedStyles, animationStyles } from '../../styles/shared-styles.ts';
 import type { IntegrationAccount, IntegrationType } from '../../types/unified-profile.types.ts';
 import type { ConnectionStatus } from '../../stores/unified-profile.store.ts';
 
 @customElement('gn-integration-card')
+@localized()
 export class GnIntegrationCard extends LitElement {
   static styles = [
     sharedStyles,
@@ -286,15 +288,15 @@ export class GnIntegrationCard extends LitElement {
     if (this.isProfileDefault) {
       return html`<span
         class="default-badge"
-        title="This profile prefers this account for its provider"
-        >Profile default</span
+        title=${msg('This profile prefers this account for its provider')}
+        >${msg('Profile default')}</span
       >`;
     }
     if (this.isGlobalDefault) {
       return html`<span
         class="default-badge global"
-        title="Used as the fallback when no profile preference is set"
-        >Global default</span
+        title=${msg('Used as the fallback when no profile preference is set')}
+        >${msg('Global default')}</span
       >`;
     }
     return nothing;
@@ -320,13 +322,13 @@ export class GnIntegrationCard extends LitElement {
   private getStatusText(): string {
     switch (this.connectionStatus) {
       case 'connected':
-        return 'Connected';
+        return msg('Connected');
       case 'disconnected':
-        return 'Disconnected';
+        return msg('Disconnected');
       case 'checking':
-        return 'Checking...';
+        return msg('Checking...');
       default:
-        return 'Unknown';
+        return msg('Unknown');
     }
   }
 
@@ -336,7 +338,9 @@ export class GnIntegrationCard extends LitElement {
 
     switch (config.type) {
       case 'azure-devops':
-        return config.organization ? `org: ${config.organization}` : null;
+        return config.organization
+          ? msg(str`org: ${config.organization}`)
+          : null;
       case 'gitlab':
         if (config.instanceUrl && config.instanceUrl !== 'https://gitlab.com') {
           try {
@@ -348,7 +352,9 @@ export class GnIntegrationCard extends LitElement {
         }
         return null;
       case 'bitbucket':
-        return config.workspace ? `workspace: ${config.workspace}` : null;
+        return config.workspace
+          ? msg(str`workspace: ${config.workspace}`)
+          : null;
       case 'oidc':
         if (config.issuerUrl) {
           try {
@@ -393,7 +399,7 @@ export class GnIntegrationCard extends LitElement {
             <button
               class="action-btn ${this.connectionStatus === 'checking' ? 'spinning' : ''}"
               @click=${this.handleRefresh}
-              title="Refresh connection"
+              title=${msg('Refresh connection')}
               ?disabled=${this.connectionStatus === 'checking'}
             >
               <svg viewBox="0 0 16 16" fill="currentColor">
@@ -401,7 +407,11 @@ export class GnIntegrationCard extends LitElement {
                 <path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/>
               </svg>
             </button>
-            <button class="action-btn" @click=${this.handleOpenDialog} title="Configure account">
+            <button
+              class="action-btn"
+              @click=${this.handleOpenDialog}
+              title=${msg('Configure account')}
+            >
               <svg viewBox="0 0 16 16" fill="currentColor">
                 <path fill-rule="evenodd" d="M8.636 3.5a.5.5 0 0 0-.5-.5H1.5A1.5 1.5 0 0 0 0 4.5v10A1.5 1.5 0 0 0 1.5 16h10a1.5 1.5 0 0 0 1.5-1.5V7.864a.5.5 0 0 0-1 0V14.5a.5.5 0 0 1-.5.5h-10a.5.5 0 0 1-.5-.5v-10a.5.5 0 0 1 .5-.5h6.636a.5.5 0 0 0 .5-.5z"/>
                 <path fill-rule="evenodd" d="M16 .5a.5.5 0 0 0-.5-.5h-5a.5.5 0 0 0 0 1h3.793L6.146 9.146a.5.5 0 1 0 .708.708L15 1.707V5.5a.5.5 0 0 0 1 0v-5z"/>

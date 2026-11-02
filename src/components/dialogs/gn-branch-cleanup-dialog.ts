@@ -6,6 +6,7 @@
 
 import { LitElement, html, css, nothing } from 'lit';
 import { customElement, state, property, query } from 'lit/decorators.js';
+import { localized, msg, str } from '@lit/localize';
 import { sharedStyles, buttonStyles } from '../../styles/shared-styles.ts';
 import * as gitService from '../../services/git.service.ts';
 import { showConfirm } from '../../services/dialog.service.ts';
@@ -37,6 +38,7 @@ const BUILTIN_PROTECTED = ['main', 'master', 'develop', 'development', 'staging'
 const MAX_CONFIRM_NAMES = 10;
 
 @customElement('gn-branch-cleanup-dialog')
+@localized()
 export class GnBranchCleanupDialog extends LitElement {
   static styles = [
     sharedStyles,
@@ -377,7 +379,7 @@ export class GnBranchCleanupDialog extends LitElement {
       );
 
       if (!result.success || !result.data) {
-        showToast('Failed to load cleanup candidates', 'error');
+        showToast(msg('Failed to load cleanup candidates'), 'error');
         // Distinct from "no candidates": leaving the three lists empty made
         // every tab assert "No merged branches found", i.e. claim there is
         // nothing to clean up when the scan simply could not tell us. The
@@ -499,7 +501,7 @@ export class GnBranchCleanupDialog extends LitElement {
       this.requestUpdate();
     } catch (err) {
       console.error('Failed to load cleanup data:', err);
-      showToast('Failed to load cleanup data', 'error');
+      showToast(msg('Failed to load cleanup data'), 'error');
     } finally {
       this.loading = false;
     }
@@ -521,7 +523,7 @@ export class GnBranchCleanupDialog extends LitElement {
     // upstream comparison, measured or missing: `ahead` counts distance from
     // the UPSTREAM, which says nothing about whether local deletion loses work.
     if (group.some((c) => c.category === 'merged')) {
-      return { risk: 'safe', riskReason: 'Fully merged into current branch' };
+      return { risk: 'safe', riskReason: msg('Fully merged into current branch') };
     }
 
     // branch_cleanup.rs computes ahead_behind once per branch and clones it
@@ -535,8 +537,8 @@ export class GnBranchCleanupDialog extends LitElement {
       return {
         risk: 'warning',
         riskReason: candidate.upstream
-          ? 'Unpushed work unknown — no upstream comparison available'
-          : 'No upstream configured — may contain unmerged work',
+          ? msg('Unpushed work unknown — no upstream comparison available')
+          : msg('No upstream configured — may contain unmerged work'),
       };
     }
 
@@ -547,19 +549,25 @@ export class GnBranchCleanupDialog extends LitElement {
       // A 'gone' branch with ahead === 0 is measured against HEAD, so it is
       // also emitted as 'merged' and the early return above already fired —
       // reaching here always means "nothing left to push to the upstream".
-      return { risk: 'safe', riskReason: 'No unpushed work' };
+      return { risk: 'safe', riskReason: msg('No unpushed work') };
     }
 
     if (isGone) {
       return {
         risk: 'danger',
-        riskReason: `Remote deleted with ${ahead} unpushed commit${ahead !== 1 ? 's' : ''}`,
+        riskReason:
+          ahead === 1
+            ? msg(str`Remote deleted with ${ahead} unpushed commit`)
+            : msg(str`Remote deleted with ${ahead} unpushed commits`),
       };
     }
 
     return {
       risk: 'warning',
-      riskReason: `Has ${ahead} unpushed commit${ahead !== 1 ? 's' : ''}`,
+      riskReason:
+        ahead === 1
+          ? msg(str`Has ${ahead} unpushed commit`)
+          : msg(str`Has ${ahead} unpushed commits`),
     };
   }
 
@@ -568,9 +576,11 @@ export class GnBranchCleanupDialog extends LitElement {
   }
 
   private getProtectedReason(candidate: CleanupCandidate): string {
-    if (BUILTIN_PROTECTED.includes(candidate.shorthand)) return 'Built-in protected branch';
-    if (candidate.isProtected) return 'Protected by branch rule';
-    return 'Protected';
+    if (BUILTIN_PROTECTED.includes(candidate.shorthand)) {
+      return msg('Built-in protected branch');
+    }
+    if (candidate.isProtected) return msg('Protected by branch rule');
+    return msg('Protected');
   }
 
   private getActiveTabBranches(): CleanupBranch[] {
@@ -676,7 +686,7 @@ export class GnBranchCleanupDialog extends LitElement {
     // repository's working tree, not an individual ref.
     const lockedRepo = this.pinnedRepoPath;
     if (!tryAcquireRefOp(lockedRepo)) {
-      showToast('Another operation is already running in this repository.', 'warning');
+      showToast(msg('Another operation is already running in this repository.'), 'warning');
       return;
     }
     this.deleting = true;
@@ -694,12 +704,16 @@ export class GnBranchCleanupDialog extends LitElement {
       const parts: string[] = [];
       if (unpushed > 0) {
         parts.push(
-          `${unpushed} ${unpushed === 1 ? 'has' : 'have'} unpushed commits that will be lost`,
+          unpushed === 1
+            ? msg(str`${unpushed} has unpushed commits that will be lost`)
+            : msg(str`${unpushed} have unpushed commits that will be lost`),
         );
       }
       if (unknown > 0) {
         parts.push(
-          `${unknown} could not be checked for unmerged work (no upstream to compare against)`,
+          msg(
+            str`${unknown} could not be checked for unmerged work (no upstream to compare against)`,
+          ),
         );
       }
       const count = toDelete.length;
@@ -722,27 +736,35 @@ export class GnBranchCleanupDialog extends LitElement {
       const shown = ordered.slice(0, MAX_CONFIRM_NAMES).map((cb) => cb.branch.name);
       const names =
         count > MAX_CONFIRM_NAMES
-          ? `${shown.join(', ')}, and ${count - MAX_CONFIRM_NAMES} more`
+          ? msg(str`${shown.join(', ')}, and ${count - MAX_CONFIRM_NAMES} more`)
           : shown.join(', ');
       const riskSummary =
         parts.length > 0
-          ? `\n\nOf ${count === 1 ? 'this branch' : 'these branches'}, ${parts.join(', and ')}.`
+          ? count === 1
+            ? msg(str`\n\nOf this branch, ${parts.join(', and ')}.`)
+            : msg(str`\n\nOf these branches, ${parts.join(', and ')}.`)
           : count === 1
-            ? '\n\nThis branch was reported as fully merged or otherwise safe to delete.'
-            : '\n\nAll selected branches were reported as fully merged or otherwise safe to delete.';
+            ? msg('\n\nThis branch was reported as fully merged or otherwise safe to delete.')
+            : msg(
+                '\n\nAll selected branches were reported as fully merged or otherwise safe to delete.',
+              );
       const pruneSummary = this.pruneRemotes
-        ? '\n\nRemote-tracking branches will also be pruned.'
+        ? msg('\n\nRemote-tracking branches will also be pruned.')
         : '';
 
       // Risk clause BEFORE the name list: the list is the part that can grow
       // without bound, so anything after it is what a clipped dialog hides.
       const confirmed = await showConfirm(
-        `Delete ${count} Local Branch${count === 1 ? '' : 'es'}?`,
-        `${count} selected local branch${count === 1 ? '' : 'es'} will be deleted.` +
+        count === 1
+          ? msg(str`Delete ${count} Local Branch?`)
+          : msg(str`Delete ${count} Local Branches?`),
+        (count === 1
+          ? msg(str`${count} selected local branch will be deleted.`)
+          : msg(str`${count} selected local branches will be deleted.`)) +
           riskSummary +
-          `\n\n${names}.` +
+          msg(str`\n\n${names}.`) +
           pruneSummary +
-          '\n\nThis action cannot be undone. Continue?',
+          msg('\n\nThis action cannot be undone. Continue?'),
         'warning',
       );
       if (!confirmed) {
@@ -792,7 +814,9 @@ export class GnBranchCleanupDialog extends LitElement {
         failed++;
         // Keep the reason: a bare "Failed to delete N branches" leaves the user
         // with no idea why and no way forward.
-        failures.push(`${cb.branch.name}: ${result.error?.message ?? 'unknown error'}`);
+        failures.push(
+          msg(str`${cb.branch.name}: ${result.error?.message ?? msg('unknown error')}`),
+        );
         console.error(`Failed to delete ${cb.branch.name}:`, result.error);
       }
     }
@@ -813,10 +837,10 @@ export class GnBranchCleanupDialog extends LitElement {
         .map((cb) => {
           const { upstream, aheadBehind } = cb.branch;
           if (upstream && aheadBehind && aheadBehind.ahead === 0) {
-            return `${cb.branch.name} (pushed to ${upstream})`;
+            return msg(str`${cb.branch.name} (pushed to ${upstream})`);
           }
           if (!upstream) {
-            return `${cb.branch.name} (no remote copy)`;
+            return msg(str`${cb.branch.name} (no remote copy)`);
           }
           // Measured and non-zero: say how much is at risk rather than
           // falling through to "unknown", which understates a loss we can
@@ -826,9 +850,11 @@ export class GnBranchCleanupDialog extends LitElement {
           // to catch.
           if (aheadBehind && aheadBehind.ahead > 0) {
             const n = aheadBehind.ahead;
-            return `${cb.branch.name} (${n} commit${n === 1 ? '' : 's'} not on ${upstream})`;
+            return n === 1
+              ? msg(str`${cb.branch.name} (${n} commit not on ${upstream})`)
+              : msg(str`${cb.branch.name} (${n} commits not on ${upstream})`);
           }
-          return `${cb.branch.name} (unpushed work unknown)`;
+          return msg(str`${cb.branch.name} (unpushed work unknown)`);
         })
         .join(', ');
       const plural = unmergedRefusals.length !== 1;
@@ -842,16 +868,22 @@ export class GnBranchCleanupDialog extends LitElement {
       // the session with no error anywhere. Treat a failed prompt as declined.
       let forceConfirmed = false;
       try {
+        const consequence = anyWithoutRemoteCopy
+          ? msg(
+              'Commits that are not on a remote will be discarded permanently and cannot be recovered.',
+            )
+          : msg(
+              'Their commits are on their upstreams, so the branches can be restored from the remote.',
+            );
         forceConfirmed = await showConfirm(
-        'Branches Not Fully Merged',
-        `${unmergedRefusals.length} branch${plural ? 'es' : ''} (${names}) ` +
-          `${plural ? 'are' : 'is'} not merged into the current branch.\n\n` +
-          (anyWithoutRemoteCopy
-            ? `Commits that are not on a remote will be discarded permanently and ` +
-              `cannot be recovered.`
-            : `Their commits are on their upstreams, so the branches can be restored ` +
-              `from the remote.`) +
-          `\n\nForce delete anyway?`,
+        msg('Branches Not Fully Merged'),
+        plural
+          ? msg(
+              str`${unmergedRefusals.length} branches (${names}) are not merged into the current branch.\n\n${consequence}\n\nForce delete anyway?`,
+            )
+          : msg(
+              str`${unmergedRefusals.length} branch (${names}) is not merged into the current branch.\n\n${consequence}\n\nForce delete anyway?`,
+            ),
         'warning',
         );
       } catch {
@@ -871,7 +903,9 @@ export class GnBranchCleanupDialog extends LitElement {
           deleted++;
         } else {
           failed++;
-          failures.push(`${cb.branch.name}: ${retry.error?.message ?? 'unknown error'}`);
+          failures.push(
+            msg(str`${cb.branch.name}: ${retry.error?.message ?? msg('unknown error')}`),
+          );
         }
       }
     }
@@ -890,7 +924,9 @@ export class GnBranchCleanupDialog extends LitElement {
       pruned = pruneResult.success && (pruneResult.data?.branchesPruned.length ?? 0) > 0;
       if (!pruneResult.success && !gitService.isNetworkGateRefusal(pruneResult.error)) {
         showToast(
-          `Failed to prune remote branches: ${pruneResult.error?.message ?? 'Unknown error'}`,
+          msg(
+            str`Failed to prune remote branches: ${pruneResult.error?.message ?? msg('Unknown error')}`,
+          ),
           'error',
         );
       }
@@ -906,10 +942,16 @@ export class GnBranchCleanupDialog extends LitElement {
     // reasonably concluded it had been deleted.
     // `pruned` is gated on the actual prune result, not on the checkbox.
     const notes: string[] = [];
-    if (deleted > 0) notes.push(`Deleted ${deleted} branch${deleted !== 1 ? 'es' : ''}`);
-    if (failed > 0) notes.push(`${failed} failed — ${failures.join('; ')}`);
-    if (kept > 0) notes.push(`${kept} kept (not fully merged)`);
-    if (pruned) notes.push('remotes pruned');
+    if (deleted > 0) {
+      notes.push(
+        deleted === 1
+          ? msg(str`Deleted ${deleted} branch`)
+          : msg(str`Deleted ${deleted} branches`),
+      );
+    }
+    if (failed > 0) notes.push(msg(str`${failed} failed — ${failures.join('; ')}`));
+    if (kept > 0) notes.push(msg(str`${kept} kept (not fully merged)`));
+    if (pruned) notes.push(msg('remotes pruned'));
 
     if (notes.length > 0) {
       showToast(notes.join(', '), failed > 0 ? 'error' : kept > 0 ? 'warning' : 'success');
@@ -959,14 +1001,14 @@ export class GnBranchCleanupDialog extends LitElement {
 
   private formatTimeAgo(timestamp: number): string {
     const daysAgo = Math.floor((Date.now() / 1000 - timestamp) / (24 * 60 * 60));
-    if (daysAgo < 1) return 'today';
-    if (daysAgo === 1) return '1 day ago';
-    if (daysAgo < 30) return `${daysAgo} days ago`;
+    if (daysAgo < 1) return msg('today');
+    if (daysAgo === 1) return msg('1 day ago');
+    if (daysAgo < 30) return msg(str`${daysAgo} days ago`);
     const months = Math.floor(daysAgo / 30);
-    if (months === 1) return '1 month ago';
-    if (months < 12) return `${months} months ago`;
+    if (months === 1) return msg('1 month ago');
+    if (months < 12) return msg(str`${months} months ago`);
     const years = Math.floor(months / 12);
-    return years === 1 ? '1 year ago' : `${years} years ago`;
+    return years === 1 ? msg('1 year ago') : msg(str`${years} years ago`);
   }
 
   private renderTab(tab: CleanupTab, label: string, count: number) {
@@ -991,7 +1033,7 @@ export class GnBranchCleanupDialog extends LitElement {
     return html`
       <span class="risk-badge ${risk}" title=${reason}>
         ${icons[risk]}
-        ${risk === 'safe' ? 'Safe' : risk === 'warning' ? 'Warning' : 'Danger'}
+        ${risk === 'safe' ? msg('Safe') : risk === 'warning' ? msg('Warning') : msg('Danger')}
       </span>
     `;
   }
@@ -1001,7 +1043,7 @@ export class GnBranchCleanupDialog extends LitElement {
     const isSelected = this.selectedBranches.has(branch.name);
 
     const detail = branch.lastCommitTimestamp
-      ? `Last commit: ${this.formatTimeAgo(branch.lastCommitTimestamp)}`
+      ? msg(str`Last commit: ${this.formatTimeAgo(branch.lastCommitTimestamp)}`)
       : '';
 
     return html`
@@ -1011,7 +1053,7 @@ export class GnBranchCleanupDialog extends LitElement {
           .checked=${isSelected}
           ?disabled=${isProtected || this.deleting}
           @change=${() => this.handleToggleBranch(branch.name)}
-          aria-label="Select ${branch.shorthand}"
+          aria-label=${msg(str`Select ${branch.shorthand}`)}
         />
         <div class="branch-info">
           <span class="branch-name">${branch.shorthand}</span>
@@ -1022,12 +1064,15 @@ export class GnBranchCleanupDialog extends LitElement {
         </div>
         ${isProtected
           ? html`
-              <span class="protected-badge" title=${protectedReason ?? 'Protected'}>
+              <span
+                class="protected-badge"
+                title=${protectedReason ?? msg('Protected')}
+              >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
                   <path d="M7 11V7a5 5 0 0110 0v4"></path>
                 </svg>
-                Protected
+                ${msg('Protected')}
               </span>
             `
           : this.renderRiskBadge(risk, riskReason)}
@@ -1044,9 +1089,9 @@ export class GnBranchCleanupDialog extends LitElement {
             <line x1="12" y1="8" x2="12" y2="12"></line>
             <line x1="12" y1="16" x2="12.01" y2="16"></line>
           </svg>
-          <span>Could not load cleanup candidates</span>
+          <span>${msg('Could not load cleanup candidates')}</span>
           <button class="btn btn-secondary" @click=${() => void this.loadCleanupData()}>
-            Retry
+            ${msg('Retry')}
           </button>
         </div>
       `;
@@ -1054,9 +1099,9 @@ export class GnBranchCleanupDialog extends LitElement {
 
     if (branches.length === 0) {
       const messages: Record<CleanupTab, string> = {
-        merged: 'No merged branches found',
-        stale: 'No stale branches found',
-        gone: 'No branches with deleted upstreams found',
+        merged: msg('No merged branches found'),
+        stale: msg('No stale branches found'),
+        gone: msg('No branches with deleted upstreams found'),
       };
 
       return html`
@@ -1084,7 +1129,9 @@ export class GnBranchCleanupDialog extends LitElement {
                 id="select-all-checkbox"
               />
               <label for="select-all-checkbox">
-                ${allSelected ? 'Deselect all' : 'Select all'} (${selectable.length})
+                ${allSelected
+                  ? msg(str`Deselect all (${selectable.length})`)
+                  : msg(str`Select all (${selectable.length})`)}
               </label>
             </div>
           `
@@ -1097,16 +1144,16 @@ export class GnBranchCleanupDialog extends LitElement {
 
   render() {
     return html`
-      <gn-modal modalTitle="Branch Cleanup" @close=${this.handleModalClose}>
+      <gn-modal modalTitle=${msg('Branch Cleanup')} @close=${this.handleModalClose}>
         <div class="tabs">
-          ${this.renderTab('merged', 'Merged', this.mergedBranches.length)}
-          ${this.renderTab('stale', 'Stale', this.staleBranches.length)}
-          ${this.renderTab('gone', 'Gone Upstream', this.goneUpstreamBranches.length)}
+          ${this.renderTab('merged', msg('Merged'), this.mergedBranches.length)}
+          ${this.renderTab('stale', msg('Stale'), this.staleBranches.length)}
+          ${this.renderTab('gone', msg('Gone Upstream'), this.goneUpstreamBranches.length)}
         </div>
 
         <div class="content-area">
           ${this.loading
-            ? html`<div class="loading">Loading branches...</div>`
+            ? html`<div class="loading">${msg('Loading branches...')}</div>`
             : this.renderBranchList(this.getActiveTabBranches())}
         </div>
 
@@ -1118,7 +1165,7 @@ export class GnBranchCleanupDialog extends LitElement {
               @change=${(e: Event) => { this.pruneRemotes = (e.target as HTMLInputElement).checked; }}
               ?disabled=${this.deleting}
             />
-            Also prune remote tracking branches
+            ${msg('Also prune remote tracking branches')}
           </label>
         </div>
 
@@ -1126,12 +1173,14 @@ export class GnBranchCleanupDialog extends LitElement {
           <div class="footer-content">
             <span class="footer-summary">
               ${this.totalSelected > 0
-                ? `${this.totalSelected} branch${this.totalSelected !== 1 ? 'es' : ''} selected`
-                : 'No branches selected'}
+                ? this.totalSelected === 1
+                  ? msg(str`${this.totalSelected} branch selected`)
+                  : msg(str`${this.totalSelected} branches selected`)
+                : msg('No branches selected')}
             </span>
             <div class="footer-actions">
               <button class="btn btn-secondary" @click=${this.close} ?disabled=${this.deleting}>
-                Cancel
+                ${msg('Cancel')}
               </button>
               <button
                 class="btn btn-danger"
@@ -1142,10 +1191,10 @@ export class GnBranchCleanupDialog extends LitElement {
                 this.lock.busy}
               >
                 ${this.deleting
-                  ? 'Working...'
+                  ? msg('Working...')
                   : this.totalSelected === 0
-                    ? 'Prune Remotes'
-                    : `Delete Selected (${this.totalSelected})`}
+                    ? msg('Prune Remotes')
+                    : msg(str`Delete Selected (${this.totalSelected})`)}
               </button>
             </div>
           </div>

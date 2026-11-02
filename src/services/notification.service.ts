@@ -9,6 +9,7 @@ import {
   sendNotification,
 } from '@tauri-apps/plugin-notification';
 import { uiStore, type ToastAction } from '../stores/ui.store.ts';
+import { localizeBackendMessage } from './backend-message.service.ts';
 
 export type NotificationType = 'info' | 'success' | 'warning' | 'error';
 
@@ -105,5 +106,14 @@ export function showToast(
   duration = 5000,
   action?: ToastAction
 ): void {
-  uiStore.getState().addToast({ type, message, duration, action });
+  // Backend success/event text arrives as plain English sentences (the branch
+  // switch confirmation, the multi-remote summaries…). This is the one sink
+  // every toast passes through, so it is where those are recognised and
+  // translated; frontend copy is already localised and passes straight through.
+  uiStore.getState().addToast({
+    type,
+    message: localizeBackendMessage(message),
+    duration,
+    action,
+  });
 }

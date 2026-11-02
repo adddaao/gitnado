@@ -7,6 +7,7 @@
  * to keep per-frame measureText cost down.
  */
 
+import { msg, str } from '@lit/localize';
 import type { RenderData, GraphPullRequest } from './virtual-scroll.ts';
 import type { RefInfo, RefType } from '../types/git.types.ts';
 import { md5 } from '../utils/md5.ts';
@@ -713,7 +714,7 @@ export class CanvasRenderer {
     const diff = now - timestamp;
 
     if (diff < 60) {
-      return 'now';
+      return msg('now');
     } else if (diff < 3600) {
       const mins = Math.floor(diff / 60);
       return `${mins}m`;
@@ -951,7 +952,9 @@ export class CanvasRenderer {
     if (stats.additions === 0 && stats.deletions === 0) {
       if (stats.filesChanged > 0) {
         // Binary files changed - show file count
-        return `${stats.filesChanged} file${stats.filesChanged === 1 ? '' : 's'}`;
+        return stats.filesChanged === 1
+          ? msg(str`${stats.filesChanged} file`)
+          : msg(str`${stats.filesChanged} files`);
       }
       return '—'; // No direct changes (e.g., merge commit)
     }
@@ -1120,42 +1123,42 @@ export class CanvasRenderer {
     // Graph header - centered over the graph column
     const graphCenterX = column.left + column.width / 2;
     ctx.textAlign = 'center';
-    ctx.fillText('GRAPH', graphCenterX, headerY);
+    ctx.fillText(msg('GRAPH'), graphCenterX, headerY);
 
     // "N more" hints for lanes scrolled out of the column. Only when the
     // column is wide enough that they do not collide with the GRAPH label.
-    const graphLabelWidth = ctx.measureText('GRAPH').width;
+    const graphLabelWidth = ctx.measureText(msg('GRAPH')).width;
     if (column.width >= graphLabelWidth + 2 * 56) {
       ctx.font = '9px -apple-system, BlinkMacSystemFont, sans-serif';
       if (hidden.left > 0) {
         ctx.textAlign = 'left';
-        ctx.fillText(`◂ ${hidden.left} more`, column.left + 2, headerY);
+        ctx.fillText(msg(str`◂ ${hidden.left} more`), column.left + 2, headerY);
       }
       if (hidden.right > 0) {
         ctx.textAlign = 'right';
-        ctx.fillText(`${hidden.right} more ▸`, column.right - 2, headerY);
+        ctx.fillText(msg(str`${hidden.right} more ▸`), column.right - 2, headerY);
       }
       ctx.font = 'bold 10px -apple-system, BlinkMacSystemFont, sans-serif';
     }
 
     // Commit message header
     ctx.textAlign = 'left';
-    ctx.fillText('COMMIT', messageColumnX, headerY);
+    ctx.fillText(msg('COMMIT'), messageColumnX, headerY);
 
     // Optional author/date headers
     if (authorColumnX !== null) {
-      ctx.fillText('AUTHOR', authorColumnX, headerY);
+      ctx.fillText(msg('AUTHOR'), authorColumnX, headerY);
     }
     if (dateColumnX !== null) {
-      ctx.fillText('DATE', dateColumnX, headerY);
+      ctx.fillText(msg('DATE'), dateColumnX, headerY);
     }
 
     // Stats header - center aligned in its column
     ctx.textAlign = 'center';
-    ctx.fillText('CHANGES', statsColumnX + statsColumnWidth / 2, headerY);
+    ctx.fillText(msg('CHANGES'), statsColumnX + statsColumnWidth / 2, headerY);
 
     // Time header - center aligned in its column
-    ctx.fillText('TIME', timeColumnX + timeColumnWidth / 2, headerY);
+    ctx.fillText(msg('TIME'), timeColumnX + timeColumnWidth / 2, headerY);
 
     ctx.globalAlpha = 1.0;
 

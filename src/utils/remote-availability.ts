@@ -33,6 +33,7 @@
  * `git.service`'s fetch/pull/push that is not the runner has to do the same.
  */
 
+import { msg, str } from '@lit/localize';
 import { showToast } from '../services/notification.service.ts';
 import { dialogs } from '../stores/dialog.store.ts';
 import { repositoryStore } from '../stores/repository.store.ts';
@@ -80,7 +81,7 @@ export function knownToHaveNoRemote(repo?: RemoteBearing | null): boolean {
  * "Fetch", "Pull", "Push".
  */
 export function noRemoteButtonLabel(action: string): string {
-  return `${action} — this repository has no remote configured`;
+  return msg(str`${action} — this repository has no remote configured`);
 }
 
 /** Last path segment, so a message names the repository the user knows. */
@@ -116,7 +117,7 @@ function repositoryName(repoPath: string): string {
  * user to guess which of the two "Add a remote…" buttons belonged to which.
  */
 export function noRemoteMessage(repoPath: string): string {
-  return `No remote configured for ${repositoryName(repoPath)} — add one first.`;
+  return msg(str`No remote configured for ${repositoryName(repoPath)} — add one first.`);
 }
 
 /**
@@ -142,7 +143,7 @@ export function noRemoteMessage(repoPath: string): string {
  */
 export function addRemoteToastAction(repoPath: string): ToastAction {
   return {
-    label: 'Add a remote…',
+    label: msg('Add a remote…'),
     callback: () => {
       const state = repositoryStore.getState();
       if (state.getActiveRepository()?.repository.path === repoPath) {
@@ -153,8 +154,8 @@ export function addRemoteToastAction(repoPath: string): ToastAction {
       const name = repositoryName(repoPath);
       showToast(
         stillOpen
-          ? `Switch to ${name} to add its remote.`
-          : `${name} is no longer open — reopen it to add a remote.`,
+          ? msg(str`Switch to ${name} to add its remote.`)
+          : msg(str`${name} is no longer open — reopen it to add a remote.`),
         'warning',
       );
     },

@@ -137,6 +137,27 @@ describe('gn-commit-panel', () => {
       expect(summary.tagName.toLowerCase()).to.equal('textarea');
     });
 
+    it('lets the user drag the summary box taller, like the description box', async () => {
+      const el = await renderCommitPanel();
+      const summary = el.shadowRoot!.querySelector('.summary-input') as HTMLTextAreaElement;
+      const description = el.shadowRoot!.querySelector(
+        '.description-input'
+      ) as HTMLTextAreaElement;
+
+      // The browser's native textarea grip is the affordance: the summary must
+      // not be locked to its one-row default (a long AI/pasted subject was
+      // unreadable and only scrollable inside it).
+      expect(getComputedStyle(summary).resize).to.equal('vertical');
+      expect(getComputedStyle(description).resize).to.equal('vertical');
+      expect(getComputedStyle(summary).minHeight).to.not.equal('0px');
+
+      // A height the user dragged stays put across a re-render.
+      summary.style.height = '120px';
+      el.requestUpdate();
+      await el.updateComplete;
+      expect(summary.style.height).to.equal('120px');
+    });
+
     it('renders description textarea', async () => {
       const el = await renderCommitPanel();
       const desc = el.shadowRoot!.querySelector('.description-input') as HTMLTextAreaElement;

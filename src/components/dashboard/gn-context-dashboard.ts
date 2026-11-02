@@ -8,6 +8,7 @@
 
 import { LitElement, html, css, nothing } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
+import { localized, msg, str } from '@lit/localize';
 import { sharedStyles, animationStyles } from '../../styles/shared-styles.ts';
 import { unifiedProfileStore, type AccountConnectionStatus, type ConnectionStatus } from '../../stores/unified-profile.store.ts';
 import { repositoryStore, type OpenRepository } from '../../stores/repository.store.ts';
@@ -44,6 +45,7 @@ const STORAGE_KEY = 'gn-context-dashboard-expanded';
 const log = loggers.dashboard;
 
 @customElement('gn-context-dashboard')
+@localized()
 export class GnContextDashboard extends LitElement {
   static styles = [
     sharedStyles,
@@ -831,7 +833,7 @@ export class GnContextDashboard extends LitElement {
 
     try {
       await unifiedProfileService.applyUnifiedProfile(repoPath, profile.id);
-      showToast(`Applied profile "${profile.name}"`, 'success');
+      showToast(msg(str`Applied profile "${profile.name}"`), 'success');
       // Applying a profile rewrites the repo's local git identity/signing
       // config. Refresh so listeners re-read it now (the commit panel reloads
       // the author behind its ${author} commit-template placeholder) instead
@@ -848,7 +850,9 @@ export class GnContextDashboard extends LitElement {
       // field has no render sink, so setError alone would be silent (CLAUDE.md
       // error-feedback rule).
       showToast(
-        `Failed to switch profile: ${err instanceof Error ? err.message : 'Unknown error'}`,
+        msg(
+          str`Failed to switch profile: ${err instanceof Error ? err.message : msg('Unknown error')}`,
+        ),
         'error'
       );
     } finally {
@@ -858,6 +862,20 @@ export class GnContextDashboard extends LitElement {
 
   private getAccountStatus(accountId: string): ConnectionStatus {
     return this.accountConnectionStatus[accountId]?.status ?? 'unknown';
+  }
+
+  /** User-visible word for a connection-status token. */
+  private connectionStatusLabel(status: ConnectionStatus): string {
+    switch (status) {
+      case 'connected':
+        return msg('connected');
+      case 'disconnected':
+        return msg('disconnected');
+      case 'checking':
+        return msg('checking');
+      default:
+        return msg('unknown');
+    }
   }
 
   private isProfileDefaultAccount(account: IntegrationAccount): boolean {
@@ -999,7 +1017,7 @@ export class GnContextDashboard extends LitElement {
   private renderProfileDropdown() {
     return html`
       <div class="profile-dropdown">
-        <div class="dropdown-header">Switch Profile</div>
+        <div class="dropdown-header">${msg('Switch Profile')}</div>
         ${this.profiles.length > 0
           ? this.profiles.map((profile) => html`
               <button
@@ -1013,7 +1031,9 @@ export class GnContextDashboard extends LitElement {
                 <div class="profile-info">
                   <div class="profile-display-name">
                     ${profile.name}
-                    ${profile.isDefault ? html`<span class="default-tag">(default)</span>` : nothing}
+                    ${profile.isDefault
+                      ? html`<span class="default-tag">${msg('(default)')}</span>`
+                      : nothing}
                   </div>
                   <div class="profile-email">${profile.gitEmail}</div>
                 </div>
@@ -1026,13 +1046,13 @@ export class GnContextDashboard extends LitElement {
                   : nothing}
               </button>
             `)
-          : html`<div class="dropdown-empty">No profiles configured</div>`}
+          : html`<div class="dropdown-empty">${msg('No profiles configured')}</div>`}
         <div class="dropdown-divider"></div>
         <button class="dropdown-action" @click=${this.openProfileManager}>
           <svg viewBox="0 0 16 16" fill="currentColor">
             <path fill-rule="evenodd" d="M7.429 1.525a6.593 6.593 0 0 1 1.142 0c.036.003.108.036.137.146l.289 1.105c.147.56.55.967.997 1.189.174.086.341.183.501.29.417.278.97.423 1.53.27l1.102-.303c.11-.03.175.016.195.046.219.31.41.641.573.989.014.031.022.11-.059.19l-.815.806c-.411.406-.562.957-.53 1.456a4.588 4.588 0 0 1 0 .582c-.032.499.119 1.05.53 1.456l.815.806c.08.08.073.159.059.19a6.494 6.494 0 0 1-.573.99c-.02.029-.086.074-.195.045l-1.103-.303c-.559-.153-1.112-.008-1.529.27-.16.107-.327.204-.5.29-.449.222-.851.628-.998 1.189l-.289 1.105c-.029.11-.101.143-.137.146a6.613 6.613 0 0 1-1.142 0c-.036-.003-.108-.037-.137-.146l-.289-1.105c-.147-.56-.55-.967-.997-1.189a4.502 4.502 0 0 1-.501-.29c-.417-.278-.97-.423-1.53-.27l-1.102.303c-.11.03-.175-.016-.195-.046a6.492 6.492 0 0 1-.573-.989c-.014-.031-.022-.11.059-.19l.815-.806c.411-.406.562-.957.53-1.456a4.587 4.587 0 0 1 0-.582c.032-.499-.119-1.05-.53-1.456l-.815-.806c-.08-.08-.073-.159-.059-.19.162-.348.354-.68.573-.99.02-.029.086-.074.195-.045l1.103.303c.559.153 1.112.008 1.529-.27.16-.107.327-.204.5-.29.449-.222.851-.628.998-1.189l.289-1.105c.029-.11.101-.143.137-.146ZM8 0c-.236 0-.47.01-.701.03-.743.065-1.29.615-1.458 1.261l-.29 1.106c-.017.066-.078.158-.211.232a5.489 5.489 0 0 0-.594.344c-.12.08-.234.115-.327.096l-1.103-.303c-.648-.178-1.392.02-1.82.63a7.986 7.986 0 0 0-.704 1.217c-.315.675-.111 1.422.363 1.891l.815.806c.05.048.098.147.088.294a6.084 6.084 0 0 0 0 .772c.01.147-.038.246-.088.294l-.815.806c-.474.469-.678 1.216-.363 1.891.2.428.436.835.704 1.218.428.609 1.172.806 1.82.63l1.103-.303c.093-.02.207.016.327.096.185.124.38.237.594.344.133.074.194.166.211.232l.29 1.106c.167.646.714 1.196 1.457 1.26.23.02.465.031.701.031.236 0 .47-.01.701-.03.743-.065 1.29-.615 1.458-1.261l.29-1.106c.017-.066.078-.158.211-.232a5.49 5.49 0 0 0 .594-.344c.12-.08.234-.115.327-.096l1.103.303c.648.178 1.392-.02 1.82-.63.268-.383.505-.79.704-1.217.315-.675.111-1.422-.364-1.891l-.814-.806c-.05-.048-.098-.147-.088-.294a6.083 6.083 0 0 0 0-.772c-.01-.147.039-.246.088-.294l.814-.806c.475-.469.679-1.216.364-1.891a7.992 7.992 0 0 0-.704-1.218c-.428-.609-1.172-.806-1.82-.63l-1.103.303c-.093.02-.207-.016-.327-.096a5.49 5.49 0 0 0-.594-.344c-.133-.074-.194-.166-.211-.232l-.29-1.106C9.992.645 9.444.095 8.701.031A8.566 8.566 0 0 0 8 0Zm1.5 8a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0ZM11 8a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"/>
           </svg>
-          Profiles &amp; Accounts
+          ${msg('Profiles & Accounts')}
         </button>
       </div>
     `;
@@ -1051,8 +1071,10 @@ export class GnContextDashboard extends LitElement {
       <div class="compact-divider"></div>
       <span
         class="detached-head"
-        title="HEAD is detached at ${oid}. New commits won't belong to any branch."
-        >Detached HEAD @ ${oid.slice(0, 7)}</span
+        title=${msg(
+          str`HEAD is detached at ${oid}. New commits won't belong to any branch.`,
+        )}
+        >${msg(str`Detached HEAD @ ${oid.slice(0, 7)}`)}</span
       >
     `;
   }
@@ -1068,7 +1090,7 @@ export class GnContextDashboard extends LitElement {
                   @click=${this.toggleProfileDropdown}
                   aria-expanded="${this.isProfileDropdownOpen}"
                   aria-haspopup="listbox"
-                  aria-label="Switch profile. Currently: ${this.activeProfile.name}"
+                  aria-label=${msg(str`Switch profile. Currently: ${this.activeProfile.name}`)}
                 >
                   ${this.isApplyingProfile
                     ? html`<div class="loading-spinner"></div>`
@@ -1091,12 +1113,12 @@ export class GnContextDashboard extends LitElement {
             `
           : html`
               <div class="no-profile">
-                <span>No profile active</span>
+                <span>${msg('No profile active')}</span>
                 <button class="no-profile-btn" @click=${this.openProfileManager}>
                   <svg viewBox="0 0 16 16" fill="currentColor">
                     <path d="M8 2a.75.75 0 0 1 .75.75v4.5h4.5a.75.75 0 0 1 0 1.5h-4.5v4.5a.75.75 0 0 1-1.5 0v-4.5h-4.5a.75.75 0 0 1 0-1.5h4.5v-4.5A.75.75 0 0 1 8 2Z"/>
                   </svg>
-                  Set up profile
+                  ${msg('Set up profile')}
                 </button>
               </div>
             `}
@@ -1113,7 +1135,7 @@ export class GnContextDashboard extends LitElement {
             const displayName = relevantAccount.cachedUser?.username
               ? `${INTEGRATION_TYPE_NAMES[relevantAccount.integrationType]} (@${relevantAccount.cachedUser.username})`
               : relevantAccount.name;
-            const label = `${displayName}: ${status}`;
+            const label = `${displayName}: ${this.connectionStatusLabel(status)}`;
 
             // Show a more prominent button when disconnected or unknown
             if (status === 'disconnected' || status === 'unknown') {
@@ -1122,10 +1144,12 @@ export class GnContextDashboard extends LitElement {
                 <button
                   class="configure-btn"
                   @click=${() => this.openIntegrationDialog(relevantAccount.integrationType)}
-                  title="${label}. Click to reconnect."
+                  title=${msg(str`${label}. Click to reconnect.`)}
                 >
                   <span class="account-status-dot ${status}" aria-hidden="true" style="width: 6px; height: 6px;"></span>
-                  Reconnect ${INTEGRATION_TYPE_NAMES[relevantAccount.integrationType]}
+                  ${msg(
+                    str`Reconnect ${INTEGRATION_TYPE_NAMES[relevantAccount.integrationType]}`,
+                  )}
                 </button>
               `;
             }
@@ -1135,7 +1159,9 @@ export class GnContextDashboard extends LitElement {
               <button
                 class="account-status-btn"
                 @click=${() => this.openIntegrationDialog(relevantAccount.integrationType)}
-                aria-label="${label}. Click to open ${INTEGRATION_TYPE_NAMES[relevantAccount.integrationType]} dialog."
+                aria-label=${msg(
+                  str`${label}. Click to open ${INTEGRATION_TYPE_NAMES[relevantAccount.integrationType]} dialog.`,
+                )}
                 title="${label}"
               >
                 <span class="account-status-dot ${status}" aria-hidden="true"></span>
@@ -1150,13 +1176,13 @@ export class GnContextDashboard extends LitElement {
               <button
                 class="configure-btn"
                 @click=${() => this.openIntegrationDialog(provider)}
-                title="Configure ${INTEGRATION_TYPE_NAMES[provider]} integration"
+                title=${msg(str`Configure ${INTEGRATION_TYPE_NAMES[provider]} integration`)}
               >
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
                   <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
                 </svg>
-                Connect ${INTEGRATION_TYPE_NAMES[provider]}
+                ${msg(str`Connect ${INTEGRATION_TYPE_NAMES[provider]}`)}
               </button>
             `;
           }
@@ -1167,7 +1193,7 @@ export class GnContextDashboard extends LitElement {
         <div class="remote-buttons">
           <button
             class="remote-btn ${this.remoteOperation === 'fetch' ? 'loading' : ''}"
-            title=${this.remoteButtonTitle('Fetch', 'Fetch from remote')}
+            title=${this.remoteButtonTitle(msg('Fetch'), msg('Fetch from remote'))}
             @click=${this.handleFetch}
             ?disabled=${this.isRemoteOperationInProgress || !this.hasRemote}
           >
@@ -1177,14 +1203,18 @@ export class GnContextDashboard extends LitElement {
               <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"></path>
               <path d="M16 16h5v5"></path>
             </svg>
-            Fetch
+            ${msg('Fetch')}
           </button>
           <div class="remote-btn-wrapper">
             <button
               class="remote-btn ${this.remoteOperation === 'pull' ? 'loading' : ''}"
               title=${this.remoteButtonTitle(
-                'Pull',
-                `Pull from remote${this.behind > 0 ? ` (${this.behind} commits behind)` : ''}`,
+                msg('Pull'),
+                this.behind === 0
+                  ? msg('Pull from remote')
+                  : this.behind === 1
+                    ? msg(str`Pull from remote (${this.behind} commit behind)`)
+                    : msg(str`Pull from remote (${this.behind} commits behind)`),
               )}
               @click=${this.handlePull}
               ?disabled=${this.isRemoteOperationInProgress || this.lock.busy || !this.hasRemote}
@@ -1193,7 +1223,7 @@ export class GnContextDashboard extends LitElement {
                 <path d="M12 3v18"></path>
                 <path d="M5 16l7 7 7-7"></path>
               </svg>
-              Pull
+              ${msg('Pull')}
             </button>
             ${this.behind > 0 ? html`<span class="badge pull">${this.behind}</span>` : nothing}
           </div>
@@ -1201,8 +1231,12 @@ export class GnContextDashboard extends LitElement {
             <button
               class="remote-btn ${this.remoteOperation === 'push' ? 'loading' : ''}"
               title=${this.remoteButtonTitle(
-                'Push',
-                `Push to remote${this.ahead > 0 ? ` (${this.ahead} commits ahead)` : ''}`,
+                msg('Push'),
+                this.ahead === 0
+                  ? msg('Push to remote')
+                  : this.ahead === 1
+                    ? msg(str`Push to remote (${this.ahead} commit ahead)`)
+                    : msg(str`Push to remote (${this.ahead} commits ahead)`),
               )}
               @click=${this.handlePush}
               ?disabled=${this.isRemoteOperationInProgress
@@ -1213,7 +1247,7 @@ export class GnContextDashboard extends LitElement {
                 <path d="M12 3v18"></path>
                 <path d="M5 8l7-7 7 7"></path>
               </svg>
-              Push
+              ${msg('Push')}
             </button>
             ${this.ahead > 0 ? html`<span class="badge push">${this.ahead}</span>` : nothing}
           </div>
@@ -1223,7 +1257,9 @@ export class GnContextDashboard extends LitElement {
           class="expand-btn ${this.isExpanded ? 'expanded' : ''}"
           @click=${this.toggleExpanded}
           aria-expanded="${this.isExpanded}"
-          aria-label="${this.isExpanded ? 'Collapse' : 'Expand'} repository context dashboard"
+          aria-label=${this.isExpanded
+            ? msg('Collapse repository context dashboard')
+            : msg('Expand repository context dashboard')}
         >
           <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
             <path fill-rule="evenodd" d="M4.22 6.22a.75.75 0 0 1 1.06 0L8 8.94l2.72-2.72a.75.75 0 1 1 1.06 1.06l-3.25 3.25a.75.75 0 0 1-1.06 0L4.22 7.28a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd"/>
@@ -1238,10 +1274,14 @@ export class GnContextDashboard extends LitElement {
     const detectedProvider = this.detectProvider();
 
     return html`
-      <div class="dashboard-expanded" role="region" aria-label="Repository context">
+      <div
+        class="dashboard-expanded"
+        role="region"
+        aria-label=${msg('Repository context')}
+      >
         <div class="dashboard-header">
           <div class="header-left">
-            <span class="dashboard-title">Repository Context</span>
+            <span class="dashboard-title">${msg('Repository Context')}</span>
             ${this.activeProfile
               ? html`
                   <div class="profile-selector">
@@ -1250,7 +1290,7 @@ export class GnContextDashboard extends LitElement {
                       @click=${this.toggleProfileDropdown}
                       aria-expanded="${this.isProfileDropdownOpen}"
                       aria-haspopup="listbox"
-                      aria-label="Switch profile. Currently: ${this.activeProfile.name}"
+                      aria-label=${msg(str`Switch profile. Currently: ${this.activeProfile.name}`)}
                     >
                       ${this.isApplyingProfile
                         ? html`<div class="loading-spinner"></div>`
@@ -1274,7 +1314,7 @@ export class GnContextDashboard extends LitElement {
             class="expand-btn expanded"
             @click=${this.toggleExpanded}
             aria-expanded="${this.isExpanded}"
-            aria-label="Collapse repository context dashboard"
+            aria-label=${msg('Collapse repository context dashboard')}
           >
             <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
               <path fill-rule="evenodd" d="M4.22 6.22a.75.75 0 0 1 1.06 0L8 8.94l2.72-2.72a.75.75 0 1 1 1.06 1.06l-3.25 3.25a.75.75 0 0 1-1.06 0L4.22 7.28a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd"/>
@@ -1325,13 +1365,17 @@ export class GnContextDashboard extends LitElement {
                     ${this.getProviderIcon(detectedProvider)}
                   </div>
                   <div class="configure-card-content">
-                    <div class="configure-card-title">${INTEGRATION_TYPE_NAMES[detectedProvider]} not connected</div>
+                    <div class="configure-card-title">
+                      ${msg(str`${INTEGRATION_TYPE_NAMES[detectedProvider]} not connected`)}
+                    </div>
                     <div class="configure-card-description">
-                      Connect your ${INTEGRATION_TYPE_NAMES[detectedProvider]} account to enable pull requests, pipelines, and more.
+                      ${msg(
+                        str`Connect your ${INTEGRATION_TYPE_NAMES[detectedProvider]} account to enable pull requests, pipelines, and more.`,
+                      )}
                     </div>
                   </div>
                   <button class="configure-card-btn" @click=${() => this.openIntegrationDialog(detectedProvider)}>
-                    Connect
+                    ${msg('Connect')}
                   </button>
                 </div>
               `;

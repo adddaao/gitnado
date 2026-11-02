@@ -59,6 +59,7 @@ import {
   warnRepositoryBusy,
 } from '../utils/ref-lock.ts';
 import type { CommandResult } from '../types/api.types.ts';
+import { msg, str } from '@lit/localize';
 
 /** The three operations that share one per-repository slot. */
 export type RemoteOperationKind = 'fetch' | 'pull' | 'push';
@@ -76,31 +77,56 @@ export interface RemoteOperationOptions {
   warnWhenBusy?: boolean;
 }
 
-const PROGRESS_MESSAGE: Record<RemoteOperationKind, string> = {
-  fetch: 'Fetching from remote...',
-  pull: 'Pulling from remote...',
-  push: 'Pushing to remote...',
-};
+/**
+ * The progress row's wording, per operation.
+ *
+ * A function rather than a module-level table: `msg()` runs when the row is
+ * created, so the text follows the locale active at that moment instead of
+ * freezing at module load.
+ */
+function progressMessage(kind: RemoteOperationKind): string {
+  switch (kind) {
+    case 'fetch':
+      return msg('Fetching from remote...');
+    case 'pull':
+      return msg('Pulling from remote...');
+    case 'push':
+      return msg('Pushing to remote...');
+  }
+}
 
-const FAILURE_FALLBACK: Record<RemoteOperationKind, string> = {
-  fetch: 'Fetch failed',
-  pull: 'Pull failed',
-  push: 'Push failed',
-};
+/** The error-suggestion title when an operation fails. Same reason as
+ * `progressMessage()`: evaluated at failure time, not at module load. */
+function failureFallback(kind: RemoteOperationKind): string {
+  switch (kind) {
+    case 'fetch':
+      return msg('Fetch failed');
+    case 'pull':
+      return msg('Pull failed');
+    case 'push':
+      return msg('Push failed');
+  }
+}
 
 /**
- * What a cancel that really took effect says, per operation.
+ * What a cancel that really took effect says, per operation. Same reason as
+ * `progressMessage()`.
  *
  * A cancelled pull is worth spelling out: the backend only aborts during the
  * fetch phase and refuses to begin a merge it cannot stop halfway, so nothing
  * was merged and the repository is exactly where a plain Fetch would have left
  * it. See commands/remote.rs::pull_branch.
  */
-const CANCELLED_MESSAGE: Record<RemoteOperationKind, string> = {
-  fetch: 'Fetch cancelled',
-  pull: 'Pull cancelled',
-  push: 'Push cancelled',
-};
+function cancelledMessage(kind: RemoteOperationKind): string {
+  switch (kind) {
+    case 'fetch':
+      return msg('Fetch cancelled');
+    case 'pull':
+      return msg('Pull cancelled');
+    case 'push':
+      return msg('Push cancelled');
+  }
+}
 
 /**
  * The slot fetch, pull and push share, per repository.
@@ -286,7 +312,9 @@ function notifyRepositoryRefreshed(repoPath: string): void {
  */
 function openConflictResolution(repoPath: string, operationType: 'merge' | 'rebase'): void {
   showToast(
-    `Pull produced conflicts — resolve them to finish the ${operationType}`,
+    msg(
+      str`Pull produced conflicts — resolve them to finish the ${operationType === 'rebase' ? msg('rebase') : msg('merge')}`
+    ),
     'warning',
   );
   const shell = document.querySelector('gn-app-shell');
@@ -359,7 +387,7 @@ async function runRemoteOperation(
   // the button is unreachable dead code and the operation cannot be stopped.
   // Every surface gets it, so a fetch a keyboard shortcut started is as
   // cancellable as one a dashboard button started.
-  const opId = progressService.startOperation(kind, PROGRESS_MESSAGE[kind], {
+  const opId = progressService.startOperation(kind, progressMessage(kind), {
     cancellable: true,
   });
   try {
@@ -384,7 +412,7 @@ async function runRemoteOperation(
     // already announced itself: this one has to be acknowledged, or the row
     // simply vanishes with no explanation.
     if (isOperationCancelled(result.error)) {
-      showToast(CANCELLED_MESSAGE[kind], 'info');
+      showToast(cancelledMessage(kind), 'info');
       return;
     }
 
@@ -397,7 +425,7 @@ async function runRemoteOperation(
     // Pull Now action the app already implements and an auth failure offers
     // Open Settings. It falls back to the plain error toast when no suggestion
     // matches, so nothing is ever silent.
-    showErrorWithSuggestion(result.error?.message ?? '', FAILURE_FALLBACK[kind], {
+    showErrorWithSuggestion(result.error, failureFallback(kind), {
       operation: kind,
       repoPath,
     });

@@ -1,5 +1,6 @@
 import { LitElement, html, css, nothing } from 'lit';
 import { customElement, property, state, query } from 'lit/decorators.js';
+import { localized, msg, str } from '@lit/localize';
 import { sharedStyles } from '../../styles/shared-styles.ts';
 import * as gitService from '../../services/git.service.ts';
 import { showConfirm, showPrompt } from '../../services/dialog.service.ts';
@@ -28,6 +29,7 @@ import {
   subscribeRefOps,
 } from '../../utils/ref-lock.ts';
 
+import { backendErrorMatchText } from '../../services/backend-error.service.ts';
 type BranchSortMode = 'name' | 'date' | 'date-asc';
 
 interface BranchSubgroup {
@@ -61,6 +63,7 @@ interface ContextMenuState {
  * Displays local and remote branches with checkout and management functionality
  */
 @customElement('gn-branch-list')
+@localized()
 export class GnBranchList extends LitElement {
   static styles = [
     sharedStyles,
@@ -722,8 +725,8 @@ export class GnBranchList extends LitElement {
         hostHasRepositories: state.openRepositories.length > 0,
         entries: {
           'gn-branch-cleanup-dialog': {
-            dismissed: 'branch cleanup cancelled',
-            running: 'branch cleanup',
+            dismissed: msg('branch cleanup cancelled'),
+            running: msg('branch cleanup'),
           },
         },
       });
@@ -850,8 +853,8 @@ export class GnBranchList extends LitElement {
    */
   private get createRequestLabel(): string {
     return this.prProvider?.provider === 'gitlab'
-      ? 'Create merge request...'
-      : 'Create pull request...';
+      ? msg('Create merge request...')
+      : msg('Create pull request...');
   }
 
   /**
@@ -862,12 +865,14 @@ export class GnBranchList extends LitElement {
    * on the server to open it from.
    */
   private createRequestBlockedReason(branch: Branch): string | null {
-    if (!this.prProviderResolved) return 'Checking for a hosting provider...';
+    if (!this.prProviderResolved) return msg('Checking for a hosting provider...');
     if (!this.prProvider) {
-      return 'No GitHub, GitLab, Bitbucket or Azure DevOps remote was detected for this repository';
+      return msg(
+        'No GitHub, GitLab, Bitbucket or Azure DevOps remote was detected for this repository'
+      );
     }
     if (!branch.upstream) {
-      return `Push ${branch.shorthand} and set its upstream first`;
+      return msg(str`Push ${branch.shorthand} and set its upstream first`);
     }
     return null;
   }
@@ -999,7 +1004,7 @@ export class GnBranchList extends LitElement {
 
       if (!branchesResult.success) {
         if (isCurrent) {
-          this.error = branchesResult.error?.message ?? 'Failed to load branches';
+          this.error = branchesResult.error?.message ?? msg('Failed to load branches');
         }
         return;
       }
@@ -1142,7 +1147,7 @@ export class GnBranchList extends LitElement {
 
     } catch (err) {
       if (this.repositoryPath === loadedPath) {
-        this.error = err instanceof Error ? err.message : 'Unknown error';
+        this.error = err instanceof Error ? err.message : msg('Unknown error');
       }
     } finally {
       // A stale load must not stomp the loading state of the load that the
@@ -1350,7 +1355,10 @@ export class GnBranchList extends LitElement {
       if (result.success && result.data?.success) {
         const data = result.data;
         if (data.stashed && data.stashConflict) {
-          showToast(`Switched to ${branch.shorthand} — stash conflicts need resolution`, 'warning');
+          showToast(
+            msg(str`Switched to ${branch.shorthand} — stash conflicts need resolution`),
+            'warning',
+          );
           this.dispatchEvent(new CustomEvent('open-conflict-dialog', {
             bubbles: true,
             composed: true,
@@ -1382,8 +1390,8 @@ export class GnBranchList extends LitElement {
         // libgit2's "1 conflict prevents checkout" names neither the files nor
         // a way forward, and this is the surface most checkouts come from.
         showErrorWithSuggestion(
-          result.data?.message || result.error?.message || '',
-          'Checkout failed',
+          result.data?.message || result.error,
+          msg('Checkout failed'),
         );
       }
     } finally {
@@ -1420,7 +1428,11 @@ export class GnBranchList extends LitElement {
 
     this.contextMenu = { ...this.contextMenu, visible: false };
 
-    const newName = await showPrompt('Rename Branch', `Rename branch "${branch.name}" to:`, branch.name);
+    const newName = await showPrompt(
+      msg('Rename Branch'),
+      msg(str`Rename branch "${branch.name}" to:`),
+      branch.name,
+    );
     if (!newName || newName === branch.name) {
       this.releaseOperation(lockedRepo);
       return;
@@ -1437,12 +1449,15 @@ export class GnBranchList extends LitElement {
         // Every other mutating handler in this file toasts. Rename did not, and
         // the list is often filtered or scrolled, so the renamed row may not
         // even be on screen — success was the only outcome that said nothing.
-        showToast(`Renamed ${branch.shorthand} to ${newName.trim()}`, 'success');
+        showToast(msg(str`Renamed ${branch.shorthand} to ${newName.trim()}`), 'success');
         await this.loadBranches();
         this.dispatchBranchesChanged(repoPath);
       } else {
         console.error('Rename branch failed:', result.error);
-        showToast(`Failed to rename branch: ${result.error?.message ?? 'Unknown error'}`, 'error');
+        showToast(
+          msg(str`Failed to rename branch: ${result.error?.message ?? msg('Unknown error')}`),
+          'error',
+        );
       }
     } finally {
       this.releaseOperation(lockedRepo);
@@ -1462,8 +1477,10 @@ export class GnBranchList extends LitElement {
     this.contextMenu = { ...this.contextMenu, visible: false };
 
     const confirmed = await showConfirm(
-      'Delete Branch',
-      `Are you sure you want to delete the branch "${branch.shorthand}"?\n\nThis action cannot be undone.`,
+      msg('Delete Branch'),
+      msg(
+        str`Are you sure you want to delete the branch "${branch.shorthand}"?\n\nThis action cannot be undone.`
+      ),
       'warning'
     );
 
@@ -1484,10 +1501,12 @@ export class GnBranchList extends LitElement {
       // so its tip is not an ancestor of HEAD) can't be deleted without force.
       // Offer force instead of dead-ending — there's no other force path in
       // this menu, and the squash-finish flow directs users here.
-      if (!result.success && /not fully merged/i.test(result.error?.message ?? '')) {
+      if (!result.success && /not fully merged/i.test(backendErrorMatchText(result.error))) {
         const forceConfirmed = await showConfirm(
-          'Branch Not Fully Merged',
-          `"${branch.shorthand}" is not fully merged (its changes may have been squash-merged). Force delete it anyway?\n\nThis action cannot be undone.`,
+          msg('Branch Not Fully Merged'),
+          msg(
+            str`"${branch.shorthand}" is not fully merged (its changes may have been squash-merged). Force delete it anyway?\n\nThis action cannot be undone.`
+          ),
           'warning'
         );
         if (!forceConfirmed) {
@@ -1495,7 +1514,7 @@ export class GnBranchList extends LitElement {
           // as "the delete did nothing and nobody will say why". The unmerged
           // refusal that explains it was consumed by the escalation prompt.
           showToast(
-            `"${branch.shorthand}" was not deleted — it is not fully merged`,
+            msg(str`"${branch.shorthand}" was not deleted — it is not fully merged`),
             'warning'
           );
           return;
@@ -1509,11 +1528,14 @@ export class GnBranchList extends LitElement {
         // toasts, and Branch Cleanup toasts. Here the only signal was a row
         // vanishing from a list that is often filtered or scrolled away from
         // the deleted row — the same gap fixed on the sibling tag list.
-        showToast(`Deleted branch ${branch.shorthand}`, 'success');
+        showToast(msg(str`Deleted branch ${branch.shorthand}`), 'success');
         this.dispatchBranchesChanged(repoPath);
       } else {
         console.error('Delete branch failed:', result.error);
-        showToast(`Failed to delete branch: ${result.error?.message ?? 'Unknown error'}`, 'error');
+        showToast(
+          msg(str`Failed to delete branch: ${result.error?.message ?? msg('Unknown error')}`),
+          'error',
+        );
       }
     } finally {
       this.releaseOperation(lockedRepo);
@@ -1537,8 +1559,8 @@ export class GnBranchList extends LitElement {
     // in-memory in the backend, so it cannot race the merge it precedes.
     const prediction = await mergePreviewSummary(repoPath, branch.name);
     const confirmed = await showConfirm(
-      'Merge Branch',
-      `Merge "${branch.name}" into the current branch?${prediction}`,
+      msg('Merge Branch'),
+      msg(str`Merge "${branch.name}" into the current branch?${prediction}`),
       'info'
     );
 
@@ -1563,7 +1585,7 @@ export class GnBranchList extends LitElement {
         // The same operation from the graph's ref label toasts. Here nothing
         // visibly changes on an up-to-date merge or a no-op rebase, so without
         // this the user cannot tell a completed operation from a dead click.
-        showToast(`Merged ${branch.shorthand}`, 'success');
+        showToast(msg(str`Merged ${branch.shorthand}`), 'success');
         this.dispatchBranchesChanged(repoPath);
       } else if (result.error?.code === 'MERGE_CONFLICT') {
         // Open the conflict-resolution dialog (same flow as the drag-drop path)
@@ -1574,7 +1596,7 @@ export class GnBranchList extends LitElement {
         }));
       } else {
         console.error('Merge failed:', result.error);
-        showToast(`Merge failed: ${result.error?.message ?? 'Unknown error'}`, 'error');
+        showToast(msg(str`Merge failed: ${result.error?.message ?? msg('Unknown error')}`), 'error');
       }
     } finally {
       this.releaseOperation(lockedRepo);
@@ -1593,8 +1615,8 @@ export class GnBranchList extends LitElement {
     // invoked on, even if the user switches tabs while the confirm is up.
     const repoPath = this.repositoryPath;
     const confirmed = await showConfirm(
-      'Rebase Branch',
-      `Rebase current branch onto "${branch.name}"?\n\nThis will rewrite commit history.`,
+      msg('Rebase Branch'),
+      msg(str`Rebase current branch onto "${branch.name}"?\n\nThis will rewrite commit history.`),
       'warning'
     );
 
@@ -1627,7 +1649,7 @@ export class GnBranchList extends LitElement {
         }));
       } else {
         console.error('Rebase failed:', result.error);
-        showToast(`Rebase failed: ${result.error?.message ?? 'Unknown error'}`, 'error');
+        showToast(msg(str`Rebase failed: ${result.error?.message ?? msg('Unknown error')}`), 'error');
       }
     } finally {
       this.releaseOperation(lockedRepo);
@@ -1712,7 +1734,10 @@ export class GnBranchList extends LitElement {
       });
 
       if (!createResult.success) {
-        showToast(`Failed to create branch: ${createResult.error?.message ?? 'Unknown error'}`, 'error');
+        showToast(
+          msg(str`Failed to create branch: ${createResult.error?.message ?? msg('Unknown error')}`),
+          'error',
+        );
         return;
       }
 
@@ -1723,7 +1748,7 @@ export class GnBranchList extends LitElement {
       );
 
       if (upstreamResult.success) {
-        showToast(`Tracking ${remoteBranchRef} as ${localName}`, 'success');
+        showToast(msg(str`Tracking ${remoteBranchRef} as ${localName}`), 'success');
         await this.loadBranches();
         this.dispatchBranchesChanged(repoPath);
       } else {
@@ -1733,15 +1758,19 @@ export class GnBranchList extends LitElement {
         // this branch" again) then failed at createBranch with "branch already
         // exists" and never reached the upstream step: a dead end.
         showToast(
-          `Created ${localName} but failed to set upstream: ` +
-            `${upstreamResult.error?.message ?? 'Unknown error'}`,
+          msg(
+            str`Created ${localName} but failed to set upstream: ${upstreamResult.error?.message ?? msg('Unknown error')}`
+          ),
           'warning',
         );
         await this.loadBranches();
         this.dispatchBranchesChanged(repoPath);
       }
     } catch (err) {
-      showToast(`Failed to track branch: ${err instanceof Error ? err.message : 'Unknown error'}`, 'error');
+      showToast(
+        msg(str`Failed to track branch: ${err instanceof Error ? err.message : msg('Unknown error')}`),
+        'error',
+      );
     }
   }
 
@@ -1757,7 +1786,11 @@ export class GnBranchList extends LitElement {
     // repo is active when the prompt resolves, not the one it was invoked on.
     const repoPath = this.repositoryPath;
     const defaultUpstream = branch.upstream ?? `origin/${branch.shorthand}`;
-    const upstream = await showPrompt('Set Upstream', `Set upstream for "${branch.shorthand}":`, defaultUpstream);
+    const upstream = await showPrompt(
+      msg('Set Upstream'),
+      msg(str`Set upstream for "${branch.shorthand}":`),
+      defaultUpstream,
+    );
     if (!upstream) return;
 
     try {
@@ -1768,14 +1801,20 @@ export class GnBranchList extends LitElement {
       );
 
       if (result.success) {
-        showToast(`Upstream set to ${upstream.trim()}`, 'success');
+        showToast(msg(str`Upstream set to ${upstream.trim()}`), 'success');
         await this.loadBranches();
         this.dispatchBranchesChanged(repoPath);
       } else {
-        showToast(`Failed to set upstream: ${result.error?.message ?? 'Unknown error'}`, 'error');
+        showToast(
+          msg(str`Failed to set upstream: ${result.error?.message ?? msg('Unknown error')}`),
+          'error',
+        );
       }
     } catch (err) {
-      showToast(`Failed to set upstream: ${err instanceof Error ? err.message : 'Unknown error'}`, 'error');
+      showToast(
+        msg(str`Failed to set upstream: ${err instanceof Error ? err.message : msg('Unknown error')}`),
+        'error',
+      );
     }
   }
 
@@ -1793,14 +1832,20 @@ export class GnBranchList extends LitElement {
       );
 
       if (result.success) {
-        showToast(`Upstream removed for ${branch.shorthand}`, 'success');
+        showToast(msg(str`Upstream removed for ${branch.shorthand}`), 'success');
         await this.loadBranches();
         this.dispatchBranchesChanged(repoPath);
       } else {
-        showToast(`Failed to unset upstream: ${result.error?.message ?? 'Unknown error'}`, 'error');
+        showToast(
+          msg(str`Failed to unset upstream: ${result.error?.message ?? msg('Unknown error')}`),
+          'error',
+        );
       }
     } catch (err) {
-      showToast(`Failed to unset upstream: ${err instanceof Error ? err.message : 'Unknown error'}`, 'error');
+      showToast(
+        msg(str`Failed to unset upstream: ${err instanceof Error ? err.message : msg('Unknown error')}`),
+        'error',
+      );
     }
   }
 
@@ -1830,8 +1875,12 @@ export class GnBranchList extends LitElement {
 
     return html`
       <span class="ahead-behind">
-        ${ahead > 0 ? html`<span class="ahead" title="${ahead} commit${ahead > 1 ? 's' : ''} ahead of remote">↑${ahead}</span>` : nothing}
-        ${behind > 0 ? html`<span class="behind" title="${behind} commit${behind > 1 ? 's' : ''} behind remote">↓${behind}</span>` : nothing}
+        ${ahead > 0
+          ? html`<span class="ahead" title=${ahead > 1 ? msg(str`${ahead} commits ahead of remote`) : msg(str`${ahead} commit ahead of remote`)}>↑${ahead}</span>`
+          : nothing}
+        ${behind > 0
+          ? html`<span class="behind" title=${behind > 1 ? msg(str`${behind} commits behind remote`) : msg(str`${behind} commit behind remote`)}>↓${behind}</span>`
+          : nothing}
       </span>
     `;
   }
@@ -1862,14 +1911,17 @@ export class GnBranchList extends LitElement {
 
     // Calculate how long ago the last commit was
     const lastCommit = branch.lastCommitTimestamp;
-    let title = 'Stale branch';
+    let title = msg('Stale branch');
     if (lastCommit) {
       const daysAgo = Math.floor((Date.now() / 1000 - lastCommit) / (24 * 60 * 60));
       const months = Math.floor(daysAgo / 30);
       if (months >= 1) {
-        title = `Last commit ${months} month${months > 1 ? 's' : ''} ago`;
+        title =
+          months > 1
+            ? msg(str`Last commit ${months} months ago`)
+            : msg(str`Last commit ${months} month ago`);
       } else {
-        title = `Last commit ${daysAgo} days ago`;
+        title = msg(str`Last commit ${daysAgo} days ago`);
       }
     }
 
@@ -1916,13 +1968,13 @@ export class GnBranchList extends LitElement {
         ${!branch.isRemote && branch.upstream ? html`
           <div class="branch-info">
             <span class="branch-name">${displayName}</span>
-            <span class="branch-upstream" title="Tracking ${branch.upstream}">→ ${branch.upstream}</span>
+            <span class="branch-upstream" title=${msg(str`Tracking ${branch.upstream}`)}>→ ${branch.upstream}</span>
           </div>
         ` : html`<span class="branch-name">${displayName}</span>`}
         ${this.renderAheadBehind(branch)}
         ${this.renderStaleIndicator(branch)}
         ${isDropTarget ? html`
-          <span class="drop-indicator ${this.dropAction}">${this.dropAction === 'merge' ? 'Merge' : 'Rebase'}</span>
+          <span class="drop-indicator ${this.dropAction}">${this.dropAction === 'merge' ? msg('Merge') : msg('Rebase')}</span>
         ` : nothing}
       </li>
     `;
@@ -2026,8 +2078,8 @@ export class GnBranchList extends LitElement {
         // gestures, so it is the one that most needs the warning.
         const prediction = await mergePreviewSummary(repoPath, sourceBranch.name);
         const confirmed = await showConfirm(
-          'Merge Branch',
-          `Merge "${sourceBranch.name}" into the current branch?${prediction}`,
+          msg('Merge Branch'),
+          msg(str`Merge "${sourceBranch.name}" into the current branch?${prediction}`),
           'info'
         );
         if (!confirmed) return;
@@ -2040,7 +2092,7 @@ export class GnBranchList extends LitElement {
 
         if (result.success) {
           await this.loadBranches();
-          showToast(`Merged ${sourceBranch.shorthand}`, 'success');
+          showToast(msg(str`Merged ${sourceBranch.shorthand}`), 'success');
           this.dispatchBranchesChanged(repoPath);
         } else if (result.error?.code === 'MERGE_CONFLICT') {
           this.dispatchEvent(new CustomEvent('merge-conflict', {
@@ -2052,7 +2104,7 @@ export class GnBranchList extends LitElement {
           // No checkout happens on this arm — the target IS HEAD, so
           // saying "Switched to <branch>" would describe a switch that
           // never occurred and send the user looking for a way back.
-          showToast(`Merge failed: ${result.error?.message ?? 'Unknown error'}`, 'error');
+          showToast(msg(str`Merge failed: ${result.error?.message ?? msg('Unknown error')}`), 'error');
         }
       } else {
         // Rebase current branch onto source
@@ -2060,8 +2112,10 @@ export class GnBranchList extends LitElement {
         // drag is the least deliberate of the three gestures — alt-drag is easy
         // to trigger by accident — so it is the one that most needs it.
         const confirmed = await showConfirm(
-          'Rebase Branch',
-          `Rebase current branch onto "${sourceBranch.name}"?\n\nThis will rewrite commit history.`,
+          msg('Rebase Branch'),
+          msg(
+            str`Rebase current branch onto "${sourceBranch.name}"?\n\nThis will rewrite commit history.`
+          ),
           'warning'
         );
         if (!confirmed) return;
@@ -2086,12 +2140,12 @@ export class GnBranchList extends LitElement {
           // No checkout happens on this arm — the target IS HEAD, so
           // saying "Switched to <branch>" would describe a switch that
           // never occurred and send the user looking for a way back.
-          showToast(`Rebase failed: ${result.error?.message ?? 'Unknown error'}`, 'error');
+          showToast(msg(str`Rebase failed: ${result.error?.message ?? msg('Unknown error')}`), 'error');
         }
       }
     } else {
       // Dropping on a non-HEAD branch: need to checkout first, then merge/rebase
-      const actionText = action === 'merge' ? 'merge' : 'rebase onto';
+      const actionText = action === 'merge' ? msg('merge') : msg('rebase onto');
       // Previewed against the TARGET branch, not HEAD: this arm checks the
       // target out first and merges into that, so a prediction against the
       // branch the user is leaving would describe a different merge.
@@ -2100,10 +2154,14 @@ export class GnBranchList extends LitElement {
           ? await mergePreviewSummary(repoPath, sourceBranch.name, targetBranch.name)
           : '';
       const confirmed = await showConfirm(
-        action === 'merge' ? 'Merge Branch' : 'Rebase Branch',
-        `This will checkout "${targetBranch.name}" and ${actionText} "${sourceBranch.name}". Continue?` +
-          (action === 'rebase' ? `\n\nThis will rewrite commit history.` : '') +
-          prediction,
+        action === 'merge' ? msg('Merge Branch') : msg('Rebase Branch'),
+        action === 'merge'
+          ? msg(
+              str`This will checkout "${targetBranch.name}" and ${actionText} "${sourceBranch.name}". Continue?${prediction}`
+            )
+          : msg(
+              str`This will checkout "${targetBranch.name}" and ${actionText} "${sourceBranch.name}". Continue?\n\nThis will rewrite commit history.${prediction}`
+            ),
         action === 'merge' ? 'info' : 'warning'
       );
       if (!confirmed) return;
@@ -2117,16 +2175,18 @@ export class GnBranchList extends LitElement {
       if (!checkoutResult.success || !checkoutResult.data?.success) {
         console.error('Checkout failed:', checkoutResult.data?.message || checkoutResult.error);
         showErrorWithSuggestion(
-          checkoutResult.data?.message || checkoutResult.error?.message || '',
-          'Checkout failed',
+          checkoutResult.data?.message || checkoutResult.error,
+          msg('Checkout failed'),
         );
         return;
       }
 
       if (checkoutResult.data.stashed && checkoutResult.data.stashConflict) {
-        const actionName = action === 'merge' ? 'merge' : 'rebase';
+        const actionName = action === 'merge' ? msg('merge') : msg('rebase');
         showToast(
-          `Switched to ${targetBranch.shorthand}, but re-applying your stashed changes hit conflicts. The ${actionName} was NOT started — resolve the stash conflicts, then re-run the ${actionName}.`,
+          msg(
+            str`Switched to ${targetBranch.shorthand}, but re-applying your stashed changes hit conflicts. The ${actionName} was NOT started — resolve the stash conflicts, then re-run the ${actionName}.`
+          ),
           'warning',
         );
         this.dispatchEvent(new CustomEvent('open-conflict-dialog', {
@@ -2162,7 +2222,7 @@ export class GnBranchList extends LitElement {
 
         if (result.success) {
           await this.loadBranches();
-          showToast(`Merged ${sourceBranch.shorthand}`, 'success');
+          showToast(msg(str`Merged ${sourceBranch.shorthand}`), 'success');
           this.dispatchBranchesChanged(repoPath);
         } else if (result.error?.code === 'MERGE_CONFLICT') {
           this.dispatchEvent(new CustomEvent('merge-conflict', {
@@ -2176,8 +2236,9 @@ export class GnBranchList extends LitElement {
           await this.loadBranches();
           this.dispatchBranchesChanged(repoPath);
           showToast(
-            `Switched to ${targetBranch.shorthand}, but the merge failed: ` +
-              `${result.error?.message ?? 'Unknown error'}`,
+            msg(
+              str`Switched to ${targetBranch.shorthand}, but the merge failed: ${result.error?.message ?? msg('Unknown error')}`
+            ),
             'error'
           );
         }
@@ -2204,8 +2265,9 @@ export class GnBranchList extends LitElement {
           await this.loadBranches();
           this.dispatchBranchesChanged(repoPath);
           showToast(
-            `Switched to ${targetBranch.shorthand}, but the rebase failed: ` +
-              `${result.error?.message ?? 'Unknown error'}`,
+            msg(
+              str`Switched to ${targetBranch.shorthand}, but the rebase failed: ${result.error?.message ?? msg('Unknown error')}`
+            ),
             'error'
           );
         }
@@ -2238,7 +2300,7 @@ export class GnBranchList extends LitElement {
           role="button"
           tabindex="0"
           aria-expanded=${expanded}
-          aria-label="${group.displayName} branch group, ${filteredBranches.length} branches"
+          aria-label=${msg(str`${group.displayName} branch group, ${filteredBranches.length} branches`)}
           @click=${() => this.toggleGroup(groupId)}
           @keydown=${(e: KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this.toggleGroup(groupId); } }}
         >
@@ -2283,7 +2345,7 @@ export class GnBranchList extends LitElement {
           role="button"
           tabindex="0"
           aria-expanded=${expanded}
-          aria-label="${subgroup.displayName} branch group, ${filteredBranches.length} branches"
+          aria-label=${msg(str`${subgroup.displayName} branch group, ${filteredBranches.length} branches`)}
           @click=${() => this.toggleGroup(groupId)}
           @keydown=${(e: KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this.toggleGroup(groupId); } }}
         >
@@ -2358,7 +2420,7 @@ export class GnBranchList extends LitElement {
       <div
         class="context-menu"
         role="menu"
-        aria-label="Branch actions"
+        aria-label=${msg('Branch actions')}
         style="left: ${this.contextMenu.x}px; top: ${this.contextMenu.y}px;"
         @click=${(e: Event) => e.stopPropagation()}
         @keydown=${(e: KeyboardEvent) => this.handleContextMenuKeydown(e)}
@@ -2368,7 +2430,7 @@ export class GnBranchList extends LitElement {
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
               <polyline points="20 6 9 17 4 12"></polyline>
             </svg>
-            Checkout
+            ${msg('Checkout')}
           </button>
         ` : ''}
 
@@ -2377,7 +2439,7 @@ export class GnBranchList extends LitElement {
             <line x1="12" y1="5" x2="12" y2="19"></line>
             <line x1="5" y1="12" x2="19" y2="12"></line>
           </svg>
-          Create branch from here
+          ${msg('Create branch from here')}
         </button>
 
         ${!isHead ? html`
@@ -2388,7 +2450,7 @@ export class GnBranchList extends LitElement {
               <line x1="6" y1="9" x2="6" y2="21"></line>
               <line x1="18" y1="3" x2="18" y2="15"></line>
             </svg>
-            Compare with current branch
+            ${msg('Compare with current branch')}
           </button>
         ` : ''}
 
@@ -2400,7 +2462,7 @@ export class GnBranchList extends LitElement {
               <line x1="20" y1="8" x2="20" y2="14"></line>
               <line x1="23" y1="11" x2="17" y2="11"></line>
             </svg>
-            Track this branch
+            ${msg('Track this branch')}
           </button>
         ` : ''}
 
@@ -2409,7 +2471,10 @@ export class GnBranchList extends LitElement {
             class="context-menu-item"
             role="menuitem"
             ?disabled=${createRequestBlocked !== null}
-            title=${createRequestBlocked ?? `Open a ${this.prProvider?.itemNoun ?? 'pull request'} for ${branch.shorthand} on ${this.prProvider?.providerName ?? 'the remote'}`}
+            title=${createRequestBlocked ??
+              msg(
+                str`Open a ${this.prProvider?.itemNoun ?? msg('pull request')} for ${branch.shorthand} on ${this.prProvider?.providerName ?? msg('the remote')}`
+              )}
             @click=${this.handleCreatePullRequest}
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
@@ -2429,7 +2494,7 @@ export class GnBranchList extends LitElement {
               : html`<path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line>`
             }
           </svg>
-          ${this.hiddenBranches.has(branch.name) ? 'Show branch' : 'Hide branch'}
+          ${this.hiddenBranches.has(branch.name) ? msg('Show branch') : msg('Hide branch')}
         </button>
 
         ${!isHead ? html`
@@ -2439,7 +2504,7 @@ export class GnBranchList extends LitElement {
               <circle cx="6" cy="6" r="3"></circle>
               <path d="M6 21V9a9 9 0 009 9"></path>
             </svg>
-            Merge into current branch
+            ${msg('Merge into current branch')}
           </button>
           <button class="context-menu-item" role="menuitem" ?disabled=${this.operationInProgress} @click=${this.handleRebaseBranch}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
@@ -2448,7 +2513,7 @@ export class GnBranchList extends LitElement {
               <line x1="6" y1="9" x2="6" y2="15"></line>
               <path d="M18 6h-6a3 3 0 00-3 3v3"></path>
             </svg>
-            Rebase current onto this
+            ${msg('Rebase current onto this')}
           </button>
           <button class="context-menu-item" role="menuitem" ?disabled=${this.operationInProgress} @click=${this.handleInteractiveRebase}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
@@ -2457,7 +2522,7 @@ export class GnBranchList extends LitElement {
               <line x1="9" y1="13" x2="15" y2="13"></line>
               <line x1="9" y1="17" x2="12" y2="17"></line>
             </svg>
-            Interactive rebase onto this
+            ${msg('Interactive rebase onto this')}
           </button>
         ` : ''}
 
@@ -2469,7 +2534,7 @@ export class GnBranchList extends LitElement {
               <line x1="21" y1="3" x2="14" y2="10"></line>
               <path d="M10 14L3 21"></path>
             </svg>
-            ${branch.upstream ? 'Change Upstream...' : 'Set Upstream...'}
+            ${branch.upstream ? msg('Change Upstream...') : msg('Set Upstream...')}
           </button>
           ${branch.upstream ? html`
             <button class="context-menu-item" role="menuitem" @click=${this.handleUnsetUpstream}>
@@ -2477,7 +2542,7 @@ export class GnBranchList extends LitElement {
                 <line x1="18" y1="6" x2="6" y2="18"></line>
                 <line x1="6" y1="6" x2="18" y2="18"></line>
               </svg>
-              Unset Upstream
+              ${msg('Unset Upstream')}
             </button>
           ` : ''}
           <div class="context-menu-divider" role="separator"></div>
@@ -2485,14 +2550,14 @@ export class GnBranchList extends LitElement {
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
               <path d="M17 3a2.828 2.828 0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path>
             </svg>
-            Rename
+            ${msg('Rename')}
           </button>
           <button class="context-menu-item danger" role="menuitem" ?disabled=${this.operationInProgress} @click=${this.handleDeleteBranch}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
               <polyline points="3 6 5 6 21 6"></polyline>
               <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"></path>
             </svg>
-            Delete branch
+            ${msg('Delete branch')}
           </button>
         ` : ''}
       </div>
@@ -2504,8 +2569,8 @@ export class GnBranchList extends LitElement {
       <div class="controls" style="position: relative;">
         <button
           class="controls-btn ${this.showFilter ? 'active' : ''}"
-          title="Filter branches"
-          aria-label="Filter branches"
+          title=${msg('Filter branches')}
+          aria-label=${msg('Filter branches')}
           @click=${this.toggleFilter}
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
@@ -2515,8 +2580,8 @@ export class GnBranchList extends LitElement {
         </button>
         <button
           class="controls-btn ${this.showSortMenu ? 'active' : ''}"
-          title="Sort branches"
-          aria-label="Sort branches"
+          title=${msg('Sort branches')}
+          aria-label=${msg('Sort branches')}
           @click=${this.toggleSortMenu}
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
@@ -2528,8 +2593,8 @@ export class GnBranchList extends LitElement {
         <div style="flex:1"></div>
         <button
           class="controls-btn"
-          title="Create branch"
-          aria-label="Create branch"
+          title=${msg('Create branch')}
+          aria-label=${msg('Create branch')}
           @click=${this.handleCreateBranch}
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
@@ -2538,12 +2603,12 @@ export class GnBranchList extends LitElement {
           </svg>
         </button>
         ${this.showSortMenu ? html`
-          <div class="sort-menu" role="menu" aria-label="Sort options" @click=${(e: Event) => e.stopPropagation()}>
+          <div class="sort-menu" role="menu" aria-label=${msg('Sort options')} @click=${(e: Event) => e.stopPropagation()}>
             <button class="sort-option ${this.sortMode === 'name' ? 'active' : ''}" role="menuitem" @click=${() => this.setSortMode('name')}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                 <path d="M4 6h7M4 12h5M4 18h3M17 6v12M14 18l3 3 3-3"></path>
               </svg>
-              Name (A-Z)
+              ${msg('Name (A-Z)')}
             </button>
             <button class="sort-option ${this.sortMode === 'date' ? 'active' : ''}" role="menuitem" @click=${() => this.setSortMode('date')}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
@@ -2552,7 +2617,7 @@ export class GnBranchList extends LitElement {
                 <line x1="8" y1="2" x2="8" y2="6"></line>
                 <line x1="3" y1="10" x2="21" y2="10"></line>
               </svg>
-              Date (Newest)
+              ${msg('Date (Newest)')}
             </button>
             <button class="sort-option ${this.sortMode === 'date-asc' ? 'active' : ''}" role="menuitem" @click=${() => this.setSortMode('date-asc')}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
@@ -2561,7 +2626,7 @@ export class GnBranchList extends LitElement {
                 <line x1="8" y1="2" x2="8" y2="6"></line>
                 <line x1="3" y1="10" x2="21" y2="10"></line>
               </svg>
-              Date (Oldest)
+              ${msg('Date (Oldest)')}
             </button>
           </div>
         ` : nothing}
@@ -2575,13 +2640,13 @@ export class GnBranchList extends LitElement {
           <input
             class="filter-input"
             type="text"
-            placeholder="Filter branches..."
-            aria-label="Filter branches"
+            placeholder=${msg('Filter branches...')}
+            aria-label=${msg('Filter branches')}
             .value=${this.filterText}
             @input=${this.handleFilterInput}
           />
           ${this.filterText ? html`
-            <button class="filter-clear" aria-label="Clear filter" @click=${this.clearFilter}>
+            <button class="filter-clear" aria-label=${msg('Clear filter')} @click=${this.clearFilter}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                 <line x1="18" y1="6" x2="6" y2="18"></line>
                 <line x1="6" y1="6" x2="18" y2="18"></line>
@@ -2616,7 +2681,7 @@ export class GnBranchList extends LitElement {
     return html`
       ${dialogs}
       ${this.loading
-        ? html`<div class="loading">Loading branches...</div>`
+        ? html`<div class="loading">${msg('Loading branches...')}</div>`
         : this.error
           ? html`<div class="error">${this.error}</div>`
           : this.renderBody()}
@@ -2630,20 +2695,22 @@ export class GnBranchList extends LitElement {
       <!-- Local branches -->
       ${this.localBranchGroups.length > 0 ? html`
         <div class="local-header">
-          <span class="local-header-title">Local Branches</span>
+          <span class="local-header-title">${msg('Local Branches')}</span>
           ${this.getCleanupCandidateCount() > 0 || this.cleanupCheckFailed ? html`
             <button
               class="cleanup-btn"
               @click=${this.handleOpenCleanupDialog}
               title=${this.cleanupCheckFailed
-                ? 'Could not check for cleanup candidates — open to retry'
-                : `${this.getCleanupCandidateCount()} branch${this.getCleanupCandidateCount() === 1 ? '' : 'es'} can be reviewed for cleanup`}
+                ? msg('Could not check for cleanup candidates — open to retry')
+                : this.getCleanupCandidateCount() === 1
+                  ? msg(str`${this.getCleanupCandidateCount()} branch can be reviewed for cleanup`)
+                  : msg(str`${this.getCleanupCandidateCount()} branches can be reviewed for cleanup`)}
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <polyline points="3 6 5 6 21 6"></polyline>
                 <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"></path>
               </svg>
-              Clean up
+              ${msg('Clean up')}
               ${this.cleanupCheckFailed
                 ? nothing
                 : html`<span class="badge">${this.getCleanupCandidateCount()}</span>`}
@@ -2666,7 +2733,7 @@ export class GnBranchList extends LitElement {
               role="button"
               tabindex="0"
               aria-expanded=${expanded}
-              aria-label="${group.name} remote, ${group.branches.length} branches"
+              aria-label=${msg(str`${group.name} remote, ${group.branches.length} branches`)}
               @click=${() => this.toggleGroup(groupId)}
               @keydown=${(e: KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this.toggleGroup(groupId); } }}
             >

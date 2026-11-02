@@ -5,6 +5,7 @@
 
 import { LitElement, html, css, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
+import { localized, msg, str } from '@lit/localize';
 import { sharedStyles } from '../../styles/shared-styles.ts';
 import * as gitService from '../../services/git.service.ts';
 import { showToast } from '../../services/notification.service.ts';
@@ -19,6 +20,7 @@ interface HistoryContextMenuState {
 }
 
 @customElement('gn-file-history')
+@localized()
 export class GnFileHistory extends LitElement {
   static styles = [
     sharedStyles,
@@ -332,11 +334,11 @@ export class GnFileHistory extends LitElement {
       if (result.success && result.data) {
         this.entries = result.data;
       } else if (!result.success) {
-        this.error = result.error?.message ?? 'Failed to load file history';
+        this.error = result.error?.message ?? msg('Failed to load file history');
       }
     } catch (err) {
       if (seq !== this.loadSeq) return;
-      this.error = err instanceof Error ? err.message : 'Failed to load file history';
+      this.error = err instanceof Error ? err.message : msg('Failed to load file history');
       console.error('Failed to load file history:', err);
     } finally {
       if (seq === this.loadSeq) {
@@ -377,17 +379,23 @@ export class GnFileHistory extends LitElement {
     const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
     if (diffDays === 0) {
-      return 'Today';
+      return msg('Today');
     } else if (diffDays === 1) {
-      return 'Yesterday';
+      return msg('Yesterday');
     } else if (diffDays < 7) {
-      return `${diffDays} days ago`;
+      return msg(str`${diffDays} days ago`);
     } else if (diffDays < 30) {
       const weeks = Math.floor(diffDays / 7);
-      return `${weeks} week${weeks > 1 ? 's' : ''} ago`;
+      // Singular and plural are two full messages: inflecting the noun in code
+      // (`week${n > 1 ? 's' : ''}`) cannot be translated.
+      return weeks === 1
+        ? msg(str`${weeks} week ago`)
+        : msg(str`${weeks} weeks ago`);
     } else if (diffDays < 365) {
       const months = Math.floor(diffDays / 30);
-      return `${months} month${months > 1 ? 's' : ''} ago`;
+      return months === 1
+        ? msg(str`${months} month ago`)
+        : msg(str`${months} months ago`);
     } else {
       return date.toLocaleDateString();
     }
@@ -460,12 +468,14 @@ export class GnFileHistory extends LitElement {
     try {
       await navigator.clipboard.writeText(entry.commit.oid);
       showToast(
-        `Copied SHA ${entry.commit.shortId || entry.commit.oid.substring(0, 7)} to clipboard`,
+        msg(
+          str`Copied SHA ${entry.commit.shortId || entry.commit.oid.substring(0, 7)} to clipboard`
+        ),
         'success'
       );
     } catch (err) {
       console.error('Failed to copy hash:', err);
-      showToast('Failed to copy hash to clipboard', 'error');
+      showToast(msg('Failed to copy hash to clipboard'), 'error');
     }
   }
 
@@ -479,14 +489,14 @@ export class GnFileHistory extends LitElement {
             <line x1="12" y1="15" x2="12" y2="21"></line>
           </svg>
           <div>
-            <div class="header-title">File History</div>
+            <div class="header-title">${msg('File History')}</div>
             <div class="file-path" title="${this.filePath}">${this.filePath}</div>
           </div>
         </div>
         ${!this.loading ? html`
-          <span class="commit-count">${this.entries.length} commits</span>
+          <span class="commit-count">${msg(str`${this.entries.length} commits`)}</span>
         ` : nothing}
-        <button class="close-btn" @click=${this.handleClose} title="Close">
+        <button class="close-btn" @click=${this.handleClose} title=${msg('Close')}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="18" y1="6" x2="6" y2="18"></line>
             <line x1="6" y1="6" x2="18" y2="18"></line>
@@ -496,11 +506,11 @@ export class GnFileHistory extends LitElement {
 
       <div class="content">
         ${this.loading
-          ? html`<div class="loading">Loading history...</div>`
+          ? html`<div class="loading">${msg('Loading history...')}</div>`
           : this.error
             ? html`<div class="error">${this.error}</div>`
           : this.entries.length === 0
-            ? html`<div class="empty">No history found for this file</div>`
+            ? html`<div class="empty">${msg('No history found for this file')}</div>`
             : html`
                 <div class="commit-list">
                   ${this.entries.map(entry => html`
@@ -515,9 +525,9 @@ export class GnFileHistory extends LitElement {
                         <button
                           class="view-diff-btn"
                           @click=${(e: Event) => this.handleViewDiff(e, entry)}
-                          title="View diff of ${entry.pathAtCommit} at this commit"
+                          title=${msg(str`View diff of ${entry.pathAtCommit} at this commit`)}
                         >
-                          View
+                          ${msg('View')}
                         </button>
                       </div>
                       <div class="commit-meta">
@@ -559,7 +569,7 @@ export class GnFileHistory extends LitElement {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M12 3v18M3 12h18"></path>
           </svg>
-          View diff
+          ${msg('View diff')}
         </button>
         <button class="context-menu-item" @click=${this.handleContextShowCommit}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -567,7 +577,7 @@ export class GnFileHistory extends LitElement {
             <line x1="12" y1="3" x2="12" y2="9"></line>
             <line x1="12" y1="15" x2="12" y2="21"></line>
           </svg>
-          Show commit details
+          ${msg('Show commit details')}
         </button>
         <button class="context-menu-item" @click=${this.handleContextViewBlame}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -576,14 +586,14 @@ export class GnFileHistory extends LitElement {
             <line x1="16" y1="13" x2="8" y2="13"></line>
             <line x1="16" y1="17" x2="8" y2="17"></line>
           </svg>
-          View blame at this commit
+          ${msg('View blame at this commit')}
         </button>
         <button class="context-menu-item" @click=${this.handleContextRestoreFile}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M3 12a9 9 0 1 0 3-6.7L3 8"></path>
             <polyline points="3 3 3 8 8 8"></polyline>
           </svg>
-          Restore this version
+          ${msg('Restore this version')}
         </button>
         <div class="context-menu-divider"></div>
         <button class="context-menu-item" @click=${this.handleContextCopyHash}>
@@ -591,7 +601,7 @@ export class GnFileHistory extends LitElement {
             <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
             <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
           </svg>
-          Copy commit hash
+          ${msg('Copy commit hash')}
         </button>
       </div>
     `;

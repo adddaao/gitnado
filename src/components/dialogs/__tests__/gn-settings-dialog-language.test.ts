@@ -184,6 +184,7 @@ describe('gn-settings-dialog language setting', () => {
     expect(options).to.deep.equal([
       { value: 'en', label: 'English' },
       { value: 'fr', label: 'Français' },
+      { value: 'zh', label: '中文' },
     ]);
     expect(select(el).value).to.equal('en');
     expect(sectionTitles(el)[0]).to.equal('Appearance');
@@ -210,6 +211,30 @@ describe('gn-settings-dialog language setting', () => {
       (node) => node.textContent?.trim()
     );
     expect(toggleLabels).to.include('Mode hors ligne');
+    expect(changed, 'settings-changed was dispatched once').to.equal(1);
+  });
+
+  it('persists the choice and re-renders the dialog in Chinese', async () => {
+    let changed = 0;
+    const onChange = (): number => (changed += 1);
+    window.addEventListener('settings-changed', onChange);
+
+    await choose(el, 'zh');
+
+    await waitUntil(
+      () => sectionTitles(el)[0] === '外观',
+      'the settings dialog re-rendered in Chinese'
+    );
+    window.removeEventListener('settings-changed', onChange);
+
+    expect(settingsStore.getState().language).to.equal('zh');
+    expect(getAppLocale()).to.equal('zh');
+    expect(sectionTitles(el)).to.include('安全');
+    // The toggle rows take their label from the same strings.
+    const toggleLabels = Array.from(el.shadowRoot?.querySelectorAll('.setting-name') ?? []).map(
+      (node) => node.textContent?.trim()
+    );
+    expect(toggleLabels).to.include('离线模式');
     expect(changed, 'settings-changed was dispatched once').to.equal(1);
   });
 
@@ -245,10 +270,17 @@ describe('gn-settings-dialog language setting', () => {
    *
    * This used to name a handful of expected French labels, so a row it did not
    * happen to list could go back to English unnoticed. It now renders the whole
-   * dialog twice and compares the two sets: any text that survives the switch to
-   * French unchanged is English that leaked into the French UI.
+   * dialog twice and compares the two sets: any text that survives the switch
+   * unchanged — other than the legitimate exceptions the caller names — is
+   * English that leaked into the localised UI. It runs for every locale we
+   * ship, so adding a language cannot ship a half-translated screen unnoticed.
    */
-  it('leaves no English text behind when the dialog switches to French', async () => {
+  async function expectNothingLeftInEnglish(
+    locale: string,
+    sectionTitle: string,
+    /** Text that legitimately reads the same in both languages. */
+    sameInTarget: string[]
+  ): Promise<void> {
     // `.error-text` is the AI banner: its message is a string built when the
     // error happens, so it is provoked in each language below rather than
     // relying on the re-render. Without it here, a bare template rendered
@@ -275,16 +307,6 @@ describe('gn-settings-dialog language setting', () => {
         )
       );
 
-    /**
-     * Text that is legitimately identical in both languages. Every entry has to
-     * be a word French borrows unchanged — if a row lands here because nobody
-     * translated it, that is the bug this test exists to catch.
-     */
-    // `Port` is a word French borrows unchanged. The model name is registry
-    // DATA, not a label: it is the product's own name and reads identically in
-    // every locale, so it is not evidence of a missing translation.
-    const SAME_IN_FRENCH = new Set(['Port', 'Qwen2.5 Coder 1.5B']);
-
     await provokeAiError();
     const english = visibleText();
     expect(english.size, 'the dialog rendered its rows in English').to.be.greaterThan(50);
@@ -306,19 +328,36 @@ describe('gn-settings-dialog language setting', () => {
       'control: the recommended-model row is part of the comparison'
     ).to.be.true;
 
-    await choose(el, 'fr');
-    await waitUntil(() => sectionTitles(el)[0] === 'Apparence');
+    await choose(el, locale);
+    await waitUntil(
+      () => sectionTitles(el)[0] === sectionTitle,
+      `the settings dialog switched to "${locale}"`
+    );
     await provokeAiError();
 
+    const allowed = new Set(sameInTarget);
     const leftInEnglish = [...visibleText()].filter(
-      (text) => text !== '' && english.has(text) && !SAME_IN_FRENCH.has(text)
+      (text) => text !== '' && english.has(text) && !allowed.has(text)
     );
     expect(
       leftInEnglish,
-      `${leftInEnglish.length} label(s) render the same text under "fr" as under "en" — ` +
+      `${leftInEnglish.length} label(s) render the same text under "${locale}" as under "en" — ` +
         `their translation is missing or detached from the source string:\n` +
         leftInEnglish.map((text) => `  ${JSON.stringify(text)}`).join('\n')
     ).to.deep.equal([]);
+  }
+
+  it('leaves no English text behind when the dialog switches to French', async () => {
+    // `Port` is a word French borrows unchanged. The model name is registry
+    // DATA, not a label: it is the product's own name and reads identically in
+    // every locale, so it is not evidence of a missing translation.
+    await expectNothingLeftInEnglish('fr', 'Apparence', ['Port', 'Qwen2.5 Coder 1.5B']);
+  });
+
+  it('leaves no English text behind when the dialog switches to Chinese', async () => {
+    // The model name is registry DATA from the backend, not a translatable
+    // label — it reads the same in every locale.
+    await expectNothingLeftInEnglish('zh', '外观', ['Qwen2.5 Coder 1.5B']);
   });
 
   it('localises the menu labels that live in the settings store', async () => {
@@ -339,6 +378,21 @@ describe('gn-settings-dialog language setting', () => {
     ]);
   });
 
+  it('localises the settings-store menu labels in Chinese too', async () => {
+    await choose(el, 'zh');
+    await waitUntil(() => sectionTitles(el)[0] === '外观');
+
+    const options = Array.from(
+      el.shadowRoot?.querySelectorAll('#diff-whitespace-select option') ?? []
+    ).map((option) => option.textContent?.trim());
+    expect(options).to.deep.equal([
+      '显示所有空白字符',
+      '忽略行尾空白字符',
+      '忽略空白字符改动',
+      '忽略所有空白字符',
+    ]);
+  });
+
   it('falls back to English when asked for a locale the app does not ship', async () => {
     const applied = await settingsStore.getState().setLanguage('xx-YY');
     expect(applied).to.equal('en');
@@ -351,6 +405,11 @@ describe('gn-settings-dialog language setting', () => {
     const applied = await settingsStore.getState().setLanguage('fr-CA');
     expect(applied).to.equal('fr');
     expect(settingsStore.getState().language).to.equal('fr');
+
+    // Chinese ships as a single translation, so every zh-* tag lands on it.
+    const chinese = await settingsStore.getState().setLanguage('zh-CN');
+    expect(chinese).to.equal('zh');
+    expect(settingsStore.getState().language).to.equal('zh');
   });
 
   it('resets the language along with every other preference', async () => {
@@ -359,7 +418,8 @@ describe('gn-settings-dialog language setting', () => {
 
     settingsStore.getState().resetToDefaults();
 
-    expect(settingsStore.getState().language).to.equal('en');
-    await waitUntil(() => getAppLocale() === 'en', 'the reset put the locale back to English');
+    // The fresh-install default is Chinese, so a reset returns the UI to 中文.
+    expect(settingsStore.getState().language).to.equal('zh');
+    await waitUntil(() => getAppLocale() === 'zh', 'the reset put the locale back to Chinese');
   });
 });

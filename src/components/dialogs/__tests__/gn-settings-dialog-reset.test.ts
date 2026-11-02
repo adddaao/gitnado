@@ -80,6 +80,7 @@ import type { GnSettingsDialog } from '../gn-settings-dialog.ts';
 import { settingsStore } from '../../../stores/settings.store.ts';
 import { uiStore } from '../../../stores/ui.store.ts';
 
+import { setAppLocale } from '../../../i18n/index.ts';
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 /** Records whether a window event of `name` reaches window. */
@@ -106,6 +107,10 @@ describe('gn-settings-dialog Reset to Defaults', () => {
   let aiWatcher: { fired: () => boolean; stop: () => void };
 
   beforeEach(async () => {
+    // resetToDefaults() re-applies the fresh-install default, which is Chinese;
+    // every assertion in this file is about the English source strings.
+    await setAppLocale('en');
+    settingsStore.setState({ language: 'en' });
     confirmAnswer = 'Ok';
     confirmCount = 0;
     releaseConfirm = null;

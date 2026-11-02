@@ -1,6 +1,7 @@
 import { LitElement, html, css } from 'lit';
 import { live } from 'lit/directives/live.js';
 import { customElement, property, state } from 'lit/decorators.js';
+import { localized, msg, str } from '@lit/localize';
 import { sharedStyles } from '../../styles/shared-styles.ts';
 import * as gitService from '../../services/git.service.ts';
 import { showConfirm } from '../../services/dialog.service.ts';
@@ -34,6 +35,7 @@ const SETTING_CHOICES: Record<string, readonly string[]> = {
  * Manage git configuration settings, identity, and aliases
  */
 @customElement('gn-config-dialog')
+@localized()
 export class GnConfigDialog extends LitElement {
   static styles = [
     sharedStyles,
@@ -456,7 +458,7 @@ export class GnConfigDialog extends LitElement {
         this.identity = null;
         this.editName = '';
         this.editEmail = '';
-        this.error = identityResult.error?.message || 'Failed to load user identity';
+        this.error = identityResult.error?.message || msg('Failed to load user identity');
       }
 
       if (settingsResult.success && settingsResult.data) {
@@ -464,7 +466,7 @@ export class GnConfigDialog extends LitElement {
       } else if (!settingsResult.success) {
         this.settings = [];
         if (!this.error) {
-          this.error = settingsResult.error?.message || 'Failed to load settings';
+          this.error = settingsResult.error?.message || msg('Failed to load settings');
         }
       }
 
@@ -473,12 +475,12 @@ export class GnConfigDialog extends LitElement {
       } else if (!aliasesResult.success) {
         this.aliases = [];
         if (!this.error) {
-          this.error = aliasesResult.error?.message || 'Failed to load aliases';
+          this.error = aliasesResult.error?.message || msg('Failed to load aliases');
         }
       }
     } catch (e) {
       if (targetRepo === this.pinnedRepoPath) {
-        this.error = e instanceof Error ? e.message : 'Failed to load configuration';
+        this.error = e instanceof Error ? e.message : msg('Failed to load configuration');
       }
     } finally {
       if (targetRepo === this.pinnedRepoPath) {
@@ -509,7 +511,7 @@ export class GnConfigDialog extends LitElement {
       );
 
       if (result.success) {
-        showToast('Identity saved', 'success');
+        showToast(msg('Identity saved'), 'success');
         await this.loadData();
         // Announce the new identity so the rest of the app stops acting on the
         // old one. Without this, a user who opened this dialog FROM the commit
@@ -525,10 +527,10 @@ export class GnConfigDialog extends LitElement {
           }),
         );
       } else {
-        this.error = result.error?.message || 'Failed to save identity';
+        this.error = result.error?.message || msg('Failed to save identity');
       }
     } catch (e) {
-      this.error = e instanceof Error ? e.message : 'Failed to save identity';
+      this.error = e instanceof Error ? e.message : msg('Failed to save identity');
     } finally {
       this.saving = false;
     }
@@ -550,7 +552,7 @@ export class GnConfigDialog extends LitElement {
       const result = await gitService.setConfigValue(this.pinnedRepoPath, key, value, false /* local */);
 
       if (result.success) {
-        showToast('Setting saved', 'success');
+        showToast(msg('Setting saved'), 'success');
         // Update the in-memory value so re-renders don't snap the control back
         // to the stale value. The write always lands in this repository's
         // config, so the scope badge has to follow it — a row that was "not
@@ -560,10 +562,10 @@ export class GnConfigDialog extends LitElement {
           s.key === key ? { ...s, value, scope: 'local' } : s
         );
       } else {
-        this.error = result.error?.message || 'Failed to save setting';
+        this.error = result.error?.message || msg('Failed to save setting');
       }
     } catch (e) {
-      this.error = e instanceof Error ? e.message : 'Failed to save setting';
+      this.error = e instanceof Error ? e.message : msg('Failed to save setting');
     }
   }
 
@@ -580,11 +582,11 @@ export class GnConfigDialog extends LitElement {
       if (settingsResult.success && settingsResult.data) {
         this.settings = settingsResult.data;
       } else if (!settingsResult.success) {
-        this.error = settingsResult.error?.message || 'Failed to load settings';
+        this.error = settingsResult.error?.message || msg('Failed to load settings');
       }
     } catch (e) {
       if (targetRepo === this.pinnedRepoPath) {
-        this.error = e instanceof Error ? e.message : 'Failed to load settings';
+        this.error = e instanceof Error ? e.message : msg('Failed to load settings');
       }
     }
   }
@@ -614,17 +616,17 @@ export class GnConfigDialog extends LitElement {
         const inherited = this.settings.find((s) => s.key === key && s.scope !== 'unset');
         if (inherited) {
           showToast(
-            `Cleared ${key} for this repository — still set in ${inherited.scope} config`,
+            msg(str`Cleared ${key} for this repository — still set in ${inherited.scope} config`),
             'info'
           );
         } else {
-          showToast('Setting cleared', 'success');
+          showToast(msg('Setting cleared'), 'success');
         }
       } else {
-        this.error = result.error?.message || 'Failed to clear setting';
+        this.error = result.error?.message || msg('Failed to clear setting');
       }
     } catch (e) {
-      this.error = e instanceof Error ? e.message : 'Failed to clear setting';
+      this.error = e instanceof Error ? e.message : msg('Failed to clear setting');
     }
   }
 
@@ -642,20 +644,24 @@ export class GnConfigDialog extends LitElement {
       );
 
       if (result.success) {
-        showToast('Alias added', 'success');
+        showToast(msg('Alias added'), 'success');
         this.newAliasName = '';
         this.newAliasCommand = '';
         await this.loadData();
       } else {
-        this.error = result.error?.message || 'Failed to add alias';
+        this.error = result.error?.message || msg('Failed to add alias');
       }
     } catch (e) {
-      this.error = e instanceof Error ? e.message : 'Failed to add alias';
+      this.error = e instanceof Error ? e.message : msg('Failed to add alias');
     }
   }
 
   private async handleDeleteAlias(alias: GitAlias): Promise<void> {
-    const confirmed = await showConfirm('Delete Alias', `Delete alias "${alias.name}"?`, 'warning');
+    const confirmed = await showConfirm(
+      msg('Delete Alias'),
+      msg(str`Delete alias "${alias.name}"?`),
+      'warning'
+    );
     if (!confirmed) return;
 
     this.error = null;
@@ -668,19 +674,19 @@ export class GnConfigDialog extends LitElement {
       );
 
       if (result.success) {
-        showToast('Alias deleted', 'success');
+        showToast(msg('Alias deleted'), 'success');
         await this.loadData();
       } else {
-        this.error = result.error?.message || 'Failed to delete alias';
+        this.error = result.error?.message || msg('Failed to delete alias');
       }
     } catch (e) {
-      this.error = e instanceof Error ? e.message : 'Failed to delete alias';
+      this.error = e instanceof Error ? e.message : msg('Failed to delete alias');
     }
   }
 
   private renderIdentityTab() {
     if (this.loading) {
-      return html`<div class="loading-indicator">Loading...</div>`;
+      return html`<div class="loading-indicator">${msg('Loading...')}</div>`;
     }
 
     return html`
@@ -689,37 +695,37 @@ export class GnConfigDialog extends LitElement {
           class="scope-btn ${this.saveScope === 'local' ? 'active' : ''}"
           @click=${() => (this.saveScope = 'local')}
         >
-          Repository
+          ${msg('Repository')}
         </button>
         <button
           class="scope-btn ${this.saveScope === 'global' ? 'active' : ''}"
           @click=${() => (this.saveScope = 'global')}
         >
-          Global
+          ${msg('Global')}
         </button>
       </div>
 
       <div class="form-group">
         <label>
-          Name
+          ${msg('Name')}
           ${this.identity?.nameIsGlobal
-            ? html`<span class="scope-badge">from global</span>`
+            ? html`<span class="scope-badge">${msg('from global')}</span>`
             : ''}
         </label>
         <input
           type="text"
-          placeholder="Your Name"
+          placeholder=${msg('Your Name')}
           .value=${this.editName}
           @input=${(e: Event) => (this.editName = (e.target as HTMLInputElement).value)}
         />
-        <div class="hint">The name that will appear in your commits</div>
+        <div class="hint">${msg('The name that will appear in your commits')}</div>
       </div>
 
       <div class="form-group">
         <label>
-          Email
+          ${msg('Email')}
           ${this.identity?.emailIsGlobal
-            ? html`<span class="scope-badge">from global</span>`
+            ? html`<span class="scope-badge">${msg('from global')}</span>`
             : ''}
         </label>
         <input
@@ -728,7 +734,7 @@ export class GnConfigDialog extends LitElement {
           .value=${this.editEmail}
           @input=${(e: Event) => (this.editEmail = (e.target as HTMLInputElement).value)}
         />
-        <div class="hint">The email that will appear in your commits</div>
+        <div class="hint">${msg('The email that will appear in your commits')}</div>
       </div>
 
       <div class="form-actions">
@@ -737,7 +743,11 @@ export class GnConfigDialog extends LitElement {
           ?disabled=${this.saving}
           @click=${this.handleSaveIdentity}
         >
-          ${this.saving ? 'Saving...' : `Save to ${this.saveScope}`}
+          ${this.saving
+            ? msg('Saving...')
+            : this.saveScope === 'local'
+              ? msg('Save to local')
+              : msg('Save to global')}
         </button>
       </div>
     `;
@@ -758,7 +768,7 @@ export class GnConfigDialog extends LitElement {
       return html`
         <input
           type="text"
-          placeholder="Not set"
+          placeholder=${msg('Not set')}
           .value=${setting.value}
           @change=${(e: Event) =>
             this.handleSaveSetting(setting.key, (e.target as HTMLInputElement).value)}
@@ -784,7 +794,7 @@ export class GnConfigDialog extends LitElement {
         @change=${(e: Event) =>
           this.handleSaveSetting(setting.key, (e.target as HTMLSelectElement).value)}
       >
-        <option value="" .selected=${live(setting.value === '')}>Not set</option>
+        <option value="" .selected=${live(setting.value === '')}>${msg('Not set')}</option>
         ${options.map(
           (choice) => html`
             <option value=${choice} .selected=${live(setting.value === choice)}>${choice}</option>
@@ -796,13 +806,13 @@ export class GnConfigDialog extends LitElement {
 
   private renderSettingsTab() {
     if (this.loading) {
-      return html`<div class="loading-indicator">Loading...</div>`;
+      return html`<div class="loading-indicator">${msg('Loading...')}</div>`;
     }
 
     if (this.settings.length === 0) {
       return html`
         <div class="empty-state">
-          <p>No common settings configured</p>
+          <p>${msg('No common settings configured')}</p>
         </div>
       `;
     }
@@ -815,7 +825,7 @@ export class GnConfigDialog extends LitElement {
               <div>
                 <span class="setting-key">${setting.key}</span>
                 <span class="scope-badge"
-                  >${setting.scope === 'unset' ? 'not set' : setting.scope}</span
+                  >${setting.scope === 'unset' ? msg('not set') : setting.scope}</span
                 >
               </div>
               <div class="setting-value">${this.renderSettingControl(setting)}</div>
@@ -826,10 +836,10 @@ export class GnConfigDialog extends LitElement {
 
       <div class="form-group" style="margin-top: var(--spacing-md)">
         <div class="hint">
-          Changes are saved automatically when you modify a value.
-          A setting that is not configured yet shows as "Not set" — pick or type a
-          value to set it for this repository, or choose "Not set" again to clear
-          it from this repository.
+          ${msg('Changes are saved automatically when you modify a value.')}
+          ${msg(
+            'A setting that is not configured yet shows as "Not set" — pick or type a value to set it for this repository, or choose "Not set" again to clear it from this repository.'
+          )}
         </div>
       </div>
     `;
@@ -837,7 +847,7 @@ export class GnConfigDialog extends LitElement {
 
   private renderAliasesTab() {
     if (this.loading) {
-      return html`<div class="loading-indicator">Loading...</div>`;
+      return html`<div class="loading-indicator">${msg('Loading...')}</div>`;
     }
 
     return html`
@@ -850,11 +860,11 @@ export class GnConfigDialog extends LitElement {
                     <div class="alias-header">
                       <span class="alias-name">
                         git ${alias.name}
-                        <span class="scope-badge">${alias.isGlobal ? 'global' : 'local'}</span>
+                        <span class="scope-badge">${alias.isGlobal ? msg('global') : msg('local')}</span>
                       </span>
                       <button
                         class="btn-icon danger"
-                        title="Delete alias"
+                        title=${msg('Delete alias')}
                         @click=${() => this.handleDeleteAlias(alias)}
                       >
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -871,37 +881,37 @@ export class GnConfigDialog extends LitElement {
           `
         : html`
             <div class="empty-state" style="padding: var(--spacing-md)">
-              <p>No aliases configured</p>
+              <p>${msg('No aliases configured')}</p>
             </div>
           `}
 
       <div class="add-alias-form">
-        <h4>Add New Alias</h4>
+        <h4>${msg('Add New Alias')}</h4>
         <div class="scope-toggle" style="margin-bottom: var(--spacing-sm)">
           <button
             class="scope-btn ${this.saveScope === 'local' ? 'active' : ''}"
             @click=${() => (this.saveScope = 'local')}
           >
-            Repository
+            ${msg('Repository')}
           </button>
           <button
             class="scope-btn ${this.saveScope === 'global' ? 'active' : ''}"
             @click=${() => (this.saveScope = 'global')}
           >
-            Global
+            ${msg('Global')}
           </button>
         </div>
         <div class="inline-form">
           <input
             type="text"
-            placeholder="Alias name (e.g., co)"
+            placeholder=${msg('Alias name (e.g., co)')}
             .value=${this.newAliasName}
             @input=${(e: Event) => (this.newAliasName = (e.target as HTMLInputElement).value)}
             style="flex: 0 0 150px"
           />
           <input
             type="text"
-            placeholder="Command (e.g., checkout)"
+            placeholder=${msg('Command (e.g., checkout)')}
             .value=${this.newAliasCommand}
             @input=${(e: Event) => (this.newAliasCommand = (e.target as HTMLInputElement).value)}
           />
@@ -910,11 +920,13 @@ export class GnConfigDialog extends LitElement {
             ?disabled=${!this.newAliasName || !this.newAliasCommand}
             @click=${this.handleAddAlias}
           >
-            Add
+            ${msg('Add')}
           </button>
         </div>
         <div class="hint" style="margin-top: var(--spacing-xs)">
-          Example: name "co" with command "checkout" creates "git co" as alias for "git checkout"
+          ${msg(
+            'Example: name "co" with command "checkout" creates "git co" as alias for "git checkout"'
+          )}
         </div>
       </div>
     `;
@@ -924,7 +936,7 @@ export class GnConfigDialog extends LitElement {
     if (!this.open) return null;
 
     return html`
-      <gn-modal modalTitle="Git Configuration" open @close=${this.handleClose}>
+      <gn-modal modalTitle=${msg('Git Configuration')} open @close=${this.handleClose}>
         <div class="content">
           ${this.error
             ? html`
@@ -944,19 +956,19 @@ export class GnConfigDialog extends LitElement {
               class="tab ${this.activeTab === 'identity' ? 'active' : ''}"
               @click=${() => (this.activeTab = 'identity')}
             >
-              Identity
+              ${msg('Identity')}
             </button>
             <button
               class="tab ${this.activeTab === 'settings' ? 'active' : ''}"
               @click=${() => (this.activeTab = 'settings')}
             >
-              Settings
+              ${msg('Settings')}
             </button>
             <button
               class="tab ${this.activeTab === 'aliases' ? 'active' : ''}"
               @click=${() => (this.activeTab = 'aliases')}
             >
-              Aliases
+              ${msg('Aliases')}
             </button>
           </div>
 

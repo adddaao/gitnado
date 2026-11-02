@@ -5,6 +5,7 @@
 
 import { LitElement, html, css, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
+import { localized, msg, str } from '@lit/localize';
 import { sharedStyles } from '../../styles/shared-styles.ts';
 import * as gitService from '../../services/git.service.ts';
 import { showConfirm } from '../../services/dialog.service.ts';
@@ -34,6 +35,7 @@ interface ReflogContextMenuState {
 const REFLOG_PAGE_SIZE = 50;
 
 @customElement('gn-reflog-dialog')
+@localized()
 export class GnReflogDialog extends LitElement {
   static styles = [
     sharedStyles,
@@ -524,13 +526,18 @@ export class GnReflogDialog extends LitElement {
         // Keep the two halves of `hasMoreEntries` describing the SAME read.
         this.entryLimit = requestedLimit;
       } else if (!result.success) {
-        showToast(`Failed to load reflog: ${result.error?.message ?? 'Unknown error'}`, 'error');
+        showToast(
+          msg(str`Failed to load reflog: ${result.error?.message ?? msg('Unknown error')}`),
+          'error',
+        );
       }
     } catch (err) {
       if (gen !== this.fetchGeneration) return;
       console.error('Failed to load reflog:', err);
       showToast(
-        `Failed to load reflog: ${err instanceof Error ? err.message : 'Unknown error'}`,
+        msg(
+          str`Failed to load reflog: ${err instanceof Error ? err.message : msg('Unknown error')}`
+        ),
         'error',
       );
     } finally {
@@ -569,7 +576,9 @@ export class GnReflogDialog extends LitElement {
         this.entryLimit = nextLimit;
       } else if (!result.success) {
         showToast(
-          `Failed to load more reflog entries: ${result.error?.message ?? 'Unknown error'}`,
+          msg(
+            str`Failed to load more reflog entries: ${result.error?.message ?? msg('Unknown error')}`
+          ),
           'error',
         );
       }
@@ -577,7 +586,9 @@ export class GnReflogDialog extends LitElement {
       if (gen !== this.fetchGeneration) return;
       console.error('Failed to load more reflog entries:', err);
       showToast(
-        `Failed to load more reflog entries: ${err instanceof Error ? err.message : 'Unknown error'}`,
+        msg(
+          str`Failed to load more reflog entries: ${err instanceof Error ? err.message : msg('Unknown error')}`
+        ),
         'error',
       );
     } finally {
@@ -682,7 +693,7 @@ export class GnReflogDialog extends LitElement {
     this.resetting = true;
     if (!tryAcquireRefOp(repoPath)) {
       this.resetting = false;
-      showToast('Another operation is already running in this repository.', 'warning');
+      showToast(msg('Another operation is already running in this repository.'), 'warning');
       return;
     }
 
@@ -695,7 +706,10 @@ export class GnReflogDialog extends LitElement {
         // the work looked lost, with the only clue in a stash entry nobody was
         // told about. Same reporting the branch and tag lists give.
         if (data.stashed && data.stashConflict) {
-          showToast(`Switched to ${target} — stash conflicts need resolution`, 'warning');
+          showToast(
+            msg(str`Switched to ${target} — stash conflicts need resolution`),
+            'warning',
+          );
           this.dispatchEvent(
             new CustomEvent('open-conflict-dialog', {
               bubbles: true,
@@ -720,7 +734,7 @@ export class GnReflogDialog extends LitElement {
             data.message.includes('staged status was not preserved') ? 'warning' : 'info',
           );
         } else {
-          showToast(`Switched to ${target}`, 'success');
+          showToast(msg(str`Switched to ${target}`), 'success');
         }
         // Same event the reset path emits, so the host refreshes the repo the
         // switch ran on even if the user changed tabs during the IPC await.
@@ -734,13 +748,17 @@ export class GnReflogDialog extends LitElement {
         this.close();
       } else {
         showToast(
-          result.error?.message ?? result.data?.message ?? `Failed to switch to ${target}`,
+          result.error?.message ??
+            result.data?.message ??
+            msg(str`Failed to switch to ${target}`),
           'error',
         );
       }
     } catch (err) {
       showToast(
-        `Failed to switch to ${target}: ${err instanceof Error ? err.message : 'Unknown error'}`,
+        msg(
+          str`Failed to switch to ${target}: ${err instanceof Error ? err.message : msg('Unknown error')}`
+        ),
         'error',
       );
     } finally {
@@ -769,7 +787,7 @@ export class GnReflogDialog extends LitElement {
     // stayed clickable while this reset was moving the branch.
     if (!tryAcquireRefOp(repoPath)) {
       this.resetting = false;
-      showToast('Another operation is already running in this repository.', 'warning');
+      showToast(msg('Another operation is already running in this repository.'), 'warning');
       return;
     }
 
@@ -778,32 +796,39 @@ export class GnReflogDialog extends LitElement {
     // `hard` alone meant clicking Undo in a dialog opened just to LOOK at
     // history silently reset the branch. The same operation from the graph
     // context menu confirms for all three modes; this surface must match.
-    const droppedNote =
-      `This branch will point at ${entry.shortId}. Any commit no longer reachable ` +
-      `from it is recoverable only through the reflog.`;
+    const droppedNote = msg(
+      str`This branch will point at ${entry.shortId}. Any commit no longer reachable from it is recoverable only through the reflog.`
+    );
 
     // A checkout entry belongs to a DIFFERENT branch, so resetting onto it
     // moves the current branch to that branch's commit. "This branch will
     // point at <oid>" is true but does not say whose commit that is.
     const checkoutTarget = this.checkoutTarget(entry);
     const crossBranchNote = checkoutTarget
-      ? `\n\nThis entry is a checkout of "${checkoutTarget}", not a state of the ` +
-        `current branch. Resetting moves the current branch onto that commit. To ` +
-        `go back to "${checkoutTarget}", close this and use Switch instead.`
+      ? msg(
+          str`\n\nThis entry is a checkout of "${checkoutTarget}", not a state of the current branch. Resetting moves the current branch onto that commit. To go back to "${checkoutTarget}", close this and use Switch instead.`
+        )
       : '';
 
     const modeNote =
       mode === 'hard'
-        ? 'All uncommitted changes are also discarded permanently — those are not in the reflog and cannot be recovered.'
+        ? msg(
+            'All uncommitted changes are also discarded permanently — those are not in the reflog and cannot be recovered.'
+          )
         : mode === 'mixed'
-          ? 'Your working-directory changes are kept, but unstaged.'
-          : 'Your changes remain staged.';
+          ? msg('Your working-directory changes are kept, but unstaged.')
+          : msg('Your changes remain staged.');
 
-    const titles = { hard: 'Hard Reset', mixed: 'Undo to This State', soft: 'Soft Reset' };
+    const titles = {
+      hard: msg('Hard Reset'),
+      mixed: msg('Undo to This State'),
+      soft: msg('Soft Reset'),
+    };
 
     const confirmed = await showConfirm(
       titles[mode],
-      `Reset to ${entry.shortId}?\n\n${droppedNote}${crossBranchNote}\n\n${modeNote}`,
+      msg(str`Reset to ${entry.shortId}?`) +
+        `\n\n${droppedNote}${crossBranchNote}\n\n${modeNote}`,
       'warning'
     );
     if (!confirmed) {
@@ -823,7 +848,7 @@ export class GnReflogDialog extends LitElement {
         // this surface closed in silence, so the strongest signal after the
         // most destructive action here was nothing — indistinguishable from
         // having pressed Escape.
-        showToast(`Reset to ${entry.shortId} (${mode})`, 'success');
+        showToast(msg(str`Reset to ${entry.shortId} (${mode})`), 'success');
         this.dispatchEvent(new CustomEvent('undo-complete', {
           // repositoryPath so the host refreshes the repo the reset ran on —
           // the user may have switched tabs during the IPC await.
@@ -833,7 +858,10 @@ export class GnReflogDialog extends LitElement {
         }));
         this.close();
       } else {
-        showToast(`Reset failed: ${result.error?.message ?? 'Unknown error'}`, 'error');
+        showToast(
+          msg(str`Reset failed: ${result.error?.message ?? msg('Unknown error')}`),
+          'error',
+        );
         // The backend refuses when the reflog shifted under us and tells the
         // user to "refresh and try again" — but this dialog loads once and has
         // no refresh affordance, so without this the stale indices persist and
@@ -845,7 +873,7 @@ export class GnReflogDialog extends LitElement {
     } catch (err) {
       console.error('Reset failed:', err);
       showToast(
-        `Reset failed: ${err instanceof Error ? err.message : 'Unknown error'}`,
+        msg(str`Reset failed: ${err instanceof Error ? err.message : msg('Unknown error')}`),
         'error',
       );
     } finally {
@@ -862,10 +890,10 @@ export class GnReflogDialog extends LitElement {
     const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
     const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
-    if (diffMins < 1) return 'just now';
-    if (diffMins < 60) return `${diffMins}m ago`;
-    if (diffHours < 24) return `${diffHours}h ago`;
-    if (diffDays < 7) return `${diffDays}d ago`;
+    if (diffMins < 1) return msg('just now');
+    if (diffMins < 60) return msg(str`${diffMins}m ago`);
+    if (diffHours < 24) return msg(str`${diffHours}h ago`);
+    if (diffDays < 7) return msg(str`${diffDays}d ago`);
     return date.toLocaleDateString();
   }
 
@@ -899,7 +927,7 @@ export class GnReflogDialog extends LitElement {
       await navigator.clipboard.writeText(entry.oid);
     } catch (err) {
       console.error('Failed to copy hash:', err);
-      showToast('Failed to copy hash to clipboard', 'error');
+      showToast(msg('Failed to copy hash to clipboard'), 'error');
     }
   }
 
@@ -929,7 +957,7 @@ export class GnReflogDialog extends LitElement {
           <div class="entry-header">
             <span class="entry-oid">${entry.shortId}</span>
             <span class="entry-action">${entry.action}</span>
-            ${isCurrent ? html`<span class="current-badge">Current</span>` : nothing}
+            ${isCurrent ? html`<span class="current-badge">${msg('Current')}</span>` : nothing}
           </div>
           <div class="entry-message">${entry.message}</div>
           <div class="entry-meta">
@@ -944,9 +972,9 @@ export class GnReflogDialog extends LitElement {
               class="reset-btn"
               @click=${(e: Event) => { e.stopPropagation(); this.handleSwitchTo(entry); }}
               ?disabled=${this.resetting || this.repositoryBusy}
-              title="Switch back to ${this.checkoutTarget(entry)}"
+              title=${msg(str`Switch back to ${this.checkoutTarget(entry)}`)}
             >
-              Switch to ${this.checkoutTarget(entry)}
+              ${msg('Switch to ')}${this.checkoutTarget(entry)}
             </button>
           </div>
         ` : nothing}
@@ -957,17 +985,17 @@ export class GnReflogDialog extends LitElement {
               class="reset-btn"
               @click=${(e: Event) => { e.stopPropagation(); this.handleReset(entry, 'mixed'); }}
               ?disabled=${this.resetting || this.repositoryBusy}
-              title="Reset (keep changes unstaged)"
+              title=${msg('Reset (keep changes unstaged)')}
             >
-              Undo
+              ${msg('Undo')}
             </button>
             <button
               class="reset-btn hard"
               @click=${(e: Event) => { e.stopPropagation(); this.handleReset(entry, 'hard'); }}
               ?disabled=${this.resetting || this.repositoryBusy}
-              title="Hard reset (discard all changes)"
+              title=${msg('Hard reset (discard all changes)')}
             >
-              Hard
+              ${msg('Hard')}
             </button>
           </div>
         ` : nothing}
@@ -986,8 +1014,8 @@ export class GnReflogDialog extends LitElement {
               <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
             </svg>
             <div>
-              <div class="title">Undo History</div>
-              <div class="subtitle">Reflog - recover previous states</div>
+              <div class="title">${msg('Undo History')}</div>
+              <div class="subtitle">${msg('Reflog - recover previous states')}</div>
             </div>
           </div>
           <button class="close-btn" @click=${this.dismiss}>
@@ -1000,9 +1028,9 @@ export class GnReflogDialog extends LitElement {
 
         <div class="content">
           ${this.loading
-            ? html`<div class="loading">Loading reflog...</div>`
+            ? html`<div class="loading">${msg('Loading reflog...')}</div>`
             : this.entries.length === 0
-              ? html`<div class="empty">No reflog entries found</div>`
+              ? html`<div class="empty">${msg('No reflog entries found')}</div>`
               : html`
                   <div class="entry-list">
                     ${this.entries.map(entry => this.renderEntry(entry))}
@@ -1011,23 +1039,27 @@ export class GnReflogDialog extends LitElement {
                     ${this.hasMoreEntries
                       ? html`
                           <span class="list-note">
-                            Showing the first ${this.entries.length} entries
+                            ${msg(str`Showing the first ${this.entries.length} entries`)}
                           </span>
                           <button
                             class="show-more-btn"
                             @click=${this.loadMoreEntries}
                             ?disabled=${this.loadingMore || this.resetting}
                           >
-                            ${this.loadingMore ? 'Loading...' : 'Show more'}
+                            ${this.loadingMore ? msg('Loading...') : msg('Show more')}
                           </button>
                         `
-                      : html`<span class="list-note">Showing all ${this.entries.length} entries</span>`}
+                      : html`<span class="list-note">${msg(
+                          str`Showing all ${this.entries.length} entries`
+                        )}</span>`}
                   </div>
                 `}
         </div>
 
         <div class="help-text">
-          <strong>Undo</strong> resets HEAD but keeps your changes. <strong>Hard</strong> discards all changes.
+          ${msg(
+            html`<strong>Undo</strong> resets HEAD but keeps your changes. <strong>Hard</strong> discards all changes.`
+          )}
         </div>
       </div>
       ${this.renderContextMenu()}
@@ -1052,7 +1084,7 @@ export class GnReflogDialog extends LitElement {
               <polyline points="1 4 1 10 7 10"></polyline>
               <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
             </svg>
-            Undo to this state
+            ${msg('Undo to this state')}
           </button>
           <div class="context-menu-divider"></div>
         ` : nothing}
@@ -1062,14 +1094,14 @@ export class GnReflogDialog extends LitElement {
             <line x1="12" y1="3" x2="12" y2="9"></line>
             <line x1="12" y1="15" x2="12" y2="21"></line>
           </svg>
-          Show commit details
+          ${msg('Show commit details')}
         </button>
         <button class="context-menu-item" @click=${this.handleContextCopyHash}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
             <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
           </svg>
-          Copy commit hash
+          ${msg('Copy commit hash')}
         </button>
       </div>
     `;

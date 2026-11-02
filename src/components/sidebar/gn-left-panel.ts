@@ -1,5 +1,6 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
+import { localized, msg } from '@lit/localize';
 import { sharedStyles } from '../../styles/shared-styles.ts';
 import { repositoryStore } from '../../stores/index.ts';
 import './gn-branch-list.ts';
@@ -14,6 +15,7 @@ import type { GnPullRequestList } from './gn-pull-request-list.ts';
  * Contains branch list, stashes, and tags
  */
 @customElement('gn-left-panel')
+@localized()
 export class GnLeftPanel extends LitElement {
   static styles = [
     sharedStyles,
@@ -166,7 +168,7 @@ export class GnLeftPanel extends LitElement {
 
   render() {
     if (!this.repositoryPath) {
-      return html`<div class="placeholder">No repository open</div>`;
+      return html`<div class="placeholder">${msg('No repository open')}</div>`;
     }
 
     const branchesExpanded = this.expandedSections.has('branches');
@@ -180,7 +182,7 @@ export class GnLeftPanel extends LitElement {
       <section class="section branches-section ${branchesExpanded ? '' : 'collapsed'}">
         <header class="section-header" @click=${() => this.toggleSection('branches')}>
           ${this.renderChevron(branchesExpanded)}
-          <span class="title">Branches</span>
+          <span class="title">${msg('Branches')}</span>
         </header>
         <div class="section-content">
           <gn-branch-list
@@ -202,7 +204,7 @@ export class GnLeftPanel extends LitElement {
       <section class="section refs-section ${stashesExpanded ? '' : 'collapsed'}">
         <header class="section-header" @click=${() => this.toggleSection('stashes')}>
           ${this.renderChevron(stashesExpanded)}
-          <span class="title">Stashes</span>
+          <span class="title">${msg('Stashes')}</span>
           ${this.stashCount > 0 ? html`<span class="count">${this.stashCount}</span>` : ''}
         </header>
         <div class="section-content">
@@ -220,11 +222,11 @@ export class GnLeftPanel extends LitElement {
       <section class="section refs-section ${tagsExpanded ? '' : 'collapsed'}">
         <header class="section-header" @click=${() => this.toggleSection('tags')}>
           ${this.renderChevron(tagsExpanded)}
-          <span class="title">Tags</span>
+          <span class="title">${msg('Tags')}</span>
           ${this.tagCount > 0 ? html`<span class="count">${this.tagCount}</span>` : ''}
           <button
             class="section-action"
-            title="Create tag"
+            title=${msg('Create tag')}
             @click=${this.handleCreateTag}
           >
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -262,13 +264,13 @@ export class GnLeftPanel extends LitElement {
       <section class="section refs-section ${pullRequestsExpanded ? '' : 'collapsed'}">
         <header class="section-header" @click=${() => this.toggleSection('pull-requests')}>
           ${this.renderChevron(pullRequestsExpanded)}
-          <span class="title">Pull Requests</span>
+          <span class="title">${msg('Pull Requests')}</span>
           ${this.pullRequestCount > 0 ? html`<span class="count">${this.pullRequestCount}</span>` : ''}
           ${pullRequestsExpanded ? html`
             <button
               class="section-action"
-              title="Refresh pull requests"
-              aria-label="Refresh pull requests"
+              title=${msg('Refresh pull requests')}
+              aria-label=${msg('Refresh pull requests')}
               @click=${this.handleRefreshPullRequests}
             >
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -291,7 +293,7 @@ export class GnLeftPanel extends LitElement {
       <section class="section refs-section ${gitflowExpanded ? '' : 'collapsed'}">
         <header class="section-header" @click=${() => this.toggleSection('gitflow')}>
           ${this.renderChevron(gitflowExpanded)}
-          <span class="title">Git Flow</span>
+          <span class="title">${msg('Git Flow')}</span>
         </header>
         <div class="section-content">
           <gn-gitflow-panel

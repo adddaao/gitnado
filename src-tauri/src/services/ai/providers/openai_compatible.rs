@@ -3,7 +3,7 @@
 //! This provider works with OpenAI API and compatible services like LM Studio
 
 use crate::services::ai::{
-    AiProvider, AiProviderType, GeneratedCommitMessage, COMMIT_MESSAGE_PROMPT,
+    commit_message_prompt, AiProvider, AiProviderType, GeneratedCommitMessage, PromptLanguage,
 };
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -164,6 +164,7 @@ impl AiProvider for OpenAiCompatibleProvider {
         &self,
         diff: &str,
         model: Option<&str>,
+        language: PromptLanguage,
     ) -> Result<GeneratedCommitMessage, String> {
         let model_name = model.unwrap_or(self.provider_type.default_model());
 
@@ -174,7 +175,7 @@ impl AiProvider for OpenAiCompatibleProvider {
             },
             ChatMessage {
                 role: "user".to_string(),
-                content: format!("{}{}", COMMIT_MESSAGE_PROMPT, diff),
+                content: format!("{}{}", commit_message_prompt(language), diff),
             },
         ];
 

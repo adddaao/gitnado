@@ -9,6 +9,7 @@
  * newest-first walk), never from the order the user happened to click.
  */
 
+import { msg, str } from '@lit/localize';
 import type { Commit } from '../types/git.types.ts';
 
 /**
@@ -75,11 +76,8 @@ export function numberedCommitList(commits: readonly Commit[]): string {
  * and it is not the order the user clicked in.
  */
 export function cherryPickConfirmMessage(commits: readonly Commit[], branch: string): string {
-  return (
-    `Cherry-pick ${commits.length} commits onto ${branch}, oldest first:\n\n` +
-    `${numberedCommitList(commits)}\n\n` +
-    'They are applied one at a time. If one conflicts or fails, the ' +
-    'sequence stops there and the remaining commits are left alone.'
+  return msg(
+    str`Cherry-pick ${commits.length} commits onto ${branch}, oldest first:\n\n${numberedCommitList(commits)}\n\nThey are applied one at a time. If one conflicts or fails, the sequence stops there and the remaining commits are left alone.`,
   );
 }
 
@@ -99,14 +97,18 @@ export function cherryPickFailureMessage(
   const [failed, ...rest] = notApplied;
   const head =
     applied.length === 0
-      ? `Cherry-pick stopped on the first of ${total} commits`
-      : `Cherry-picked ${applied.length} of ${total} commits, then stopped`;
-  const at = failed ? ` at ${shortCommitLabel(failed)}` : '';
-  const because = reason ? `: ${reason}` : '';
+      ? msg(str`Cherry-pick stopped on the first of ${total} commits`)
+      : msg(str`Cherry-picked ${applied.length} of ${total} commits, then stopped`);
+  const at = failed ? msg(str` at ${shortCommitLabel(failed)}`) : '';
+  const because = reason ? msg(str`: ${reason}`) : '';
   const remaining =
     rest.length > 0
-      ? ` Still to apply after it: ${rest.map((c) => c.shortId || c.oid.substring(0, 7)).join(', ')}.`
-      : ' It was the last one in the sequence.';
+      ? msg(
+          str` Still to apply after it: ${rest
+            .map((c) => c.shortId || c.oid.substring(0, 7))
+            .join(', ')}.`,
+        )
+      : msg(' It was the last one in the sequence.');
   return `${head}${at}${because}.${remaining}`;
 }
 
@@ -124,14 +126,13 @@ export function cherryPickFailureMessage(
  */
 export function validateSquashSelection(commits: readonly Commit[]): string | null {
   if (commits.length < 2) {
-    return 'Select at least 2 commits to squash';
+    return msg('Select at least 2 commits to squash');
   }
 
   const merge = commits.find((c) => c.parentIds.length > 1);
   if (merge) {
-    return (
-      `${merge.shortId || merge.oid.substring(0, 7)} is a merge commit — ` +
-      'use interactive rebase to squash across merges'
+    return msg(
+      str`${merge.shortId || merge.oid.substring(0, 7)} is a merge commit — use interactive rebase to squash across merges`,
     );
   }
 
@@ -139,15 +140,16 @@ export function validateSquashSelection(commits: readonly Commit[]): string | nu
     const prev = commits[i - 1];
     const curr = commits[i];
     if (curr.parentIds[0] !== prev.oid) {
-      return 'Selected commits are not contiguous — select an unbroken chain of commits to squash';
+      return msg(
+        'Selected commits are not contiguous — select an unbroken chain of commits to squash',
+      );
     }
   }
 
   const oldest = commits[0];
   if (oldest.parentIds.length === 0) {
-    return (
-      `Cannot squash ${oldest.shortId || oldest.oid.substring(0, 7)} — ` +
-      'it is the root commit and has no parent'
+    return msg(
+      str`Cannot squash ${oldest.shortId || oldest.oid.substring(0, 7)} — it is the root commit and has no parent`,
     );
   }
 
@@ -170,10 +172,8 @@ export function combinedSquashMessage(commits: readonly Commit[]): string {
  * The confirm body for a multi-commit squash.
  */
 export function squashConfirmMessage(commits: readonly Commit[], branch: string): string {
-  return (
-    `Squash ${commits.length} commits on ${branch} into a single commit, oldest first:\n\n` +
-    `${numberedCommitList(commits)}\n\n` +
-    'This rewrites history on the current branch and replays any later commits on top.'
+  return msg(
+    str`Squash ${commits.length} commits on ${branch} into a single commit, oldest first:\n\n${numberedCommitList(commits)}\n\nThis rewrites history on the current branch and replays any later commits on top.`,
   );
 }
 

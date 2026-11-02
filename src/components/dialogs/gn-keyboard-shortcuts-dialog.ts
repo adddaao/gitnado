@@ -10,9 +10,11 @@ import { sharedStyles } from '../../styles/shared-styles.ts';
 import { keyboardService, type Shortcut, type ShortcutBinding } from '../../services/keyboard.service.ts';
 import { showConfirm } from '../../services/dialog.service.ts';
 import { pushOverlay, removeOverlay, isTopOverlay } from '../../utils/overlay-stack.ts';
+import { localized, msg } from '@lit/localize';
 import '../common/gn-toggle.ts';
 
 @customElement('gn-keyboard-shortcuts-dialog')
+@localized()
 export class GnKeyboardShortcutsDialog extends LitElement {
   static styles = [
     sharedStyles,
@@ -392,7 +394,7 @@ export class GnKeyboardShortcutsDialog extends LitElement {
         this.recordedBinding = null;
         this.conflictError = null;
       } else {
-        this.conflictError = 'This key combination is already in use';
+        this.conflictError = msg('This key combination is already in use');
         // Show the attempted binding briefly
         this.recordedBinding = binding;
         setTimeout(() => {
@@ -445,8 +447,8 @@ export class GnKeyboardShortcutsDialog extends LitElement {
 
   private async resetAllBindings(): Promise<void> {
     const confirmed = await showConfirm(
-      'Reset Keyboard Shortcuts',
-      'Reset all keyboard shortcuts to their default bindings?'
+      msg('Reset Keyboard Shortcuts'),
+      msg('Reset all keyboard shortcuts to their default bindings?')
     );
     if (confirmed) {
       keyboardService.resetAllBindings();
@@ -543,10 +545,10 @@ export class GnKeyboardShortcutsDialog extends LitElement {
           <div
             class="shortcut-keys editable ${isEditing ? 'recording' : ''}"
             @click=${() => this.startEditing(item.id)}
-            title="Click to change shortcut"
+            title=${msg('Click to change shortcut')}
           >
             ${isEditing ? html`
-              <span class="key recording-hint">Press a key... (Esc to cancel)</span>
+              <span class="key recording-hint">${msg('Press a key... (Esc to cancel)')}</span>
             ` : keys.map((key, i) => html`
               <span class="key">${key}</span>
               ${i < keys.length - 1 ? html`<span class="key-separator"></span>` : ''}
@@ -556,7 +558,7 @@ export class GnKeyboardShortcutsDialog extends LitElement {
             <button
               class="reset-btn"
               @click=${(e: Event) => { e.stopPropagation(); this.resetBinding(item.id); }}
-              title="Reset to default"
+              title=${msg('Reset to default')}
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
@@ -631,12 +633,12 @@ export class GnKeyboardShortcutsDialog extends LitElement {
               <line x1="10" y1="16" x2="14" y2="16"></line>
               <line x1="18" y1="16" x2="18" y2="16"></line>
             </svg>
-            <span class="title">Keyboard Shortcuts</span>
+            <span class="title">${msg('Keyboard Shortcuts')}</span>
           </div>
           <div class="header-actions">
             ${hasCustomBindings ? html`
               <button class="reset-all-btn" @click=${this.resetAllBindings}>
-                Reset All
+                ${msg('Reset All')}
               </button>
             ` : ''}
             <button class="close-btn" @click=${this.close}>
@@ -660,24 +662,24 @@ export class GnKeyboardShortcutsDialog extends LitElement {
 
           ${this.vimMode ? html`
             <div class="category">
-              <div class="category-title">Vim Mode (not customizable)</div>
+              <div class="category-title">${msg('Vim Mode (not customizable)')}</div>
               <div class="shortcuts-list">
                 <div class="shortcut-row">
-                  <span class="shortcut-description">Previous commit</span>
+                  <span class="shortcut-description">${msg('Previous commit')}</span>
                   <div class="shortcut-keys"><span class="key">K</span></div>
                 </div>
                 <div class="shortcut-row">
-                  <span class="shortcut-description">Next commit</span>
+                  <span class="shortcut-description">${msg('Next commit')}</span>
                   <div class="shortcut-keys"><span class="key">J</span></div>
                 </div>
                 <div class="shortcut-row">
-                  <span class="shortcut-description">First commit</span>
+                  <span class="shortcut-description">${msg('First commit')}</span>
                   <div class="shortcut-keys">
                     <span class="key">G</span><span class="key">G</span>
                   </div>
                 </div>
                 <div class="shortcut-row">
-                  <span class="shortcut-description">Last commit</span>
+                  <span class="shortcut-description">${msg('Last commit')}</span>
                   <div class="shortcut-keys">
                     <span class="key">Shift</span><span class="key">G</span>
                   </div>
@@ -688,11 +690,13 @@ export class GnKeyboardShortcutsDialog extends LitElement {
         </div>
 
         <div class="footer">
-          <span>Click a shortcut to edit • Press <span class="key">Esc</span> to cancel</span>
+          <span>${msg(
+            html`Click a shortcut to edit • Press <span class="key">Esc</span> to cancel`
+          )}</span>
           <div class="vim-toggle">
-            <label @click=${this.toggleVimMode}>Vim-style navigation</label>
+            <label @click=${this.toggleVimMode}>${msg('Vim-style navigation')}</label>
             <gn-toggle
-              label="Vim-style navigation"
+              label=${msg('Vim-style navigation')}
               .checked=${this.vimMode}
               @change=${this.toggleVimMode}
             ></gn-toggle>

@@ -15,10 +15,10 @@ describe('rebasedOntoMessage', () => {
 
   it('names the skipped commits so they do not vanish silently', () => {
     expect(rebasedOntoMessage('main', 1)).to.equal(
-      'Rebased onto main, skipped 1 commit(s) already applied upstream'
+      'Rebased onto main, skipped 1 commit already applied upstream'
     );
     expect(rebasedOntoMessage('origin/main', 3)).to.equal(
-      'Rebased onto origin/main, skipped 3 commit(s) already applied upstream'
+      'Rebased onto origin/main, skipped 3 commits already applied upstream'
     );
   });
 
@@ -35,7 +35,10 @@ describe('skippedCommitsSuffix', () => {
   // must carry its own leading comma and name the noun on its own.
   it('names the count and the noun', () => {
     expect(skippedCommitsSuffix(2)).to.equal(
-      ', skipped 2 commit(s) already applied upstream'
+      ', skipped 2 commits already applied upstream'
+    );
+    expect(skippedCommitsSuffix(1)).to.equal(
+      ', skipped 1 commit already applied upstream'
     );
   });
 

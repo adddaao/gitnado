@@ -20,7 +20,7 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 
 use serde::Deserialize;
-use tauri::menu::{MenuBuilder, MenuItem, SubmenuBuilder};
+use tauri::menu::{Menu, MenuBuilder, MenuItem, SubmenuBuilder};
 use tauri::{AppHandle, Emitter, Manager, Wry};
 
 use crate::error::{GitnadoError, Result};
@@ -199,6 +199,21 @@ impl AppMenuState {
         }
     }
 
+    /// Swap the item handles for a freshly built menu.
+    ///
+    /// Rebuilding the menu (a language switch changes every label, which the
+    /// native layer cannot do in place) produces new handles, and the old ones
+    /// are detached: keeping them would silently stop applying enabled state
+    /// and accelerators to the menu the user is looking at.
+    fn replace_items(&self, items: HashMap<String, MenuItem<Wry>>) -> Result<()> {
+        let mut guard = self
+            .items
+            .lock()
+            .map_err(|_| GitnadoError::OperationFailed("app menu state is poisoned".into()))?;
+        *guard = items;
+        Ok(())
+    }
+
     /// Apply frontend-pushed enabled/accelerator updates.
     ///
     /// Unknown ids and unparseable accelerators are logged and skipped rather
@@ -243,19 +258,36 @@ impl AppMenuState {
     }
 }
 
-/// Build the application menu, attach it, and forward chosen items to the
-/// frontend.
+/// The text a menu row should show.
 ///
-/// Repository-scoped items start disabled — with no repository open they must
-/// not fire — and the frontend enables them as soon as one is opened.
-pub fn init_app_menu(app: &AppHandle) -> tauri::Result<()> {
+/// `labels` maps a section id ("file") or an item id ("fetch") to its text in
+/// the active locale. A missing id falls back to the static English label, so a
+/// locale that forgets a row shows English there instead of blanking the menu —
+/// and a stale frontend can never render an empty menu bar.
+fn resolve_label(labels: &HashMap<String, String>, id: &str, default: &'static str) -> String {
+    match labels.get(id) {
+        Some(text) if !text.trim().is_empty() => text.clone(),
+        _ => default.to_string(),
+    }
+}
+
+/// The menu and the per-item handles the frontend drives.
+type BuiltAppMenu = (Menu<Wry>, HashMap<String, MenuItem<Wry>>);
+
+/// Build the application menu (structure from [`APP_MENU`], text from
+/// `labels`) and the item handles the frontend later drives.
+///
+/// macOS keeps the application menu (Services/Hide/Quit) and the Edit menu's
+/// clipboard items in the menu bar itself. Attaching a custom menu REPLACES
+/// Tauri's default one, so without these two submenus macOS users lose
+/// ⌘X/⌘C/⌘V/⌘A and ⌘Q entirely.
+fn build_app_menu(
+    app: &AppHandle,
+    labels: &HashMap<String, String>,
+) -> tauri::Result<BuiltAppMenu> {
     let mut items: HashMap<String, MenuItem<Wry>> = HashMap::new();
     let mut menu = MenuBuilder::new(app);
 
-    // macOS keeps the application menu (Services/Hide/Quit) and the Edit menu's
-    // clipboard items in the menu bar itself. Attaching a custom menu REPLACES
-    // Tauri's default one, so without these two submenus macOS users lose
-    // ⌘X/⌘C/⌘V/⌘A and ⌘Q entirely.
     #[cfg(target_os = "macos")]
     {
         let about_metadata = tauri::menu::AboutMetadata {
@@ -278,7 +310,8 @@ pub fn init_app_menu(app: &AppHandle) -> tauri::Result<()> {
     }
 
     for section in APP_MENU {
-        let mut submenu = SubmenuBuilder::new(app, section.label);
+        let mut submenu =
+            SubmenuBuilder::new(app, resolve_label(labels, section.id, section.label));
 
         for entry in section.entries {
             match entry {
@@ -287,7 +320,7 @@ pub fn init_app_menu(app: &AppHandle) -> tauri::Result<()> {
                     let menu_item = MenuItem::with_id(
                         app,
                         def.id,
-                        def.label,
+                        resolve_label(labels, def.id, def.label),
                         !def.repository_scoped,
                         None::<&str>,
                     )?;
@@ -308,7 +341,7 @@ pub fn init_app_menu(app: &AppHandle) -> tauri::Result<()> {
 
         #[cfg(target_os = "macos")]
         if section.id == "file" {
-            let edit_menu = SubmenuBuilder::new(app, "Edit")
+            let edit_menu = SubmenuBuilder::new(app, resolve_label(labels, "edit", "Edit"))
                 .undo()
                 .redo()
                 .separator()
@@ -321,7 +354,18 @@ pub fn init_app_menu(app: &AppHandle) -> tauri::Result<()> {
         }
     }
 
-    app.set_menu(menu.build()?)?;
+    Ok((menu.build()?, items))
+}
+
+/// Build the application menu, attach it, and forward chosen items to the
+/// frontend.
+///
+/// Repository-scoped items start disabled — with no repository open they must
+/// not fire — and the frontend enables them as soon as one is opened.
+pub fn init_app_menu(app: &AppHandle) -> tauri::Result<()> {
+    let (menu, items) = build_app_menu(app, &HashMap::new())?;
+
+    app.set_menu(menu)?;
     app.manage(AppMenuState::new(items));
 
     app.on_menu_event(move |app, event| {
@@ -338,6 +382,27 @@ pub fn init_app_menu(app: &AppHandle) -> tauri::Result<()> {
 
     tracing::info!("Application menu installed");
     Ok(())
+}
+
+/// Rebuild the application menu with localised labels.
+///
+/// The native layer cannot retitle an attached menu in place, so a language
+/// switch rebuilds it from the same static structure and swaps it in. The item
+/// handles are replaced too; the frontend re-pushes enabled state and
+/// accelerators right after (they are per-item state the rebuild resets).
+pub fn apply_app_menu_labels(app: &AppHandle, labels: &HashMap<String, String>) -> Result<()> {
+    let state = app
+        .try_state::<AppMenuState>()
+        .ok_or_else(|| GitnadoError::OperationFailed("application menu is not available".into()))?;
+
+    let (menu, items) = build_app_menu(app, labels).map_err(|e| {
+        GitnadoError::OperationFailed(format!("failed to rebuild the application menu: {e}"))
+    })?;
+
+    app.set_menu(menu).map_err(|e| {
+        GitnadoError::OperationFailed(format!("failed to attach the application menu: {e}"))
+    })?;
+    state.replace_items(items)
 }
 
 #[cfg(test)]
@@ -503,6 +568,53 @@ mod tests {
     fn apply_accepts_an_empty_update_list() {
         let state = AppMenuState::default();
         assert!(state.apply(&[]).is_ok());
+    }
+
+    #[test]
+    fn label_overrides_win_and_missing_rows_fall_back_to_english() {
+        let mut labels = HashMap::new();
+        labels.insert("file".to_string(), "Fichier".to_string());
+        labels.insert("fetch".to_string(), "Récupérer".to_string());
+        labels.insert("help".to_string(), "   ".to_string());
+
+        assert_eq!(resolve_label(&labels, "file", "File"), "Fichier");
+        assert_eq!(resolve_label(&labels, "fetch", "Fetch"), "Récupérer");
+        // An id this locale does not name, and a blank label, keep the English
+        // default: a forgotten row must not blank out the menu.
+        assert_eq!(resolve_label(&labels, "pull", "Pull"), "Pull");
+        assert_eq!(resolve_label(&labels, "help", "Help"), "Help");
+    }
+
+    #[test]
+    fn every_section_and_item_has_an_overridable_id() {
+        let ids: Vec<&str> = APP_MENU
+            .iter()
+            .flat_map(|section| {
+                std::iter::once(section.id).chain(section.entries.iter().filter_map(|entry| {
+                    match entry {
+                        MenuEntry::Item(def) => Some(def.id),
+                        MenuEntry::Separator => None,
+                    }
+                }))
+            })
+            .collect();
+
+        let mut labels = HashMap::new();
+        for id in &ids {
+            labels.insert((*id).to_string(), format!("label-{id}"));
+        }
+        for id in &ids {
+            assert_eq!(resolve_label(&labels, id, "default"), format!("label-{id}"));
+        }
+    }
+
+    #[test]
+    fn replacing_item_handles_after_a_rebuild_is_allowed() {
+        // A rebuild (language switch) hands over a whole new handle map; the
+        // state must accept it or later sync_app_menu calls would drive the
+        // detached menu.
+        let state = AppMenuState::default();
+        assert!(state.replace_items(HashMap::new()).is_ok());
     }
 
     #[test]

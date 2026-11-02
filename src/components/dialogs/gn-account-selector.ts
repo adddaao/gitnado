@@ -6,12 +6,14 @@
 
 import { LitElement, html, css, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
+import { localized, msg, str } from '@lit/localize';
 import { sharedStyles } from '../../styles/shared-styles.ts';
 import { unifiedProfileStore, getAccountsByType } from '../../stores/unified-profile.store.ts';
 import type { IntegrationAccount, IntegrationType } from '../../types/unified-profile.types.ts';
 import { ACCOUNT_COLORS, INTEGRATION_TYPE_NAMES } from '../../types/unified-profile.types.ts';
 
 @customElement('gn-account-selector')
+@localized()
 export class GnAccountSelector extends LitElement {
   static styles = [
     sharedStyles,
@@ -414,12 +416,12 @@ export class GnAccountSelector extends LitElement {
 
     return html`
       <div class="selector-container">
-        <span class="selector-label">${integrationName} Account</span>
+        <span class="selector-label">${msg(str`${integrationName} Account`)}</span>
         <button
           class="selector-btn"
           @click=${this.toggleDropdown}
           ?disabled=${this.disabled}
-          title="Select ${integrationName} Account"
+          title=${msg(str`Select ${integrationName} Account`)}
         >
           ${this.renderSelectedAccount()}
           <svg
@@ -445,7 +447,7 @@ export class GnAccountSelector extends LitElement {
 
     if (!account) {
       return html`
-        <span class="no-account">No account selected</span>
+        <span class="no-account">${msg('No account selected')}</span>
       `;
     }
 
@@ -478,9 +480,9 @@ export class GnAccountSelector extends LitElement {
 
     return html`
       <div class="dropdown">
-        <div class="dropdown-header">${integrationName} Accounts</div>
+        <div class="dropdown-header">${msg(str`${integrationName} Accounts`)}</div>
         ${this.accounts.length === 0
-          ? html`<div class="empty-state">No accounts configured</div>`
+          ? html`<div class="empty-state">${msg('No accounts configured')}</div>`
           : this.accounts.map((account) => this.renderAccountItem(account))}
         <div class="dropdown-divider"></div>
         <button
@@ -497,7 +499,7 @@ export class GnAccountSelector extends LitElement {
             <line x1="12" y1="5" x2="12" y2="19"></line>
             <line x1="5" y1="12" x2="19" y2="12"></line>
           </svg>
-          ${this.pendingAction === 'add' ? 'Opening…' : 'Add Account'}
+          ${this.pendingAction === 'add' ? msg('Opening…') : msg('Add Account')}
         </button>
         ${this.accounts.length > 0
           ? html`
@@ -517,7 +519,7 @@ export class GnAccountSelector extends LitElement {
                     d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"
                   ></path>
                 </svg>
-                ${this.pendingAction === 'manage' ? 'Opening…' : 'Manage Accounts...'}
+                ${this.pendingAction === 'manage' ? msg('Opening…') : msg('Manage Accounts...')}
               </button>
             `
           : nothing}
@@ -551,7 +553,7 @@ export class GnAccountSelector extends LitElement {
           <span class="item-name">
             ${displayLabel}
             ${account.isDefault
-              ? html`<span class="default-badge">Default</span>`
+              ? html`<span class="default-badge">${msg('Default')}</span>`
               : nothing}
           </span>
           ${detail

@@ -1,7 +1,7 @@
 //! Anthropic Claude AI provider
 
 use crate::services::ai::{
-    AiProvider, AiProviderType, GeneratedCommitMessage, COMMIT_MESSAGE_PROMPT,
+    commit_message_prompt, AiProvider, AiProviderType, GeneratedCommitMessage, PromptLanguage,
 };
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -87,6 +87,7 @@ impl AiProvider for AnthropicProvider {
         &self,
         diff: &str,
         model: Option<&str>,
+        language: PromptLanguage,
     ) -> Result<GeneratedCommitMessage, String> {
         let api_key = self
             .api_key
@@ -100,7 +101,7 @@ impl AiProvider for AnthropicProvider {
             max_tokens: 256,
             messages: vec![Message {
                 role: "user".to_string(),
-                content: format!("{}{}", COMMIT_MESSAGE_PROMPT, diff),
+                content: format!("{}{}", commit_message_prompt(language), diff),
             }],
             system: None,
         };

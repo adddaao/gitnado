@@ -968,7 +968,7 @@ describe('gn-conflict-resolution-dialog', () => {
 
       const success = uiStore.getState().toasts.find(t => t.type === 'success');
       expect(success?.message).to.equal(
-        'Rebase completed, skipped 2 commit(s) already applied upstream'
+        'Rebase completed, skipped 2 commits already applied upstream'
       );
     });
 

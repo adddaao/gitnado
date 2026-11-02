@@ -15,6 +15,7 @@
 
 import { LitElement, html, css, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
+import { localized, msg, str } from '@lit/localize';
 import { sharedStyles } from '../../styles/shared-styles.ts';
 import {
   isNetworkGateRefusal,
@@ -67,6 +68,7 @@ type PickerErrorKind =
   | 'api';
 
 @customElement('gn-account-repo-picker')
+@localized()
 export class GnAccountRepoPicker extends LitElement {
   static styles = [
     sharedStyles,
@@ -416,7 +418,7 @@ export class GnAccountRepoPicker extends LitElement {
           // no credential for this account.
           this.failWith('no-credential', '');
         } else {
-          this.failWith('api', message || 'Failed to list repositories');
+          this.failWith('api', message || msg('Failed to list repositories'));
         }
         return;
       }
@@ -429,7 +431,10 @@ export class GnAccountRepoPicker extends LitElement {
       this.hasLoaded = true;
     } catch (err) {
       if (sequence !== this.loadSequence) return;
-      this.failWith('api', err instanceof Error ? err.message : 'Failed to list repositories');
+      this.failWith(
+        'api',
+        err instanceof Error ? err.message : msg('Failed to list repositories'),
+      );
     } finally {
       if (sequence === this.loadSequence) {
         this.isLoading = false;
@@ -486,7 +491,7 @@ export class GnAccountRepoPicker extends LitElement {
         const instanceUrl =
           account.config.type === 'gitlab' ? account.config.instanceUrl : '';
         if (!instanceUrl) {
-          this.failWith('misconfigured', 'This GitLab account has no instance URL.');
+          this.failWith('misconfigured', msg('This GitLab account has no instance URL.'));
           return null;
         }
         return listGitLabProjects(instanceUrl, REPO_PICKER_PAGE_SIZE, page, token);
@@ -504,14 +509,14 @@ export class GnAccountRepoPicker extends LitElement {
         if (!organization) {
           this.failWith(
             'misconfigured',
-            'This Azure DevOps account has no organization configured.',
+            msg('This Azure DevOps account has no organization configured.'),
           );
           return null;
         }
         return listAdoRepositories(organization, REPO_PICKER_PAGE_SIZE, page, token);
       }
       default:
-        this.failWith('misconfigured', 'This account type cannot list repositories.');
+        this.failWith('misconfigured', msg('This account type cannot list repositories.'));
         return null;
     }
   }
@@ -632,12 +637,12 @@ export class GnAccountRepoPicker extends LitElement {
   private renderNoAccounts() {
     return html`
       <div class="state-message" data-state="no-accounts">
-        No accounts are connected yet. Connect a GitHub, GitLab, Bitbucket or
-        Azure DevOps account to clone one of your repositories without pasting a
-        URL.
+        ${msg(
+          'No accounts are connected yet. Connect a GitHub, GitLab, Bitbucket or Azure DevOps account to clone one of your repositories without pasting a URL.'
+        )}
         <div class="state-actions">
           <button class="link-btn" @click=${this.requestManageAccounts} ?disabled=${this.disabled}>
-            Connect an account
+            ${msg('Connect an account')}
           </button>
         </div>
       </div>
@@ -647,10 +652,10 @@ export class GnAccountRepoPicker extends LitElement {
   private renderNoProviderAccounts() {
     return html`
       <div class="state-message" data-state="no-provider-accounts">
-        No ${INTEGRATION_TYPE_NAMES[this.provider]} account is connected.
+        ${msg(str`No ${INTEGRATION_TYPE_NAMES[this.provider]} account is connected.`)}
         <div class="state-actions">
           <button class="link-btn" @click=${this.requestManageAccounts} ?disabled=${this.disabled}>
-            Connect an account
+            ${msg('Connect an account')}
           </button>
         </div>
       </div>
@@ -660,7 +665,7 @@ export class GnAccountRepoPicker extends LitElement {
   private renderProviderRow() {
     return html`
       <div class="provider-row">
-        <label for="repo-provider">Provider</label>
+        <label for="repo-provider">${msg('Provider')}</label>
         <select
           id="repo-provider"
           .value=${this.provider}
@@ -669,7 +674,7 @@ export class GnAccountRepoPicker extends LitElement {
         >
           ${REPO_PICKER_PROVIDERS.map(
             (p) => html`<option value=${p} ?selected=${p === this.provider}>
-              ${INTEGRATION_TYPE_NAMES[p]} (${this.accountCounts[p]})
+              ${msg(str`${INTEGRATION_TYPE_NAMES[p]} (${this.accountCounts[p]})`)}
             </option>`,
           )}
         </select>
@@ -680,7 +685,7 @@ export class GnAccountRepoPicker extends LitElement {
   private renderListArea() {
     if (this.isLoading) {
       return html`<div class="state-message" data-state="loading">
-        Loading repositories…
+        ${msg('Loading repositories…')}
       </div>`;
     }
 
@@ -692,17 +697,17 @@ export class GnAccountRepoPicker extends LitElement {
 
     if (!this.hasLoaded) {
       return html`<div class="state-message" data-state="idle">
-        Choose an account to list its repositories.
+        ${msg('Choose an account to list its repositories.')}
       </div>`;
     }
 
     if (this.repositories.length === 0) {
       return html`
         <div class="state-message" data-state="empty">
-          This account has no repositories to clone.
+          ${msg('This account has no repositories to clone.')}
           <div class="state-actions">
             <button class="link-btn" @click=${this.handleRetry} ?disabled=${this.disabled}>
-              Retry
+              ${msg('Retry')}
             </button>
           </div>
         </div>
@@ -716,28 +721,38 @@ export class GnAccountRepoPicker extends LitElement {
         id="repo-filter"
         class="search-input"
         type="search"
-        placeholder="Filter repositories…"
-        aria-label="Filter repositories"
+        placeholder=${msg('Filter repositories…')}
+        aria-label=${msg('Filter repositories')}
         .value=${this.filter}
         @input=${this.handleFilterInput}
         ?disabled=${this.disabled}
       />
       ${matches.length === 0
         ? html`<div class="state-message" data-state="no-matches">
-            No repository loaded so far matches “${this.filter.trim()}”.
-            ${this.nextPage !== null ? 'Load more to keep looking.' : ''}
+            ${msg(str`No repository loaded so far matches “${this.filter.trim()}”.`)}
+            ${this.nextPage !== null ? msg('Load more to keep looking.') : ''}
           </div>`
         : html`
-            <ul class="repo-list" role="list" aria-label="Repositories">
+            <ul class="repo-list" role="list" aria-label=${msg('Repositories')}>
               ${matches.map((repo) => this.renderRepository(repo))}
             </ul>
           `}
       <div class="hint">
-        Showing ${matches.length} of ${this.repositories.length} loaded
-        ${this.repositories.length === 1 ? 'repository' : 'repositories'}${this
-          .nextPage !== null
-          ? `, ${REPO_PICKER_PAGE_SIZE} at a time`
-          : ''}.
+        ${this.repositories.length === 1
+          ? this.nextPage !== null
+            ? msg(
+                str`Showing ${matches.length} of ${this.repositories.length} loaded repository, ${REPO_PICKER_PAGE_SIZE} at a time.`
+              )
+            : msg(
+                str`Showing ${matches.length} of ${this.repositories.length} loaded repository.`
+              )
+          : this.nextPage !== null
+            ? msg(
+                str`Showing ${matches.length} of ${this.repositories.length} loaded repositories, ${REPO_PICKER_PAGE_SIZE} at a time.`
+              )
+            : msg(
+                str`Showing ${matches.length} of ${this.repositories.length} loaded repositories.`
+              )}
       </div>
       ${this.errorKind
         ? html`<div class="append-error" data-state="load-more-error">
@@ -752,7 +767,7 @@ export class GnAccountRepoPicker extends LitElement {
                   @click=${this.handleLoadMore}
                   ?disabled=${this.disabled || this.isLoadingMore}
                 >
-                  ${this.isLoadingMore ? 'Loading more…' : 'Load more'}
+                  ${this.isLoadingMore ? msg('Loading more…') : msg('Load more')}
                 </button>
               </div>
             `
@@ -762,7 +777,7 @@ export class GnAccountRepoPicker extends LitElement {
 
   private renderRepository(repo: ProviderRepository) {
     const pushed = formatLastPush(repo.lastPushedAt);
-    const meta = [repo.description ?? '', pushed ? `Updated ${pushed}` : '']
+    const meta = [repo.description ?? '', pushed ? msg(str`Updated ${pushed}`) : '']
       .filter(Boolean)
       .join(' · ');
 
@@ -785,7 +800,7 @@ export class GnAccountRepoPicker extends LitElement {
           <span class="repo-title">
             <span class="repo-name">${repo.name}</span>
             <span class="repo-owner">${repo.owner}</span>
-            <span class="badge">${repo.isPrivate ? 'Private' : 'Public'}</span>
+            <span class="badge">${repo.isPrivate ? msg('Private') : msg('Public')}</span>
           </span>
           ${meta ? html`<span class="repo-meta">${meta}</span>` : nothing}
         </button>
@@ -804,13 +819,17 @@ export class GnAccountRepoPicker extends LitElement {
       return html`
         <div class="state-message error" data-state="blocked">
           ${offline
-            ? 'Offline mode is on, so your repositories cannot be listed. Turn it off in Settings > Security.'
-            : `Your remote allowlist does not include ${providerName}, so its repositories cannot be listed. Add it in Settings > Security.`}
-          You can still paste a clone URL under "From URL".
+            ? msg(
+                'Offline mode is on, so your repositories cannot be listed. Turn it off in Settings > Security.'
+              )
+            : msg(
+                str`Your remote allowlist does not include ${providerName}, so its repositories cannot be listed. Add it in Settings > Security.`
+              )}
+          ${msg('You can still paste a clone URL under "From URL".')}
           ${this.failedAppendPage !== null
             ? html`<div class="state-actions">
                 <button class="link-btn" @click=${this.handleRetry} ?disabled=${this.disabled}>
-                  Retry
+                  ${msg('Retry')}
                 </button>
               </div>`
             : nothing}
@@ -825,14 +844,18 @@ export class GnAccountRepoPicker extends LitElement {
           data-state=${this.errorKind === 'auth' ? 'auth-expired' : 'no-credential'}
         >
           ${this.errorKind === 'auth'
-            ? `This ${providerName} account's token was rejected — it has probably expired. Reconnect the account to list its repositories.`
-            : `This ${providerName} account has no stored credential. Reconnect it to list its repositories.`}
+            ? msg(
+                str`This ${providerName} account's token was rejected — it has probably expired. Reconnect the account to list its repositories.`
+              )
+            : msg(
+                str`This ${providerName} account has no stored credential. Reconnect it to list its repositories.`
+              )}
           <div class="state-actions">
             <button class="link-btn" @click=${this.requestManageAccounts} ?disabled=${this.disabled}>
-              Reconnect account
+              ${msg('Reconnect account')}
             </button>
             <button class="link-btn" @click=${this.handleRetry} ?disabled=${this.disabled}>
-              Retry
+              ${msg('Retry')}
             </button>
           </div>
         </div>
@@ -841,10 +864,10 @@ export class GnAccountRepoPicker extends LitElement {
 
     return html`
       <div class="state-message error" data-state="error">
-        ${this.errorMessage || `Failed to list ${providerName} repositories.`}
+        ${this.errorMessage || msg(str`Failed to list ${providerName} repositories.`)}
         <div class="state-actions">
           <button class="link-btn" @click=${this.handleRetry} ?disabled=${this.disabled}>
-            Retry
+            ${msg('Retry')}
           </button>
         </div>
       </div>

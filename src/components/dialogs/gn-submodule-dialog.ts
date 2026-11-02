@@ -5,6 +5,7 @@
 
 import { LitElement, html, css } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
+import { localized, msg, str } from '@lit/localize';
 import { sharedStyles } from '../../styles/shared-styles.ts';
 import * as gitService from '../../services/git.service.ts';
 import { showConfirm } from '../../services/dialog.service.ts';
@@ -21,6 +22,7 @@ import {
 type DialogMode = 'list' | 'add';
 
 @customElement('gn-submodule-dialog')
+@localized()
 export class GnSubmoduleDialog extends LitElement {
   static styles = [
     sharedStyles,
@@ -494,12 +496,12 @@ export class GnSubmoduleDialog extends LitElement {
         this.submodules = result.data;
       } else {
         this.submodules = [];
-        this.error = result.error?.message || 'Failed to load submodules';
+        this.error = result.error?.message || msg('Failed to load submodules');
       }
     } catch (err) {
       if (repoPath !== this.pinnedRepoPath) return;
       this.submodules = [];
-      this.error = err instanceof Error ? err.message : 'Failed to load submodules';
+      this.error = err instanceof Error ? err.message : msg('Failed to load submodules');
     } finally {
       if (repoPath === this.pinnedRepoPath) {
         this.loading = false;
@@ -509,7 +511,7 @@ export class GnSubmoduleDialog extends LitElement {
 
   private async handleAdd(): Promise<void> {
     if (!this.addUrl || !this.addPath) {
-      this.error = 'URL and path are required';
+      this.error = msg('URL and path are required');
       return;
     }
 
@@ -529,8 +531,8 @@ export class GnSubmoduleDialog extends LitElement {
     );
 
     if (result.success) {
-      this.success = 'Submodule added successfully';
-      showToast('Submodule added successfully', 'success');
+      this.success = msg('Submodule added successfully');
+      showToast(msg('Submodule added successfully'), 'success');
       this.addUrl = '';
       this.addPath = '';
       this.addBranch = '';
@@ -542,8 +544,8 @@ export class GnSubmoduleDialog extends LitElement {
     } else if (!gitService.isNetworkGateRefusal(result.error)) {
       // The gate already announced a block, and a declined confirm is the
       // user's own decision — neither is a failure to report.
-      this.error = result.error?.message || 'Failed to add submodule';
-      showToast(result.error?.message || 'Failed to add submodule', 'error');
+      this.error = result.error?.message || msg('Failed to add submodule');
+      showToast(result.error?.message || msg('Failed to add submodule'), 'error');
     }
     } finally {
       this.loading = false;
@@ -573,21 +575,22 @@ export class GnSubmoduleDialog extends LitElement {
       // CANCELLED means the user declined the confirm, and calling their own
       // decision a failed update is worse still.
       if (!updateResult.success && !gitService.isNetworkGateRefusal(updateResult.error)) {
-        showToast('Initialized but update failed: ' + (updateResult.error?.message || 'Unknown error'), 'warning');
+        const reason = updateResult.error?.message || msg('Unknown error');
+        showToast(msg(str`Initialized but update failed: ${reason}`), 'warning');
       } else {
         // Add, Remove and Update All in this same dialog all report success;
         // Init and Update did not, leaving the user to infer it from a status
         // badge in a row they may not be looking at. The dialog stays open, so
         // it gets the inline message its siblings use.
-        this.success = `Initialized ${submodule.path}`;
+        this.success = msg(str`Initialized ${submodule.path}`);
       }
       await this.loadSubmodules(repoPath);
       this.dispatchEvent(new CustomEvent('submodules-changed', {
         detail: { repositoryPath: repoPath || this.repositoryPath },
       }));
     } else if (!gitService.isNetworkGateRefusal(result.error)) {
-      this.error = result.error?.message || 'Failed to initialize submodule';
-      showToast(result.error?.message || 'Failed to initialize submodule', 'error');
+      this.error = result.error?.message || msg('Failed to initialize submodule');
+      showToast(result.error?.message || msg('Failed to initialize submodule'), 'error');
     }
     } finally {
       this.loading = false;
@@ -615,14 +618,14 @@ export class GnSubmoduleDialog extends LitElement {
 
     if (result.success) {
       // Same asymmetry as handleInit — see the note there.
-      this.success = `Updated ${submodule.path}`;
+      this.success = msg(str`Updated ${submodule.path}`);
       await this.loadSubmodules(repoPath);
       this.dispatchEvent(new CustomEvent('submodules-changed', {
         detail: { repositoryPath: repoPath || this.repositoryPath },
       }));
     } else if (!gitService.isNetworkGateRefusal(result.error)) {
-      this.error = result.error?.message || 'Failed to update submodule';
-      showToast(result.error?.message || 'Failed to update submodule', 'error');
+      this.error = result.error?.message || msg('Failed to update submodule');
+      showToast(result.error?.message || msg('Failed to update submodule'), 'error');
     }
     } finally {
       this.loading = false;
@@ -656,12 +659,12 @@ export class GnSubmoduleDialog extends LitElement {
     this.removingPath = submodule.path;
 
     const confirmed = await showConfirm(
-      'Remove Submodule',
+      msg('Remove Submodule'),
       // Names the PATH, not just the .gitmodules section key. The two are
       // independent — git keeps the original section name after a directory
       // move — so a confirm saying only "libfoo" never named vendor/foo, the
       // directory about to be deleted with its uncommitted contents.
-      `Are you sure you want to remove the submodule "${submodule.name}" at "${submodule.path}"?\n\nThis deletes that directory, including any uncommitted changes inside it. This cannot be undone.`,
+      msg(str`Are you sure you want to remove the submodule "${submodule.name}" at "${submodule.path}"?\n\nThis deletes that directory, including any uncommitted changes inside it. This cannot be undone.`),
       'warning'
     );
 
@@ -679,15 +682,15 @@ export class GnSubmoduleDialog extends LitElement {
       const result = await gitService.removeSubmodule(repoPath, submodule.path);
 
       if (result.success) {
-        this.success = 'Submodule removed successfully';
-        showToast('Submodule removed successfully', 'success');
+        this.success = msg('Submodule removed successfully');
+        showToast(msg('Submodule removed successfully'), 'success');
         await this.loadSubmodules(repoPath);
         this.dispatchEvent(new CustomEvent('submodules-changed', {
         detail: { repositoryPath: repoPath || this.repositoryPath },
       }));
       } else {
-        this.error = result.error?.message || 'Failed to remove submodule';
-        showToast(result.error?.message || 'Failed to remove submodule', 'error');
+        this.error = result.error?.message || msg('Failed to remove submodule');
+        showToast(result.error?.message || msg('Failed to remove submodule'), 'error');
       }
     } finally {
       this.loading = false;
@@ -711,15 +714,15 @@ export class GnSubmoduleDialog extends LitElement {
     });
 
     if (result.success) {
-      this.success = 'All submodules updated';
-      showToast('All submodules updated', 'success');
+      this.success = msg('All submodules updated');
+      showToast(msg('All submodules updated'), 'success');
       await this.loadSubmodules(repoPath);
       this.dispatchEvent(new CustomEvent('submodules-changed', {
         detail: { repositoryPath: repoPath || this.repositoryPath },
       }));
     } else if (!gitService.isNetworkGateRefusal(result.error)) {
-      this.error = result.error?.message || 'Failed to update submodules';
-      showToast(result.error?.message || 'Failed to update submodules', 'error');
+      this.error = result.error?.message || msg('Failed to update submodules');
+      showToast(result.error?.message || msg('Failed to update submodules'), 'error');
     }
     } finally {
       this.loading = false;
@@ -740,15 +743,15 @@ export class GnSubmoduleDialog extends LitElement {
   private getStatusLabel(status: string): string {
     switch (status) {
       case 'current':
-        return 'Up to date';
+        return msg('Up to date');
       case 'modified':
-        return 'Modified';
+        return msg('Modified');
       case 'uninitialized':
-        return 'Not initialized';
+        return msg('Not initialized');
       case 'missing':
-        return 'Missing';
+        return msg('Missing');
       case 'dirty':
-        return 'Has changes';
+        return msg('Has changes');
       default:
         return status;
     }
@@ -759,9 +762,9 @@ export class GnSubmoduleDialog extends LitElement {
       return html`
         <div class="empty-state">
           <div class="empty-icon">&#128230;</div>
-          <div>No submodules</div>
+          <div>${msg('No submodules')}</div>
           <div style="font-size: var(--font-size-xs); margin-top: var(--spacing-xs);">
-            Add a submodule to include another repository
+            ${msg('Add a submodule to include another repository')}
           </div>
         </div>
       `;
@@ -775,7 +778,7 @@ export class GnSubmoduleDialog extends LitElement {
               <path d="M23 4v6h-6M1 20v-6h6"/>
               <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
             </svg>
-            Update All
+            ${msg('Update All')}
           </button>
         </div>
       ` : ''}
@@ -802,7 +805,7 @@ export class GnSubmoduleDialog extends LitElement {
                   ? html`
                       <button
                         class="action-btn"
-                        title="Initialize"
+                        title=${msg('Initialize')}
                         @click=${() => this.handleInit(sub)}
                         ?disabled=${this.loading || this.repositoryBusy}
                       >
@@ -816,7 +819,7 @@ export class GnSubmoduleDialog extends LitElement {
                   : html`
                       <button
                         class="action-btn"
-                        title="Update"
+                        title=${msg('Update')}
                         @click=${() => this.handleUpdate(sub)}
                         ?disabled=${this.loading || this.repositoryBusy}
                       >
@@ -828,7 +831,7 @@ export class GnSubmoduleDialog extends LitElement {
                     `}
                 <button
                   class="action-btn danger"
-                  title="Remove"
+                  title=${msg('Remove')}
                   @click=${() => this.handleRemove(sub)}
                   ?disabled=${this.loading || this.repositoryBusy || this.removingPath === sub.path}
                 >
@@ -848,7 +851,7 @@ export class GnSubmoduleDialog extends LitElement {
   private renderAddForm() {
     return html`
       <div class="form-group">
-        <label class="form-label">Repository URL</label>
+        <label class="form-label">${msg('Repository URL')}</label>
         <input
           type="text"
           class="form-input"
@@ -858,11 +861,11 @@ export class GnSubmoduleDialog extends LitElement {
             this.addUrl = (e.target as HTMLInputElement).value;
           }}
         />
-        <div class="form-hint">The URL of the repository to add as a submodule</div>
+        <div class="form-hint">${msg('The URL of the repository to add as a submodule')}</div>
       </div>
 
       <div class="form-group">
-        <label class="form-label">Path</label>
+        <label class="form-label">${msg('Path')}</label>
         <input
           type="text"
           class="form-input"
@@ -872,11 +875,11 @@ export class GnSubmoduleDialog extends LitElement {
             this.addPath = (e.target as HTMLInputElement).value;
           }}
         />
-        <div class="form-hint">Where to place the submodule in your repository</div>
+        <div class="form-hint">${msg('Where to place the submodule in your repository')}</div>
       </div>
 
       <div class="form-group">
-        <label class="form-label">Branch (optional)</label>
+        <label class="form-label">${msg('Branch (optional)')}</label>
         <input
           type="text"
           class="form-input"
@@ -886,7 +889,7 @@ export class GnSubmoduleDialog extends LitElement {
             this.addBranch = (e.target as HTMLInputElement).value;
           }}
         />
-        <div class="form-hint">Track a specific branch instead of the default</div>
+        <div class="form-hint">${msg('Track a specific branch instead of the default')}</div>
       </div>
     `;
   }
@@ -903,7 +906,7 @@ export class GnSubmoduleDialog extends LitElement {
                 <path d="M3 3h18v18H3z"/>
                 <path d="M9 3v18M15 3v18M3 9h18M3 15h18"/>
               </svg>
-              ${this.mode === 'list' ? 'Submodules' : 'Add Submodule'}
+              ${this.mode === 'list' ? msg('Submodules') : msg('Add Submodule')}
             </span>
             <button
               class="close-btn"
@@ -918,7 +921,7 @@ export class GnSubmoduleDialog extends LitElement {
           </div>
 
           <div class="dialog-content">
-            ${this.loading ? html`<div class="loading">Loading...</div>` : ''}
+            ${this.loading ? html`<div class="loading">${msg('Loading...')}</div>` : ''}
 
             ${this.error ? html`<div class="message error">${this.error}</div>` : ''}
 
@@ -939,7 +942,7 @@ export class GnSubmoduleDialog extends LitElement {
                       <line x1="12" y1="5" x2="12" y2="19"/>
                       <line x1="5" y1="12" x2="19" y2="12"/>
                     </svg>
-                    Add Submodule
+                    ${msg('Add Submodule')}
                   </button>
                   <div class="dialog-footer-right">
                     <button
@@ -947,13 +950,13 @@ export class GnSubmoduleDialog extends LitElement {
                       @click=${this.handleClose}
                       ?disabled=${this.operationInFlight}
                     >
-                      Close
+                      ${msg('Close')}
                     </button>
                   </div>
                 `
               : html`
                   <button class="btn btn-secondary" @click=${() => { this.mode = 'list'; this.error = ''; this.success = ''; }}>
-                    Cancel
+                    ${msg('Cancel')}
                   </button>
                   <div class="dialog-footer-right">
                     <button
@@ -961,7 +964,7 @@ export class GnSubmoduleDialog extends LitElement {
                       @click=${this.handleAdd}
                       ?disabled=${this.loading || this.repositoryBusy || !this.addUrl || !this.addPath}
                     >
-                      Add Submodule
+                      ${msg('Add Submodule')}
                     </button>
                   </div>
                 `}

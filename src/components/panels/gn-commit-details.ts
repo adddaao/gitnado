@@ -5,6 +5,7 @@
 
 import { LitElement, html, css, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
+import { localized, msg, str } from '@lit/localize';
 import { sharedStyles } from '../../styles/shared-styles.ts';
 import * as gitService from '../../services/git.service.ts';
 import { parseIssueReferences, isClosingKeyword } from '../../services/git.service.ts';
@@ -37,6 +38,7 @@ interface FileContextMenuState {
 }
 
 @customElement('gn-commit-details')
+@localized()
 export class GnCommitDetails extends LitElement {
   static styles = [
     sharedStyles,
@@ -772,11 +774,11 @@ export class GnCommitDetails extends LitElement {
         log.debug('loadFiles: loaded', this.files.length, 'files');
       } else {
         console.error('loadFiles: failed', result.error);
-        this.filesError = result.error?.message ?? 'Failed to load changed files';
+        this.filesError = result.error?.message ?? msg('Failed to load changed files');
       }
     } catch (err) {
       console.error('Failed to load commit files:', err);
-      this.filesError = err instanceof Error ? err.message : 'Failed to load changed files';
+      this.filesError = err instanceof Error ? err.message : msg('Failed to load changed files');
     } finally {
       this.loadingFiles = false;
     }
@@ -917,14 +919,14 @@ export class GnCommitDetails extends LitElement {
       } else {
         this.note = null;
         this.noteLoadFailed = true;
-        this.noteError = result.error?.message ?? 'Failed to load note';
+        this.noteError = result.error?.message ?? msg('Failed to load note');
       }
     } catch (err) {
       console.error('Failed to load note:', err);
       if (isStale()) return;
       this.note = null;
       this.noteLoadFailed = true;
-      this.noteError = err instanceof Error ? err.message : 'Failed to load note';
+      this.noteError = err instanceof Error ? err.message : msg('Failed to load note');
     } finally {
       if (!isStale()) {
         this.loadingNote = false;
@@ -966,13 +968,13 @@ export class GnCommitDetails extends LitElement {
         this.allNotes = result.data ?? [];
       } else {
         this.allNotes = [];
-        this.notesOverviewError = result.error?.message ?? 'Failed to load notes';
+        this.notesOverviewError = result.error?.message ?? msg('Failed to load notes');
       }
     } catch (err) {
       console.error('Failed to load notes:', err);
       if (isStale()) return;
       this.allNotes = [];
-      this.notesOverviewError = err instanceof Error ? err.message : 'Failed to load notes';
+      this.notesOverviewError = err instanceof Error ? err.message : msg('Failed to load notes');
     }
   }
 
@@ -1027,8 +1029,8 @@ export class GnCommitDetails extends LitElement {
     const original = this.note?.message ?? '';
     if (this.noteDraft !== original) {
       const confirmed = await showConfirm(
-        'Discard note edits?',
-        'The changes to this note have not been saved.',
+        msg('Discard note edits?'),
+        msg('The changes to this note have not been saved.'),
         'warning'
       );
       if (!confirmed) return;
@@ -1046,7 +1048,7 @@ export class GnCommitDetails extends LitElement {
 
     const message = this.noteDraft.trim();
     if (!message) {
-      this.noteError = 'A note cannot be empty';
+      this.noteError = msg('A note cannot be empty');
       return;
     }
 
@@ -1091,12 +1093,12 @@ export class GnCommitDetails extends LitElement {
         this.refreshNotes();
       } else if (!isStale()) {
         // Keep the editor open so the typed note survives the failure.
-        this.noteError = result.error?.message ?? 'Failed to save note';
+        this.noteError = result.error?.message ?? msg('Failed to save note');
       }
     } catch (err) {
       console.error('Failed to save note:', err);
       if (isStale()) return;
-      this.noteError = err instanceof Error ? err.message : 'Failed to save note';
+      this.noteError = err instanceof Error ? err.message : msg('Failed to save note');
     } finally {
       this.setNoteBusy(commitOid, notesRef, false);
     }
@@ -1120,8 +1122,8 @@ export class GnCommitDetails extends LitElement {
 
     try {
       const confirmed = await showConfirm(
-        'Remove note?',
-        `The note on ${commitOid.substring(0, 7)} will be deleted from ${notesRef}.`,
+        msg('Remove note?'),
+        msg(str`The note on ${commitOid.substring(0, 7)} will be deleted from ${notesRef}.`),
         'warning'
       );
       if (!confirmed) return;
@@ -1144,12 +1146,12 @@ export class GnCommitDetails extends LitElement {
         // the list, or the panel would describe the ref that just vanished.
         this.refreshNotes();
       } else if (!isStale()) {
-        this.noteError = result.error?.message ?? 'Failed to remove note';
+        this.noteError = result.error?.message ?? msg('Failed to remove note');
       }
     } catch (err) {
       console.error('Failed to remove note:', err);
       if (isStale()) return;
-      this.noteError = err instanceof Error ? err.message : 'Failed to remove note';
+      this.noteError = err instanceof Error ? err.message : msg('Failed to remove note');
     } finally {
       this.setNoteBusy(commitOid, notesRef, false);
     }
@@ -1197,13 +1199,15 @@ export class GnCommitDetails extends LitElement {
     if (days > 30) {
       return this.formatDate(timestamp);
     } else if (days > 0) {
-      return `${days} day${days > 1 ? 's' : ''} ago`;
+      return days > 1 ? msg(str`${days} days ago`) : msg(str`${days} day ago`);
     } else if (hours > 0) {
-      return `${hours} hour${hours > 1 ? 's' : ''} ago`;
+      return hours > 1 ? msg(str`${hours} hours ago`) : msg(str`${hours} hour ago`);
     } else if (minutes > 0) {
-      return `${minutes} minute${minutes > 1 ? 's' : ''} ago`;
+      return minutes > 1
+        ? msg(str`${minutes} minutes ago`)
+        : msg(str`${minutes} minute ago`);
     } else {
-      return 'just now';
+      return msg('just now');
     }
   }
 
@@ -1284,7 +1288,7 @@ export class GnCommitDetails extends LitElement {
       );
     } catch (err) {
       console.error('Failed to copy SHA:', err);
-      showToast('Failed to copy SHA to clipboard', 'error');
+      showToast(msg('Failed to copy SHA to clipboard'), 'error');
     }
   }
 
@@ -1345,7 +1349,7 @@ export class GnCommitDetails extends LitElement {
       await shellOpen(fullPath);
     } catch (err) {
       console.error('Failed to open file:', err);
-      showToast('Failed to open file in editor', 'error');
+      showToast(msg('Failed to open file in editor'), 'error');
     }
   }
 
@@ -1357,7 +1361,7 @@ export class GnCommitDetails extends LitElement {
       await navigator.clipboard.writeText(file.path);
     } catch (err) {
       console.error('Failed to copy path:', err);
-      showToast('Failed to copy path to clipboard', 'error');
+      showToast(msg('Failed to copy path to clipboard'), 'error');
     }
   }
 
@@ -1367,7 +1371,7 @@ export class GnCommitDetails extends LitElement {
 
     return html`
       <div class="section">
-        <div class="section-title">Linked Issues</div>
+        <div class="section-title">${msg('Linked Issues')}</div>
         <div class="linked-issues">
           ${this.issueReferences.map(ref => {
             const closes = isClosingKeyword(ref.keyword);
@@ -1375,7 +1379,9 @@ export class GnCommitDetails extends LitElement {
               <span
                 class="issue-badge ${closes ? 'closes' : 'references'}"
                 @click=${() => this.handleIssueClick(ref.number)}
-                title="${closes ? `Closes issue #${ref.number}` : `References issue #${ref.number}`}"
+                title=${closes
+                  ? msg(str`Closes issue #${ref.number}`)
+                  : msg(str`References issue #${ref.number}`)}
               >
                 <svg class="issue-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <circle cx="12" cy="12" r="10"></circle>
@@ -1383,7 +1389,9 @@ export class GnCommitDetails extends LitElement {
                   <line x1="12" y1="16" x2="12.01" y2="16"></line>
                 </svg>
                 #${ref.number}
-                ${closes ? html`<span style="font-size: 10px; opacity: 0.8;">(closes)</span>` : ''}
+                ${closes
+                  ? html`<span style="font-size: 10px; opacity: 0.8;">${msg('(closes)')}</span>`
+                  : ''}
               </span>
             `;
           })}
@@ -1442,7 +1450,7 @@ export class GnCommitDetails extends LitElement {
         <span class="file-name">
           ${filename}
           ${renamedFrom
-            ? html`<span class="file-renamed-from">from ${renamedFrom}</span>`
+            ? html`<span class="file-renamed-from">${msg(str`from ${renamedFrom}`)}</span>`
             : nothing}
         </span>
         <span class="file-stats">
@@ -1452,7 +1460,7 @@ export class GnCommitDetails extends LitElement {
         <div class="file-actions">
           <button
             class="file-action"
-            title="View file history"
+            title=${msg('View file history')}
             @click=${(e: Event) => this.handleHistoryClick(file, e)}
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1463,7 +1471,7 @@ export class GnCommitDetails extends LitElement {
           ${canBlame ? html`
             <button
               class="file-action"
-              title="View file blame"
+              title=${msg('View file blame')}
               @click=${(e: Event) => this.handleBlameClick(file, e)}
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1485,8 +1493,8 @@ export class GnCommitDetails extends LitElement {
           class="note-editor"
           .value=${this.noteDraft}
           ?disabled=${this.noteBusy}
-          placeholder="Write a note for this commit…"
-          aria-label="Commit note"
+          placeholder=${msg('Write a note for this commit…')}
+          aria-label=${msg('Commit note')}
           @input=${this.handleNoteDraftInput}
         ></textarea>
         <div class="note-actions">
@@ -1495,23 +1503,23 @@ export class GnCommitDetails extends LitElement {
             ?disabled=${this.noteBusy || this.noteDraft.trim() === '' || this.noteDraft === original}
             @click=${this.handleSaveNote}
           >
-            ${this.noteBusy ? 'Saving…' : 'Save note'}
+            ${this.noteBusy ? msg('Saving…') : msg('Save note')}
           </button>
           <button class="note-btn" ?disabled=${this.noteBusy} @click=${this.handleCancelNoteEdit}>
-            Cancel
+            ${msg('Cancel')}
           </button>
         </div>
       `;
     }
 
     if (this.loadingNote) {
-      return html`<div class="note-loading">Loading note…</div>`;
+      return html`<div class="note-loading">${msg('Loading note…')}</div>`;
     }
 
     if (this.noteLoadFailed) {
       return html`
         <div class="note-actions">
-          <button class="note-btn" @click=${this.handleRetryLoadNote}>Retry</button>
+          <button class="note-btn" @click=${this.handleRetryLoadNote}>${msg('Retry')}</button>
         </div>
       `;
     }
@@ -1521,20 +1529,20 @@ export class GnCommitDetails extends LitElement {
         <pre class="note-body">${this.note.message}</pre>
         <div class="note-actions">
           <button class="note-btn" ?disabled=${this.noteBusy} @click=${this.handleEditNote}>
-            Edit
+            ${msg('Edit')}
           </button>
           <button class="note-btn danger" ?disabled=${this.noteBusy} @click=${this.handleRemoveNote}>
-            ${this.noteBusy ? 'Removing…' : 'Remove'}
+            ${this.noteBusy ? msg('Removing…') : msg('Remove')}
           </button>
         </div>
       `;
     }
 
     return html`
-      <div class="note-empty">No note on this commit in ${this.notesRef}</div>
+      <div class="note-empty">${msg(str`No note on this commit in ${this.notesRef}`)}</div>
       <div class="note-actions">
         <button class="note-btn primary" ?disabled=${this.noteBusy} @click=${this.handleAddNote}>
-          Add note
+          ${msg('Add note')}
         </button>
       </div>
     `;
@@ -1554,7 +1562,13 @@ export class GnCommitDetails extends LitElement {
         aria-expanded=${this.showNotesOverview ? 'true' : 'false'}
         @click=${this.toggleNotesOverview}
       >
-        ${this.showNotesOverview ? 'Hide' : 'Show'} all ${count} note${count === 1 ? '' : 's'} in this ref
+        ${this.showNotesOverview
+          ? count === 1
+            ? msg(str`Hide all ${count} note in this ref`)
+            : msg(str`Hide all ${count} notes in this ref`)
+          : count === 1
+            ? msg(str`Show all ${count} note in this ref`)
+            : msg(str`Show all ${count} notes in this ref`)}
       </button>
       ${this.showNotesOverview
         ? html`
@@ -1581,11 +1595,11 @@ export class GnCommitDetails extends LitElement {
     return html`
       <div class="section notes-section">
         <div class="notes-header">
-          <div class="section-title">Notes</div>
+          <div class="section-title">${msg('Notes')}</div>
           <select
             class="notes-ref-select"
-            aria-label="Notes ref"
-            title="Notes ref"
+            aria-label=${msg('Notes ref')}
+            title=${msg('Notes ref')}
             ?disabled=${this.noteBusy || this.editingNote}
             @change=${this.handleNotesRefChange}
           >
@@ -1617,7 +1631,7 @@ export class GnCommitDetails extends LitElement {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M12 3v18M3 12h18"></path>
           </svg>
-          View diff
+          ${msg('View diff')}
         </button>
         ${canBlame ? html`
           <button class="context-menu-item" @click=${this.handleContextViewBlame}>
@@ -1625,7 +1639,7 @@ export class GnCommitDetails extends LitElement {
               <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
               <circle cx="12" cy="12" r="3"></circle>
             </svg>
-            View blame
+            ${msg('View blame')}
           </button>
         ` : nothing}
         <button class="context-menu-item" @click=${this.handleContextViewHistory}>
@@ -1633,7 +1647,7 @@ export class GnCommitDetails extends LitElement {
             <circle cx="12" cy="12" r="10"></circle>
             <polyline points="12 6 12 12 16 14"></polyline>
           </svg>
-          View history
+          ${msg('View history')}
         </button>
         ${canRestore ? html`
           <button class="context-menu-item" @click=${this.handleContextRestoreFile}>
@@ -1641,7 +1655,7 @@ export class GnCommitDetails extends LitElement {
               <path d="M3 12a9 9 0 1 0 3-6.7L3 8"></path>
               <polyline points="3 3 3 8 8 8"></polyline>
             </svg>
-            Restore this version
+            ${msg('Restore this version')}
           </button>
         ` : nothing}
         <div class="context-menu-divider"></div>
@@ -1652,7 +1666,7 @@ export class GnCommitDetails extends LitElement {
               <polyline points="15 3 21 3 21 9"></polyline>
               <line x1="10" y1="14" x2="21" y2="3"></line>
             </svg>
-            Open current version
+            ${msg('Open current version')}
           </button>
         ` : nothing}
         <button class="context-menu-item" @click=${this.handleContextCopyPath}>
@@ -1660,7 +1674,7 @@ export class GnCommitDetails extends LitElement {
             <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
             <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
           </svg>
-          Copy file path
+          ${msg('Copy file path')}
         </button>
       </div>
     `;
@@ -1670,15 +1684,15 @@ export class GnCommitDetails extends LitElement {
     if (!this.commit) {
       return html`
         <div class="header">
-          <span class="header-title">Commit Details</span>
+          <span class="header-title">${msg('Commit Details')}</span>
         </div>
-        <div class="empty-state">Select a commit to view details</div>
+        <div class="empty-state">${msg('Select a commit to view details')}</div>
       `;
     }
 
     return html`
       <div class="header">
-        <span class="header-title">Commit Details</span>
+        <span class="header-title">${msg('Commit Details')}</span>
       </div>
 
       <div class="content">
@@ -1692,7 +1706,7 @@ export class GnCommitDetails extends LitElement {
         ${this.refs.length > 0
           ? html`
               <div class="section">
-                <div class="section-title">Refs</div>
+                <div class="section-title">${msg('Refs')}</div>
                 <div class="refs">
                   ${this.refs.map(
                     (ref) => html`
@@ -1720,9 +1734,9 @@ export class GnCommitDetails extends LitElement {
         ${this.renderLinkedIssues()}
 
         <div class="section">
-          <div class="section-title">Files Changed (${this.files.length})</div>
+          <div class="section-title">${msg(str`Files Changed (${this.files.length})`)}</div>
           ${this.loadingFiles
-            ? html`<div class="loading-files">Loading files...</div>`
+            ? html`<div class="loading-files">${msg('Loading files...')}</div>`
             : this.filesError
               ? html`<div class="loading-files files-error">${this.filesError}</div>`
               : this.files.length > 0
@@ -1731,19 +1745,19 @@ export class GnCommitDetails extends LitElement {
                       ${this.files.map((f) => this.renderFileItem(f))}
                     </ul>
                   `
-                : html`<div class="loading-files">No files changed</div>`}
+                : html`<div class="loading-files">${msg('No files changed')}</div>`}
         </div>
 
         ${this.renderNotesSection()}
 
         <div class="section">
-          <div class="section-title">SHA</div>
+          <div class="section-title">${msg('SHA')}</div>
           <div class="commit-sha-row">
             <code class="commit-oid">${this.commit.oid.slice(0, 7)}</code>
             <button
               class="copy-sha-btn"
               @click=${this.copyFullSha}
-              title="Copy full SHA (${this.commit.oid})"
+              title=${msg(str`Copy full SHA (${this.commit.oid})`)}
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
@@ -1754,7 +1768,7 @@ export class GnCommitDetails extends LitElement {
         </div>
 
         <div class="section">
-          <div class="section-title">Author</div>
+          <div class="section-title">${msg('Author')}</div>
           <div class="meta-row">
             <span class="meta-value">${this.commit.author.name}</span>
           </div>
@@ -1772,7 +1786,7 @@ export class GnCommitDetails extends LitElement {
         ${this.commit.committer.email !== this.commit.author.email
           ? html`
               <div class="section">
-                <div class="section-title">Committer</div>
+                <div class="section-title">${msg('Committer')}</div>
                 <div class="meta-row">
                   <span class="meta-value">${this.commit.committer.name}</span>
                 </div>
@@ -1789,7 +1803,7 @@ export class GnCommitDetails extends LitElement {
           ? html`
               <div class="section">
                 <div class="section-title">
-                  Parent${this.commit.parentIds.length > 1 ? 's' : ''}
+                  ${this.commit.parentIds.length > 1 ? msg('Parents') : msg('Parent')}
                 </div>
                 <div class="parents">
                   ${this.commit.parentIds.map(

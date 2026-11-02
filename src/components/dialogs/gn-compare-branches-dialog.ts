@@ -13,6 +13,7 @@
 
 import { LitElement, html, css, nothing } from 'lit';
 import { customElement, property, state, query } from 'lit/decorators.js';
+import { localized, msg, str } from '@lit/localize';
 import { sharedStyles } from '../../styles/shared-styles.ts';
 import * as gitService from '../../services/git.service.ts';
 import type { BranchComparison, CompareCommit, ChangedFile } from '../../services/git.service.ts';
@@ -42,6 +43,7 @@ export interface CompareOpenOptions {
 }
 
 @customElement('gn-compare-branches-dialog')
+@localized()
 export class GnCompareBranchesDialog extends LitElement {
   static styles = [
     sharedStyles,
@@ -414,7 +416,7 @@ export class GnCompareBranchesDialog extends LitElement {
       ...this.extraRefs.map((r) => ({ value: r.ref, label: r.label })),
       ...this.branches.map((b) => ({
         value: b.name,
-        label: `${b.name}${b.isHead ? ' (current)' : ''}`,
+        label: b.isHead ? msg(str`${b.name} (current)`) : b.name,
       })),
     ];
   }
@@ -454,11 +456,11 @@ export class GnCompareBranchesDialog extends LitElement {
           this.resolveBaseCollision();
         }
       } else {
-        this.error = result.error?.message ?? 'Failed to load branches';
+        this.error = result.error?.message ?? msg('Failed to load branches');
       }
     } catch (err) {
       if (generation !== this.openGeneration) return;
-      this.error = err instanceof Error ? err.message : 'Failed to load branches';
+      this.error = err instanceof Error ? err.message : msg('Failed to load branches');
     } finally {
       if (generation === this.openGeneration) this.loadingBranches = false;
     }
@@ -500,18 +502,18 @@ export class GnCompareBranchesDialog extends LitElement {
   private async handleCompare(): Promise<void> {
     if (this.comparing) return;
     if (!this.baseRef || !this.compareRef) {
-      this.error = 'Select two refs to compare';
+      this.error = msg('Select two refs to compare');
       return;
     }
     if (this.baseRef === this.compareRef) {
-      this.error = 'Select two different refs to compare';
+      this.error = msg('Select two different refs to compare');
       return;
     }
 
     // The repo the pickers were filled from, not the live property.
     const repoPath = this.pinnedRepoPath;
     if (!repoPath) {
-      this.error = 'No repository is open';
+      this.error = msg('No repository is open');
       return;
     }
 
@@ -529,11 +531,11 @@ export class GnCompareBranchesDialog extends LitElement {
       if (result.success && result.data) {
         this.comparison = result.data;
       } else {
-        this.error = result.error?.message ?? 'Failed to compare refs';
+        this.error = result.error?.message ?? msg('Failed to compare refs');
       }
     } catch (err) {
       if (generation !== this.openGeneration) return;
-      this.error = err instanceof Error ? err.message : 'Failed to compare refs';
+      this.error = err instanceof Error ? err.message : msg('Failed to compare refs');
     } finally {
       if (generation === this.openGeneration) this.comparing = false;
     }
@@ -560,7 +562,7 @@ export class GnCompareBranchesDialog extends LitElement {
       <button
         class="row"
         type="button"
-        title="Show ${commit.shortOid} in graph"
+        title=${msg(str`Show ${commit.shortOid} in graph`)}
         @click=${() => this.handleShowCommit(commit.oid)}
       >
         <span class="oid">${commit.shortOid}</span>
@@ -597,23 +599,23 @@ export class GnCompareBranchesDialog extends LitElement {
     return html`
       <div class="summary">
         <div class="stat">
-          <span class="stat-label">Ahead</span>
+          <span class="stat-label">${msg('Ahead')}</span>
           <span class="stat-value">${c.ahead}</span>
         </div>
         <div class="stat">
-          <span class="stat-label">Behind</span>
+          <span class="stat-label">${msg('Behind')}</span>
           <span class="stat-value">${c.behind}</span>
         </div>
         <div class="stat">
-          <span class="stat-label">Merge base</span>
+          <span class="stat-label">${msg('Merge base')}</span>
           <span class="stat-value">${c.mergeBase.slice(0, 7)}</span>
         </div>
         <div class="stat">
-          <span class="stat-label">Files changed</span>
+          <span class="stat-label">${msg('Files changed')}</span>
           <span class="stat-value">${files.length}</span>
         </div>
         <div class="stat">
-          <span class="stat-label">Lines</span>
+          <span class="stat-label">${msg('Lines')}</span>
           <span class="stat-value">
             <span class="additions">+${c.totalAdditions}</span>
             <span class="deletions">-${c.totalDeletions}</span>
@@ -623,15 +625,18 @@ export class GnCompareBranchesDialog extends LitElement {
 
       ${identical
         ? html`<div class="status" data-testid="identical">
-            ${c.compareRef} and ${c.baseRef} point at the same content — nothing to compare.
+            ${msg(
+              str`${c.compareRef} and ${c.baseRef} point at the same content — nothing to compare.`,
+            )}
           </div>`
         : nothing}
 
       ${commitsAhead.length > 0
         ? html`
             <div class="section-title">
-              ${commitsAhead.length} commit${commitsAhead.length === 1 ? '' : 's'} only on
-              ${c.compareRef}
+              ${commitsAhead.length === 1
+                ? msg(str`${commitsAhead.length} commit only on ${c.compareRef}`)
+                : msg(str`${commitsAhead.length} commits only on ${c.compareRef}`)}
             </div>
             <div class="list" data-testid="commits-ahead">
               ${commitsAhead.map((commit) => this.renderCommitRow(commit))}
@@ -642,8 +647,9 @@ export class GnCompareBranchesDialog extends LitElement {
       ${commitsBehind.length > 0
         ? html`
             <div class="section-title">
-              ${commitsBehind.length} commit${commitsBehind.length === 1 ? '' : 's'} only on
-              ${c.baseRef}
+              ${commitsBehind.length === 1
+                ? msg(str`${commitsBehind.length} commit only on ${c.baseRef}`)
+                : msg(str`${commitsBehind.length} commits only on ${c.baseRef}`)}
             </div>
             <div class="list" data-testid="commits-behind">
               ${commitsBehind.map((commit) => this.renderCommitRow(commit))}
@@ -653,7 +659,7 @@ export class GnCompareBranchesDialog extends LitElement {
 
       ${files.length > 0
         ? html`
-            <div class="section-title">Changed files</div>
+            <div class="section-title">${msg('Changed files')}</div>
             <div class="list" data-testid="files-changed">
               ${files.map((file) => this.renderFileRow(file))}
             </div>
@@ -670,11 +676,11 @@ export class GnCompareBranchesDialog extends LitElement {
     const tooFewRefs = selectable.length < 2;
 
     return html`
-      <gn-modal modalTitle="Compare Branches" @close=${this.handleModalClose}>
+      <gn-modal modalTitle=${msg('Compare Branches')} @close=${this.handleModalClose}>
         <div class="form">
           <div class="refs">
             <div class="field">
-              <label for="base-ref-select">Base</label>
+              <label for="base-ref-select">${msg('Base')}</label>
               <select
                 id="base-ref-select"
                 @change=${this.handleBaseChange}
@@ -687,8 +693,8 @@ export class GnCompareBranchesDialog extends LitElement {
             <button
               class="swap-btn"
               type="button"
-              title="Swap base and compare"
-              aria-label="Swap base and compare"
+              title=${msg('Swap base and compare')}
+              aria-label=${msg('Swap base and compare')}
               ?disabled=${this.loadingBranches || this.comparing || tooFewRefs}
               @click=${this.handleSwap}
             >
@@ -701,7 +707,7 @@ export class GnCompareBranchesDialog extends LitElement {
             </button>
 
             <div class="field">
-              <label for="compare-ref-select">Compare</label>
+              <label for="compare-ref-select">${msg('Compare')}</label>
               <select
                 id="compare-ref-select"
                 @change=${this.handleCompareChange}
@@ -715,40 +721,42 @@ export class GnCompareBranchesDialog extends LitElement {
           ${this.error ? html`<div class="error-message" role="alert">${this.error}</div>` : nothing}
 
           ${this.loadingBranches
-            ? html`<div class="status"><span class="spinner"></span>Loading branches…</div>`
+            ? html`<div class="status"><span class="spinner"></span>${msg('Loading branches…')}</div>`
             : nothing}
 
           ${!this.loadingBranches && selectable.length === 0 && !this.error
             ? html`<div class="status" data-testid="no-branches">
-                This repository has no branches to compare yet.
+                ${msg('This repository has no branches to compare yet.')}
               </div>`
             : nothing}
 
           ${!this.loadingBranches && selectable.length === 1 && !this.error
             ? html`<div class="status" data-testid="single-branch">
                 ${this.branches.length === 1
-                  ? html`${this.branches[0].name} is the only branch here — there is nothing to
-                      compare it with yet.`
-                  : html`${selectable[0].label} is the only ref here — there is nothing to compare
-                      it with yet.`}
+                  ? msg(
+                      str`${this.branches[0].name} is the only branch here — there is nothing to compare it with yet.`,
+                    )
+                  : msg(
+                      str`${selectable[0].label} is the only ref here — there is nothing to compare it with yet.`,
+                    )}
               </div>`
             : nothing}
 
           ${this.comparing
-            ? html`<div class="status"><span class="spinner"></span>Comparing…</div>`
+            ? html`<div class="status"><span class="spinner"></span>${msg('Comparing…')}</div>`
             : nothing}
 
           ${!this.comparing ? this.renderResult() : nothing}
         </div>
 
         <div slot="footer">
-          <button class="btn btn-secondary" @click=${this.handleModalClose}>Close</button>
+          <button class="btn btn-secondary" @click=${this.handleModalClose}>${msg('Close')}</button>
           <button
             class="btn btn-primary"
             ?disabled=${!this.canCompare}
             @click=${this.handleCompare}
           >
-            ${this.comparing ? 'Comparing…' : 'Compare'}
+            ${this.comparing ? msg('Comparing…') : msg('Compare')}
           </button>
         </div>
       </gn-modal>

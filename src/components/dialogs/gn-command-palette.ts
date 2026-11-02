@@ -9,6 +9,7 @@ import { sharedStyles } from '../../styles/shared-styles.ts';
 import { fuzzyScore, highlightMatch } from '../../utils/fuzzy-search.ts';
 import type { Branch, Commit } from '../../types/git.types.ts';
 import { pushOverlay, removeOverlay, isTopOverlay } from '../../utils/overlay-stack.ts';
+import { localized, msg, str } from '@lit/localize';
 
 export interface PaletteCommand {
   id: string;
@@ -20,6 +21,7 @@ export interface PaletteCommand {
 }
 
 @customElement('gn-command-palette')
+@localized()
 export class GnCommandPalette extends LitElement {
   static styles = [
     sharedStyles,
@@ -344,7 +346,7 @@ export class GnCommandPalette extends LitElement {
       .filter(branch => !branch.isHead)
       .map(branch => ({
       id: `branch:${branch.name}`,
-      label: `Switch to ${branch.name}`,
+      label: `${msg('Switch to ')}${branch.name}`,
       category: 'branch' as const,
       icon: 'branch',
       action: () => {
@@ -361,7 +363,7 @@ export class GnCommandPalette extends LitElement {
       .filter(branch => branch.targetOid)
       .map(branch => ({
         id: `reveal-branch:${branch.name}`,
-        label: `Reveal ${branch.name} in graph`,
+        label: msg(str`Reveal ${branch.name} in graph`),
         category: 'navigation' as const,
         icon: 'branch',
         action: () => {
@@ -375,7 +377,7 @@ export class GnCommandPalette extends LitElement {
 
     const revealTagCommands: PaletteCommand[] = this.tags.map(tag => ({
       id: `reveal-tag:${tag.name}`,
-      label: `Reveal tag ${tag.name} in graph`,
+      label: msg(str`Reveal tag ${tag.name} in graph`),
       category: 'navigation' as const,
       icon: 'commit',
       action: () => {
@@ -680,19 +682,19 @@ export class GnCommandPalette extends LitElement {
 
   private getCategoryLabel(category: string): string {
     switch (category) {
-      case 'recent': return 'Recent';
-      case 'action': return 'Actions';
-      case 'branch': return 'Branches';
-      case 'navigation': return 'Navigation';
-      case 'file': return 'Files';
-      case 'commit': return 'Commits';
+      case 'recent': return msg('Recent');
+      case 'action': return msg('Actions');
+      case 'branch': return msg('Branches');
+      case 'navigation': return msg('Navigation');
+      case 'file': return msg('Files');
+      case 'commit': return msg('Commits');
       default: return category;
     }
   }
 
   private renderCommands() {
     if (this.filteredCommands.length === 0) {
-      return html`<div class="empty">No matching commands</div>`;
+      return html`<div class="empty">${msg('No matching commands')}</div>`;
     }
 
     const grouped = new Map<string, PaletteCommand[]>();
@@ -739,7 +741,7 @@ export class GnCommandPalette extends LitElement {
   render() {
     return html`
       <div class="overlay" @click=${this.handleOverlayClick}></div>
-      <div class="palette" role="dialog" aria-label="Command Palette">
+      <div class="palette" role="dialog" aria-label=${msg('Command Palette')}>
         <div class="search-container">
           <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="11" cy="11" r="8"></circle>
@@ -748,7 +750,7 @@ export class GnCommandPalette extends LitElement {
           <input
             class="search-input"
             type="text"
-            placeholder="Search commands, files, commits..."
+            placeholder=${msg('Search commands, files, commits...')}
             .value=${this.searchQuery}
             @input=${this.handleInput}
             @keydown=${this.handleKeyDown}
@@ -756,16 +758,16 @@ export class GnCommandPalette extends LitElement {
             aria-expanded="true"
             aria-controls="palette-results"
             aria-autocomplete="list"
-            aria-label="Search commands"
+            aria-label=${msg('Search commands')}
           />
         </div>
         <div class="results" id="palette-results" role="listbox">
           ${this.renderCommands()}
         </div>
         <div class="footer">
-          <span class="footer-hint"><kbd>↑↓</kbd> navigate</span>
-          <span class="footer-hint"><kbd>↵</kbd> select</span>
-          <span class="footer-hint"><kbd>esc</kbd> close</span>
+          <span class="footer-hint">${msg(html`<kbd>↑↓</kbd> navigate`)}</span>
+          <span class="footer-hint">${msg(html`<kbd>↵</kbd> select`)}</span>
+          <span class="footer-hint">${msg(html`<kbd>esc</kbd> close`)}</span>
         </div>
       </div>
     `;

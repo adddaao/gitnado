@@ -1,5 +1,6 @@
 import { LitElement, html, css, nothing, type PropertyValues } from 'lit';
 import { customElement, property, state, query } from 'lit/decorators.js';
+import { localized, msg, str } from '@lit/localize';
 import { sharedStyles } from '../../styles/shared-styles.ts';
 import * as gitService from '../../services/git.service.ts';
 import * as aiService from '../../services/ai.service.ts';
@@ -22,12 +23,28 @@ import {
   type CoAuthor,
   type Trailer,
 } from '../../utils/commit-trailers.ts';
+import type { AiPromptLanguage } from '../../stores/settings.store.ts';
+
+/**
+ * The AI prompt-language options, in switch order.
+ *
+ * The labels are endonyms — 简 (Simplified Chinese) and 英 (English) — and are
+ * deliberately NOT passed through `msg()`: they stay readable whichever locale
+ * the UI is in, the same reason the Settings language picker shows `English`,
+ * `Français` and `中文` untranslated.
+ */
+const AI_PROMPT_LANGUAGES: ReadonlyArray<{ value: AiPromptLanguage; label: string }> = [
+  { value: 'zh', label: '简' },
+  { value: 'en', label: '英' },
+];
+
 
 /**
  * Commit panel component
  * Allows users to write commit messages and create commits
  */
 @customElement('gn-commit-panel')
+@localized()
 export class GnCommitPanel extends LitElement {
   static styles = [
     sharedStyles,
@@ -159,7 +176,16 @@ export class GnCommitPanel extends LitElement {
         color: var(--color-text-primary);
         font-size: var(--font-size-sm);
         font-family: inherit;
-        resize: none;
+        /* Starts as the familiar one-row subject box, but — like the description
+           field below — the user can drag its bottom edge taller to read a long
+           AI-generated or pasted subject without it scrolling out of sight.
+           Native textarea resizing writes an inline height, and Lit never
+           recreates the element or overwrites that, so the height the user
+           chose survives every re-render. */
+        resize: vertical;
+        min-height: 34px;
+        max-height: 40vh;
+        overflow-y: auto;
         transition: border-color var(--transition-fast);
       }
 
@@ -494,6 +520,43 @@ export class GnCommitPanel extends LitElement {
         display: flex;
         gap: var(--spacing-xs);
         align-items: center;
+      }
+
+      /* Compact 简/英 AI prompt-language shortcut in the header, before the
+         generate button. It never shrinks (flex-shrink: 0, 10px labels), so at
+         narrow widths the header's text gives way instead of the controls
+         wrapping or stacking. */
+      .prompt-language-switch {
+        display: inline-flex;
+        flex-shrink: 0;
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-sm);
+        overflow: hidden;
+        --gn-focus-ring-offset: -2px;
+      }
+
+      .prompt-language-switch .lang-option {
+        display: inline-flex;
+        align-items: center;
+        height: 22px;
+        padding: 0 5px;
+        font-size: 10px;
+        line-height: 1;
+        color: var(--color-text-secondary);
+      }
+
+      .prompt-language-switch .lang-option + .lang-option {
+        border-left: 1px solid var(--color-border);
+      }
+
+      .prompt-language-switch .lang-option:hover {
+        background: var(--color-bg-hover);
+        color: var(--color-text-primary);
+      }
+
+      .prompt-language-switch .lang-option.active {
+        background: var(--color-primary);
+        color: var(--color-bg-primary, #ffffff);
       }
 
       .generate-btn {
@@ -927,6 +990,12 @@ export class GnCommitPanel extends LitElement {
   @state() private isGenerating: boolean = false;
   @state() private generationError: string | null = null;
 
+  // AI prompt-language preference, mirrored from the settings store. This is a
+  // plain preference, not an availability answer: the quick switch is offered
+  // whether or not a model is currently loaded.
+  @state() private aiPromptLanguage: AiPromptLanguage = 'zh';
+  @state() private showPromptLanguageSwitch = true;
+
   // Vibe check state
   @state() private vibeCheckResult: import('../../services/ai.service.ts').StagedAnalysis | null = null;
   @state() private isAnalyzing: boolean = false;
@@ -963,11 +1032,25 @@ export class GnCommitPanel extends LitElement {
   // waiting for the next unrelated refresh, commit or tab switch.
   private boundHandleIdentityChanged = () => this.loadAuthorName();
   private unsubscribeStore?: () => void;
+  private unsubscribeSettings?: () => void;
   private aiRetryTimer?: ReturnType<typeof setTimeout>;
   private modelCompleteUnlisten?: UnlistenFn;
 
   async connectedCallback(): Promise<void> {
     super.connectedCallback();
+    // Mirror the AI prompt-language preference synchronously, before the first
+    // render, and follow the store afterwards: the Settings dialog writes the
+    // same two settings while this panel stays mounted, so the 简/英 shortcut
+    // has to appear/disappear and change its active half without a remount.
+    // Ignoring changes while unmounted is not a problem — the values are
+    // re-read here on connect.
+    const settings = settingsStore.getState();
+    this.aiPromptLanguage = settings.aiPromptLanguage;
+    this.showPromptLanguageSwitch = settings.showPromptLanguageSwitch;
+    this.unsubscribeSettings = settingsStore.subscribe((state) => {
+      this.aiPromptLanguage = state.aiPromptLanguage;
+      this.showPromptLanguageSwitch = state.showPromptLanguageSwitch;
+    });
     this.loadCommitHistory();
     await this.loadTemplates();
     await this.loadConventionalTypes();
@@ -1031,6 +1114,8 @@ export class GnCommitPanel extends LitElement {
     this.modelCompleteUnlisten = undefined;
     if (this.aiRetryTimer) clearTimeout(this.aiRetryTimer);
     this.unsubscribeStore?.();
+    this.unsubscribeSettings?.();
+    this.unsubscribeSettings = undefined;
   }
 
   willUpdate(changed: PropertyValues): void {
@@ -1326,7 +1411,7 @@ export class GnCommitPanel extends LitElement {
   }
 
   private async handleSaveTemplate(): Promise<void> {
-    const name = await showPrompt('Save Template', 'Enter template name:');
+    const name = await showPrompt(msg('Save Template'), msg('Enter template name:'));
     if (!name) return;
 
     const content = this.description
@@ -1346,7 +1431,8 @@ export class GnCommitPanel extends LitElement {
       await this.loadTemplates();
       this.selectedTemplateId = template.id;
     } else {
-      showToast(`Failed to save template: ${result.error?.message ?? 'Unknown error'}`, 'error');
+      const reason = result.error?.message ?? msg('Unknown error');
+      showToast(msg(str`Failed to save template: ${reason}`), 'error');
     }
   }
 
@@ -1391,8 +1477,8 @@ export class GnCommitPanel extends LitElement {
       target.checked = false;
       this.signOff = false;
       showToast(
-        'No git identity configured — set user.name and user.email to sign off',
-        'error'
+        msg('No git identity configured — set user.name and user.email to sign off'),
+        'error',
       );
       return;
     }
@@ -1426,7 +1512,8 @@ export class GnCommitPanel extends LitElement {
       });
 
       if (!result.success) {
-        this.suggestionsError = result.error?.message ?? 'Could not read recent commit authors';
+        this.suggestionsError =
+          result.error?.message ?? msg('Could not read recent commit authors');
         this.authorSuggestions = [];
         return;
       }
@@ -1445,7 +1532,8 @@ export class GnCommitPanel extends LitElement {
       }
       this.authorSuggestions = suggestions;
     } catch (err) {
-      this.suggestionsError = err instanceof Error ? err.message : 'Could not read recent commit authors';
+      this.suggestionsError =
+        err instanceof Error ? err.message : msg('Could not read recent commit authors');
       this.authorSuggestions = [];
     } finally {
       this.loadingSuggestions = false;
@@ -1466,7 +1554,7 @@ export class GnCommitPanel extends LitElement {
     if (this.coAuthors.some((c) => sameCoAuthor(c, coAuthor))) {
       // Adding the same co-author twice is a no-op — say so rather than
       // leaving the click looking broken.
-      this.coAuthorError = `${coAuthor.email} is already a co-author`;
+      this.coAuthorError = msg(str`${coAuthor.email} is already a co-author`);
       return false;
     }
     this.coAuthors = [...this.coAuthors, coAuthor];
@@ -1482,7 +1570,7 @@ export class GnCommitPanel extends LitElement {
   private handleAddCoAuthor(): void {
     const { coAuthor, error } = parseCoAuthorInput(this.coAuthorInput);
     if (!coAuthor) {
-      this.coAuthorError = error ?? 'Invalid co-author';
+      this.coAuthorError = error ?? msg('Invalid co-author');
       return;
     }
     if (this.addCoAuthor(coAuthor)) {
@@ -1605,12 +1693,15 @@ export class GnCommitPanel extends LitElement {
       // path: an unborn HEAD, or a ref deleted out from under the app.)
       this.amend = false;
       showToast(
-        result.error?.message ?? 'Could not read the last commit to amend',
-        'error'
+        result.error?.message ?? msg('Could not read the last commit to amend'),
+        'error',
       );
     } catch (err) {
       console.error('Failed to fetch last commit:', err);
-      showToast(`Failed to fetch last commit: ${err instanceof Error ? err.message : String(err)}`, 'error');
+      showToast(
+        msg(str`Failed to fetch last commit: ${err instanceof Error ? err.message : String(err)}`),
+        'error',
+      );
     }
   }
 
@@ -1628,6 +1719,20 @@ export class GnCommitPanel extends LitElement {
       bubbles: true,
       composed: true,
     }));
+  }
+
+  /**
+   * Flip the AI prompt language from the header shortcut.
+   *
+   * This writes the same persisted setting the Settings dialog does, so it
+   * announces `ai-settings-changed` exactly like that dialog: whichever surface
+   * the user acted on, every AI consumer hears the same event. The panel's own
+   * mirror is refreshed by its settings-store subscription.
+   */
+  private handlePromptLanguageSelect(language: AiPromptLanguage): void {
+    this.aiPromptLanguage = language;
+    settingsStore.getState().setAiPromptLanguage(language);
+    window.dispatchEvent(new CustomEvent('ai-settings-changed'));
   }
 
   private async handleGenerateMessage(): Promise<void> {
@@ -1658,10 +1763,10 @@ export class GnCommitPanel extends LitElement {
 
         this.description = result.data.body ?? '';
       } else {
-        this.generationError = result.error?.message ?? 'Failed to generate message';
+        this.generationError = result.error?.message ?? msg('Failed to generate message');
       }
     } catch (err) {
-      this.generationError = err instanceof Error ? err.message : 'Unknown error';
+      this.generationError = err instanceof Error ? err.message : msg('Unknown error');
     } finally {
       this.isGenerating = false;
     }
@@ -1681,10 +1786,10 @@ export class GnCommitPanel extends LitElement {
         this.vibeCheckResult = result.data;
         this.showVibeDetails = result.data.findings.length > 0;
       } else {
-        this.generationError = result.error?.message ?? 'Vibe check failed';
+        this.generationError = result.error?.message ?? msg('Vibe check failed');
       }
     } catch (err) {
-      this.generationError = err instanceof Error ? err.message : 'Vibe check failed';
+      this.generationError = err instanceof Error ? err.message : msg('Vibe check failed');
     } finally {
       this.isAnalyzing = false;
     }
@@ -1705,13 +1810,13 @@ export class GnCommitPanel extends LitElement {
         this.showSplitDetails = result.data.shouldSplit;
         if (!result.data.shouldSplit) {
           // Success path with nothing to render otherwise — give explicit feedback.
-          showToast('Staged changes look cohesive — no split needed', 'info');
+          showToast(msg('Staged changes look cohesive — no split needed'), 'info');
         }
       } else {
-        this.generationError = result.error?.message ?? 'Split check failed';
+        this.generationError = result.error?.message ?? msg('Split check failed');
       }
     } catch (err) {
-      this.generationError = err instanceof Error ? err.message : 'Split check failed';
+      this.generationError = err instanceof Error ? err.message : msg('Split check failed');
     } finally {
       this.isAnalyzingSplit = false;
     }
@@ -1727,7 +1832,7 @@ export class GnCommitPanel extends LitElement {
     const groupSet = new Set(files);
     const status = await gitService.getStatus(this.repositoryPath);
     if (!status.success) {
-      showToast(status.error?.message ?? 'Failed to isolate group', 'error');
+      showToast(status.error?.message ?? msg('Failed to isolate group'), 'error');
       return;
     }
     const otherStaged = (status.data ?? [])
@@ -1737,17 +1842,17 @@ export class GnCommitPanel extends LitElement {
     if (otherStaged.length > 0) {
       const unstage = await gitService.unstageFiles(this.repositoryPath, { paths: otherStaged });
       if (!unstage.success) {
-        showToast(unstage.error?.message ?? 'Failed to isolate group', 'error');
+        showToast(unstage.error?.message ?? msg('Failed to isolate group'), 'error');
         return;
       }
     }
 
     const result = await gitService.stageFiles(this.repositoryPath, { paths: files });
     if (result.success) {
-      showToast(`Staged ${files.length} files`, 'success');
+      showToast(msg(str`Staged ${files.length} files`), 'success');
       window.dispatchEvent(new CustomEvent('status-refresh'));
     } else {
-      showToast(result.error?.message ?? 'Failed to stage files', 'error');
+      showToast(result.error?.message ?? msg('Failed to stage files'), 'error');
     }
   }
 
@@ -1794,7 +1899,7 @@ export class GnCommitPanel extends LitElement {
         this.saveToHistory(message);
 
         if (this.repositoryPath === repoPath) {
-          this.success = `Created commit ${result.data?.shortId}`;
+          this.success = msg(str`Created commit ${result.data?.shortId}`);
           this.summary = '';
           this.description = '';
           this.amend = false;
@@ -1826,8 +1931,8 @@ export class GnCommitPanel extends LitElement {
           // is no longer showing it.
           this.draftCache.delete(repoPath);
           showToast(
-            `Created commit ${result.data?.shortId} in ${this.repoLabel(repoPath)}`,
-            'success'
+            msg(str`Created commit ${result.data?.shortId} in ${this.repoLabel(repoPath)}`),
+            'success',
           );
         }
 
@@ -1851,10 +1956,16 @@ export class GnCommitPanel extends LitElement {
         // A declined confirm — the pushed-amend warning, or the network gate —
         // is the user's own decision, already accounted for. Showing it in the
         // red error banner reports their click back to them as a failure.
-        this.reportCommitFailure(repoPath, result.error?.message ?? 'Failed to create commit');
+        this.reportCommitFailure(
+          repoPath,
+          result.error?.message ?? msg('Failed to create commit'),
+        );
       }
     } catch (err) {
-      this.reportCommitFailure(repoPath, err instanceof Error ? err.message : 'Unknown error');
+      this.reportCommitFailure(
+        repoPath,
+        err instanceof Error ? err.message : msg('Unknown error'),
+      );
     } finally {
       this.isCommitting = false;
       releaseRefOp(repoPath);
@@ -1871,8 +1982,8 @@ export class GnCommitPanel extends LitElement {
     if (trailers.length === 0) return nothing;
 
     return html`
-      <div class="trailers-preview" role="status" aria-label="Trailers added to this commit">
-        <span class="trailers-title">Trailers</span>
+      <div class="trailers-preview" role="status" aria-label=${msg('Trailers added to this commit')}>
+        <span class="trailers-title">${msg('Trailers')}</span>
         ${trailers.map((trailer) => {
           const coAuthor = this.coAuthors.find(
             (c) => formatTrailer(coAuthoredByTrailer(c)) === formatTrailer(trailer)
@@ -1882,10 +1993,10 @@ export class GnCommitPanel extends LitElement {
               <span>${formatTrailer(trailer)}</span>
               <button
                 class="trailer-remove"
-                title=${coAuthor ? `Remove ${coAuthor.email}` : 'Turn off sign-off'}
+                title=${coAuthor ? msg(str`Remove ${coAuthor.email}`) : msg('Turn off sign-off')}
                 aria-label=${coAuthor
-                  ? `Remove co-author ${coAuthor.name} <${coAuthor.email}>`
-                  : 'Turn off sign-off'}
+                  ? msg(str`Remove co-author ${coAuthor.name} <${coAuthor.email}>`)
+                  : msg('Turn off sign-off')}
                 @click=${() => (coAuthor ? this.handleRemoveCoAuthor(coAuthor) : (this.signOff = false))}
               >
                 ✕
@@ -1900,24 +2011,24 @@ export class GnCommitPanel extends LitElement {
   private renderCoAuthorDropdown() {
     return html`
       <div class="coauthor-dropdown" id="coauthor-dropdown">
-        <div class="coauthor-dropdown-header">Add co-author</div>
+        <div class="coauthor-dropdown-header">${msg('Add co-author')}</div>
         <div class="coauthor-entry">
           <input
             type="text"
             class="coauthor-input"
-            aria-label="Co-author name and email"
-            placeholder="Name &lt;email@example.com&gt;"
+            aria-label=${msg('Co-author name and email')}
+            placeholder=${msg('Name <email@example.com>')}
             .value=${this.coAuthorInput}
             @input=${this.handleCoAuthorInput}
             @keydown=${this.handleCoAuthorKeyDown}
           />
-          <button class="coauthor-add-btn" @click=${this.handleAddCoAuthor}>Add</button>
+          <button class="coauthor-add-btn" @click=${this.handleAddCoAuthor}>${msg('Add')}</button>
         </div>
         ${this.coAuthorError
           ? html`<div class="coauthor-error" role="alert">${this.coAuthorError}</div>`
           : nothing}
         ${this.loadingSuggestions
-          ? html`<div class="coauthor-empty">Loading recent authors...</div>`
+          ? html`<div class="coauthor-empty">${msg('Loading recent authors...')}</div>`
           : this.suggestionsError
             ? html`<div class="coauthor-error" role="alert">${this.suggestionsError}</div>`
             : this.visibleSuggestions.length > 0
@@ -1933,7 +2044,7 @@ export class GnCommitPanel extends LitElement {
                     </button>
                   `
                 )
-              : html`<div class="coauthor-empty">No other recent authors in this repository</div>`}
+              : html`<div class="coauthor-empty">${msg('No other recent authors in this repository')}</div>`}
       </div>
     `;
   }
@@ -1949,18 +2060,45 @@ export class GnCommitPanel extends LitElement {
 
     return html`
       <div class="header">
-        <span>Commit</span>
+        <span>${msg('Commit')}</span>
         <span class="staged-count ${this.stagedCount > 0 ? 'has-staged' : ''}">
-          ${this.stagedCount} staged ${this.stagedCount === 1 ? 'file' : 'files'}
+          ${this.stagedCount === 1
+            ? msg(str`${this.stagedCount} staged file`)
+            : msg(str`${this.stagedCount} staged files`)}
         </span>
         <div class="header-actions">
+          ${this.showPromptLanguageSwitch
+            ? html`
+                <div
+                  class="prompt-language-switch"
+                  role="group"
+                  aria-label=${msg('AI prompt language')}
+                >
+                  ${AI_PROMPT_LANGUAGES.map(
+                    (option) => html`
+                      <button
+                        class="lang-option ${this.aiPromptLanguage === option.value ? 'active' : ''}"
+                        data-lang=${option.value}
+                        aria-pressed=${this.aiPromptLanguage === option.value ? 'true' : 'false'}
+                        @click=${() => this.handlePromptLanguageSelect(option.value)}
+                      >${option.label}</button>
+                    `
+                  )}
+                </div>
+              `
+            : nothing}
           <button
             class="generate-btn ${this.aiAvailable ? 'ai-ready' : ''}"
             @click=${this.aiAvailable ? this.handleGenerateMessage : this.handleOpenSettings}
             ?disabled=${this.isGenerating || (this.aiAvailable && this.stagedCount === 0)}
             title=${this.aiAvailable
-              ? (this.stagedCount === 0 ? 'Stage changes to generate a commit message' : 'Generate commit message using AI')
-              : (this.aiUnavailableReason || (this.stagedCount > 0 ? 'Configure an AI provider in Settings' : 'Stage changes and configure AI to generate commit messages'))}
+              ? this.stagedCount === 0
+                ? msg('Stage changes to generate a commit message')
+                : msg('Generate commit message using AI')
+              : this.aiUnavailableReason ||
+                (this.stagedCount > 0
+                  ? msg('Configure an AI provider in Settings')
+                  : msg('Stage changes and configure AI to generate commit messages'))}
           >
             ${this.isGenerating ? html`
               <svg class="spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1977,7 +2115,7 @@ export class GnCommitPanel extends LitElement {
           <button
             class="icon-btn"
             @click=${this.handleSaveTemplate}
-            title="Save as template"
+            title=${msg('Save as template')}
             ?disabled=${!this.summary.trim()}
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1996,7 +2134,7 @@ export class GnCommitPanel extends LitElement {
             .value=${this.selectedTemplateId}
             @change=${this.handleTemplateChange}
           >
-            <option value="">Select template...</option>
+            <option value="">${msg('Select template...')}</option>
             ${this.templates.map(t => html`
               <option value=${t.id}>${t.name}</option>
             `)}
@@ -2011,17 +2149,17 @@ export class GnCommitPanel extends LitElement {
               class="check-btn"
               @click=${this.handleVibeCheck}
               ?disabled=${this.isAnalyzing}
-              title="Check staged changes for secrets, complexity, and quality issues"
+              title=${msg('Check staged changes for secrets, complexity, and quality issues')}
             >
-              ${this.isAnalyzing ? 'Checking...' : html`<svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0zm3.28 5.78l-4 4a.75.75 0 0 1-1.06 0l-2-2a.75.75 0 1 1 1.06-1.06L6.75 8.19l3.47-3.47a.75.75 0 1 1 1.06 1.06z"/></svg> Vibe Check`}
+              ${this.isAnalyzing ? msg('Checking...') : html`<svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0zm3.28 5.78l-4 4a.75.75 0 0 1-1.06 0l-2-2a.75.75 0 1 1 1.06-1.06L6.75 8.19l3.47-3.47a.75.75 0 1 1 1.06 1.06z"/></svg> ${msg('Vibe Check')}`}
             </button>
             <button
               class="check-btn"
               @click=${this.handleSuggestSplits}
               ?disabled=${this.isAnalyzingSplit}
-              title="Check if staged changes should be split into separate commits"
+              title=${msg('Check if staged changes should be split into separate commits')}
             >
-              ${this.isAnalyzingSplit ? 'Analyzing...' : html`<svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M5 3.25a.25.25 0 0 1 .25-.25h5.5a.25.25 0 0 1 .25.25v5.5a.25.25 0 0 1-.25.25h-5.5a.25.25 0 0 1-.25-.25v-5.5zM5 11.75a.25.25 0 0 1 .25-.25h5.5a.25.25 0 0 1 .25.25v1.5a.25.25 0 0 1-.25.25h-5.5a.25.25 0 0 1-.25-.25v-1.5z"/></svg> Split Check`}
+              ${this.isAnalyzingSplit ? msg('Analyzing...') : html`<svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M5 3.25a.25.25 0 0 1 .25-.25h5.5a.25.25 0 0 1 .25.25v5.5a.25.25 0 0 1-.25.25h-5.5a.25.25 0 0 1-.25-.25v-5.5zM5 11.75a.25.25 0 0 1 .25-.25h5.5a.25.25 0 0 1 .25.25v1.5a.25.25 0 0 1-.25.25h-5.5a.25.25 0 0 1-.25-.25v-1.5z"/></svg> ${msg('Split Check')}`}
             </button>
           </div>
 
@@ -2033,8 +2171,7 @@ export class GnCommitPanel extends LitElement {
               </div>
               ${this.vibeCheckResult.aiAnalysisRan === false ? html`
                 <div class="vibe-ai-warning" role="status">
-                  AI analysis did not run, so only the secret scan was
-                  performed${this.vibeCheckResult.aiError ? html`: ${this.vibeCheckResult.aiError}` : nothing}
+                  ${msg('AI analysis did not run, so only the secret scan was performed')}${this.vibeCheckResult.aiError ? html`: ${this.vibeCheckResult.aiError}` : nothing}
                 </div>
               ` : nothing}
               ${this.showVibeDetails && this.vibeCheckResult.findings.length > 0 ? html`
@@ -2055,8 +2192,8 @@ export class GnCommitPanel extends LitElement {
             <div class="split-result">
               <div class="split-header" @click=${() => { this.showSplitDetails = !this.showSplitDetails; }}>
                 <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M5 3.25a.25.25 0 0 1 .25-.25h5.5a.25.25 0 0 1 .25.25v5.5a.25.25 0 0 1-.25.25h-5.5a.25.25 0 0 1-.25-.25v-5.5z"/></svg>
-                <span>Split into ${this.splitSuggestion.groups.length} commits recommended</span>
-                <button class="dismiss-btn" @click=${(e: Event) => { e.stopPropagation(); this.splitSuggestion = null; }}>Dismiss</button>
+                <span>${msg(str`Split into ${this.splitSuggestion.groups.length} commits recommended`)}</span>
+                <button class="dismiss-btn" @click=${(e: Event) => { e.stopPropagation(); this.splitSuggestion = null; }}>${msg('Dismiss')}</button>
               </div>
               ${this.showSplitDetails ? html`
                 <div class="split-groups">
@@ -2065,7 +2202,7 @@ export class GnCommitPanel extends LitElement {
                     <div class="split-group">
                       <div class="group-header">
                         <strong>${g.label}</strong>
-                        <button class="stage-group-btn" @click=${() => this.handleStageGroup(g.files)}>Stage</button>
+                        <button class="stage-group-btn" @click=${() => this.handleStageGroup(g.files)}>${msg('Stage')}</button>
                       </div>
                       <div class="group-message">${g.suggestedMessage}</div>
                       <div class="group-files">${g.files.join(', ')}</div>
@@ -2098,7 +2235,7 @@ export class GnCommitPanel extends LitElement {
           <input
             type="text"
             class="scope-input"
-            placeholder="scope (optional)"
+            placeholder=${msg('scope (optional)')}
             .value=${this.scope}
             @input=${this.handleScopeInput}
           />
@@ -2108,7 +2245,9 @@ export class GnCommitPanel extends LitElement {
       <div class="message-container">
         <textarea
           class="summary-input ${summaryOverLimit ? 'over-limit' : ''}"
-          placeholder="${this.conventionalMode ? 'Description (required)' : 'Summary (required)'}"
+          placeholder=${this.conventionalMode
+            ? msg('Description (required)')
+            : msg('Summary (required)')}
           rows="1"
           .value=${this.summary}
           @input=${this.handleSummaryInput}
@@ -2123,7 +2262,7 @@ export class GnCommitPanel extends LitElement {
             <button
               class="history-btn"
               @click=${this.handleHistoryToggle}
-              title="Recent commit messages"
+              title=${msg('Recent commit messages')}
               ?disabled=${this.commitHistory.length === 0}
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -2134,22 +2273,22 @@ export class GnCommitPanel extends LitElement {
             ${this.showHistory ? html`
               <div class="history-dropdown">
                 <div class="history-dropdown-header">
-                  <span>Recent messages</span>
-                  <button class="history-clear-btn" @click=${this.handleClearHistory}>Clear</button>
+                  <span>${msg('Recent messages')}</span>
+                  <button class="history-clear-btn" @click=${this.handleClearHistory}>${msg('Clear')}</button>
                 </div>
                 ${this.commitHistory.length > 0
                   ? this.commitHistory.map(
-                      (msg) => html`
+                      (historyMessage) => html`
                         <button
                           class="history-item"
-                          @click=${() => this.handleHistorySelect(msg)}
-                          title=${msg}
+                          @click=${() => this.handleHistorySelect(historyMessage)}
+                          title=${historyMessage}
                         >
-                          ${msg.split('\n')[0]}
+                          ${historyMessage.split('\n')[0]}
                         </button>
-                      `
+                      `,
                     )
-                  : html`<div class="history-empty">No recent messages</div>`}
+                  : html`<div class="history-empty">${msg('No recent messages')}</div>`}
               </div>
             ` : nothing}
           </div>
@@ -2157,7 +2296,7 @@ export class GnCommitPanel extends LitElement {
 
         <textarea
           class="description-input"
-          placeholder="Body (optional)"
+          placeholder=${msg('Body (optional)')}
           .value=${this.description}
           @input=${this.handleDescriptionInput}
           @keydown=${this.handleKeyDown}
@@ -2171,7 +2310,7 @@ export class GnCommitPanel extends LitElement {
             .checked=${this.amend}
             @change=${this.handleAmendToggle}
           />
-          Amend${this.amend && this.lastCommit ? ` (${this.lastCommit.shortId})` : ''}
+          ${msg('Amend')}${this.amend && this.lastCommit ? ` (${this.lastCommit.shortId})` : ''}
         </label>
 
         <label class="conventional-toggle">
@@ -2180,16 +2319,16 @@ export class GnCommitPanel extends LitElement {
             .checked=${this.conventionalMode}
             @change=${this.handleConventionalToggle}
           />
-          Conventional
+          ${msg('Conventional')}
         </label>
 
         <label
           class="signoff-toggle ${identityMissing ? 'disabled' : ''}"
           title=${identityMissing
-            ? 'No git identity configured — set user.name and user.email to sign off'
+            ? msg('No git identity configured — set user.name and user.email to sign off')
             : this.hasIdentity
-              ? `Add Signed-off-by: ${this.identityName} <${this.identityEmail}>`
-              : 'Add a Signed-off-by trailer using your git identity'}
+              ? msg(str`Add Signed-off-by: ${this.identityName} <${this.identityEmail}>`)
+              : msg('Add a Signed-off-by trailer using your git identity')}
         >
           <input
             type="checkbox"
@@ -2197,18 +2336,18 @@ export class GnCommitPanel extends LitElement {
             ?disabled=${identityMissing}
             @change=${this.handleSignOffToggle}
           />
-          Sign off
+          ${msg('Sign off')}
         </label>
 
         <div class="coauthor-wrapper">
           <button
             class="coauthor-btn"
             @click=${this.handleCoAuthorsToggle}
-            title="Add Co-authored-by trailers"
+            title=${msg('Add Co-authored-by trailers')}
             aria-expanded=${this.showCoAuthors ? 'true' : 'false'}
             aria-controls="coauthor-dropdown"
           >
-            Co-authors${this.coAuthors.length > 0 ? ` (${this.coAuthors.length})` : ''}
+            ${msg('Co-authors')}${this.coAuthors.length > 0 ? ` (${this.coAuthors.length})` : ''}
           </button>
           ${this.showCoAuthors ? this.renderCoAuthorDropdown() : nothing}
         </div>
@@ -2216,8 +2355,8 @@ export class GnCommitPanel extends LitElement {
 
       ${identityMissing ? html`
         <div class="trailer-hint" role="status">
-          <span>No git identity configured, so commits cannot be signed off.</span>
-          <button @click=${this.handleOpenGitConfig}>Configure identity</button>
+          <span>${msg('No git identity configured, so commits cannot be signed off.')}</span>
+          <button @click=${this.handleOpenGitConfig}>${msg('Configure identity')}</button>
         </div>
       ` : nothing}
 
@@ -2231,12 +2370,12 @@ export class GnCommitPanel extends LitElement {
           class="commit-btn"
           ?disabled=${!this.canCommit}
           @click=${this.handleCommit}
-          title="Commit staged changes (${navigator.platform.includes('Mac') ? '⌘' : 'Ctrl'}+Enter)"
+          title=${msg(str`Commit staged changes (${navigator.platform.includes('Mac') ? '⌘' : 'Ctrl'}+Enter)`)}
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="20 6 9 17 4 12"></polyline>
           </svg>
-          ${this.isCommitting ? 'Committing...' : 'Commit'}
+          ${this.isCommitting ? msg('Committing...') : msg('Commit')}
         </button>
       </div>
     `;

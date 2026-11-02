@@ -5,6 +5,7 @@
 
 import { LitElement, html, css, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
+import { localized, msg, str } from '@lit/localize';
 import { sharedStyles } from '../../styles/shared-styles.ts';
 import * as gitService from '../../services/git.service.ts';
 import { invokeCommand } from '../../services/tauri-api.ts';
@@ -55,6 +56,7 @@ const GITLAB_PIPELINE_PAGE_SIZE = 20;
 type TabType = 'connection' | 'merge-requests' | 'issues' | 'pipelines' | 'create-mr' | 'create-issue';
 
 @customElement('gn-gitlab-dialog')
+@localized()
 export class GnGitLabDialog extends LitElement {
   static styles = [
     sharedStyles,
@@ -865,7 +867,7 @@ export class GnGitLabDialog extends LitElement {
         // A failed/denied sign-in clears the pending spinner — surface the error
         // so the user isn't left with no feedback (matches the other providers).
         if (state.status === 'error') {
-          this.error = state.error ?? 'GitLab sign-in failed';
+          this.error = state.error ?? msg('GitLab sign-in failed');
           showToast(this.error, 'error');
           // The flow is over and can no longer emit `oauth-complete`, so release
           // the pinned target — otherwise a later completion would be attributed
@@ -1021,7 +1023,7 @@ export class GnGitLabDialog extends LitElement {
       }
     } catch (err) {
       if (generation !== this.loadGeneration) return;
-      this.error = err instanceof Error ? err.message : 'Failed to load data';
+      this.error = err instanceof Error ? err.message : msg('Failed to load data');
     } finally {
       if (generation === this.loadGeneration) {
         this.isLoading = false;
@@ -1161,7 +1163,7 @@ export class GnGitLabDialog extends LitElement {
     } else if (!result.success) {
       // A genuine backend failure (not merely "this isn't a GitLab repo", which
       // surfaces as success with null data) must not fail silently.
-      this.error = result.error?.message ?? 'Failed to detect GitLab repository';
+      this.error = result.error?.message ?? msg('Failed to detect GitLab repository');
     }
   }
 
@@ -1193,10 +1195,10 @@ export class GnGitLabDialog extends LitElement {
       if (result.success && result.data) {
         this.mergeRequests = result.data;
       } else {
-        this.error = result.error?.message ?? 'Failed to load merge requests';
+        this.error = result.error?.message ?? msg('Failed to load merge requests');
       }
     } catch (err) {
-      this.error = err instanceof Error ? err.message : 'Failed to load merge requests';
+      this.error = err instanceof Error ? err.message : msg('Failed to load merge requests');
     } finally {
       this.isLoading = false;
     }
@@ -1236,11 +1238,11 @@ export class GnGitLabDialog extends LitElement {
           [mrIid]: result.data,
         };
       } else if (!gitService.isNetworkGateRefusal(result.error)) {
-        this.error = result.error?.message ?? 'Failed to load MR comments';
+        this.error = result.error?.message ?? msg('Failed to load MR comments');
         showToast(this.error, 'error');
       }
     } catch (err) {
-      this.error = err instanceof Error ? err.message : 'Failed to load MR comments';
+      this.error = err instanceof Error ? err.message : msg('Failed to load MR comments');
       showToast(this.error, 'error');
     } finally {
       this.loadingCommentsForPr = null;
@@ -1274,14 +1276,14 @@ export class GnGitLabDialog extends LitElement {
         this.commentBodyInput = '';
         this.commentFilePathInput = '';
         this.commentLineInput = '';
-        showToast('Comment posted', 'success');
+        showToast(msg('Comment posted'), 'success');
         await this.loadPrComments(mrIid);
       } else if (!gitService.isNetworkGateRefusal(result.error)) {
-        this.error = result.error?.message ?? 'Failed to post MR comment';
+        this.error = result.error?.message ?? msg('Failed to post MR comment');
         showToast(this.error, 'error');
       }
     } catch (err) {
-      this.error = err instanceof Error ? err.message : 'Failed to post MR comment';
+      this.error = err instanceof Error ? err.message : msg('Failed to post MR comment');
       showToast(this.error, 'error');
     } finally {
       this.postingCommentForPr = null;
@@ -1305,10 +1307,10 @@ export class GnGitLabDialog extends LitElement {
       if (result.success && result.data) {
         this.issues = result.data;
       } else if (!result.success) {
-        this.error = result.error?.message ?? 'Failed to load issues';
+        this.error = result.error?.message ?? msg('Failed to load issues');
       }
     } catch (err) {
-      this.error = err instanceof Error ? err.message : 'Failed to load issues';
+      this.error = err instanceof Error ? err.message : msg('Failed to load issues');
     }
   }
 
@@ -1328,10 +1330,10 @@ export class GnGitLabDialog extends LitElement {
       if (result.success && result.data) {
         this.pipelines = result.data;
       } else if (!result.success) {
-        this.error = result.error?.message ?? 'Failed to load pipelines';
+        this.error = result.error?.message ?? msg('Failed to load pipelines');
       }
     } catch (err) {
-      this.error = err instanceof Error ? err.message : 'Failed to load pipelines';
+      this.error = err instanceof Error ? err.message : msg('Failed to load pipelines');
     }
   }
 
@@ -1352,10 +1354,10 @@ export class GnGitLabDialog extends LitElement {
         // drop selections that no longer exist so they can't be submitted invisibly.
         this.createIssueLabels = this.createIssueLabels.filter(l => this.labels.includes(l));
       } else if (!result.success) {
-        this.error = result.error?.message ?? 'Failed to load labels';
+        this.error = result.error?.message ?? msg('Failed to load labels');
       }
     } catch (err) {
-      this.error = err instanceof Error ? err.message : 'Failed to load labels';
+      this.error = err instanceof Error ? err.message : msg('Failed to load labels');
     }
   }
 
@@ -1371,7 +1373,7 @@ export class GnGitLabDialog extends LitElement {
       // First verify the token works by checking connection
       const verifyResult = await gitService.checkGitLabConnectionWithToken(instanceUrl, tokenToSave);
       if (!verifyResult.success || !verifyResult.data?.connected) {
-        this.error = verifyResult.error?.message ?? 'Invalid token or connection failed';
+        this.error = verifyResult.error?.message ?? msg('Invalid token or connection failed');
         return;
       }
 
@@ -1427,7 +1429,7 @@ export class GnGitLabDialog extends LitElement {
         await this.loadAllData();
       }
     } catch (err) {
-      this.error = err instanceof Error ? err.message : 'Failed to connect';
+      this.error = err instanceof Error ? err.message : msg('Failed to connect');
       this.tokenInput = tokenToSave;
     } finally {
       this.isLoading = false;
@@ -1454,7 +1456,7 @@ export class GnGitLabDialog extends LitElement {
       this.labels = [];
       this.createIssueLabels = [];
     } catch (err) {
-      this.error = err instanceof Error ? err.message : 'Failed to disconnect';
+      this.error = err instanceof Error ? err.message : msg('Failed to disconnect');
       showToast(this.error, 'error');
     } finally {
       this.isLoading = false;
@@ -1465,10 +1467,10 @@ export class GnGitLabDialog extends LitElement {
     if (!this.selectedAccountId) return;
 
     const selected = this.accounts.find((a) => a.id === this.selectedAccountId);
-    const accountName = selected?.name ?? 'this account';
+    const accountName = selected?.name ?? msg('this account');
     const confirmed = await showConfirm(
-      'Delete GitLab Integration',
-      `Delete ${accountName}? The stored token will be removed and any profile that uses this account as its default will lose that reference.`,
+      msg('Delete GitLab Integration'),
+      msg(str`Delete ${accountName}? The stored token will be removed and any profile that uses this account as its default will lose that reference.`),
       'warning',
     );
     if (!confirmed) return;
@@ -1498,12 +1500,12 @@ export class GnGitLabDialog extends LitElement {
         await credentialService.deleteAccountToken('gitlab', accountId);
       } catch (tokenErr) {
         // M7/M10: surface partial failure instead of swallowing it.
-        const msg =
+        const message =
           tokenErr instanceof Error
-            ? `Account deleted, but its stored token could not be removed: ${tokenErr.message}`
-            : 'Account deleted, but its stored token could not be removed.';
-        this.error = msg;
-        showToast(msg, 'error');
+            ? msg(str`Account deleted, but its stored token could not be removed: ${tokenErr.message}`)
+            : msg('Account deleted, but its stored token could not be removed.');
+        this.error = message;
+        showToast(message, 'error');
       }
 
       if (this.accounts.length > 0) {
@@ -1511,9 +1513,9 @@ export class GnGitLabDialog extends LitElement {
       }
     } catch (err) {
       // M7: error path was previously console-only (silent). Surface to the user.
-      const msg = err instanceof Error ? err.message : 'Failed to delete GitLab integration';
-      this.error = msg;
-      showToast(msg, 'error');
+      const message = err instanceof Error ? err.message : msg('Failed to delete GitLab integration');
+      this.error = message;
+      showToast(message, 'error');
     } finally {
       this.isLoading = false;
     }
@@ -1525,7 +1527,7 @@ export class GnGitLabDialog extends LitElement {
   private async handleStartOAuth(): Promise<void> {
     const clientId = getClientId('gitlab');
     if (!clientId) {
-      this.error = 'GitLab OAuth is not configured. Please use a Personal Access Token.';
+      this.error = msg('GitLab OAuth is not configured. Please use a Personal Access Token.');
       this.authMethod = 'pat';
       return;
     }
@@ -1613,13 +1615,13 @@ export class GnGitLabDialog extends LitElement {
       });
 
       if (!verifyResult.success || !verifyResult.data?.connected) {
-        this.error = verifyResult.error?.message ?? 'OAuth token verification failed';
+        this.error = verifyResult.error?.message ?? msg('OAuth token verification failed');
         return;
       }
 
       const user = verifyResult.data.user;
       if (!targetAccountExists()) {
-        this.error = 'The GitLab account was removed before sign-in completed. Please sign in again.';
+        this.error = msg('The GitLab account was removed before sign-in completed. Please sign in again.');
         showToast(this.error, 'error');
         return;
       }
@@ -1656,7 +1658,7 @@ export class GnGitLabDialog extends LitElement {
           // Deleted between the existence check and the write — don't leave an
           // orphaned credential behind for an account that no longer exists.
           await credentialService.deleteAccountToken('gitlab', existingAccount.id);
-          this.error = 'The GitLab account was removed before sign-in completed. Please sign in again.';
+          this.error = msg('The GitLab account was removed before sign-in completed. Please sign in again.');
           showToast(this.error, 'error');
           return;
         }
@@ -1734,7 +1736,9 @@ export class GnGitLabDialog extends LitElement {
         // keep describing the account they are looking at now.
         this.oauthState = { status: 'idle' };
         showToast(
-          user?.username ? `Connected GitLab account @${user.username}` : 'Connected GitLab account',
+          user?.username
+            ? msg(str`Connected GitLab account @${user.username}`)
+            : msg('Connected GitLab account'),
           'success'
         );
         return;
@@ -1752,7 +1756,9 @@ export class GnGitLabDialog extends LitElement {
       // connection isn't a silent no-op.
       if (!wasOpen) {
         showToast(
-          user?.username ? `Connected GitLab account @${user.username}` : 'Connected GitLab account',
+          user?.username
+            ? msg(str`Connected GitLab account @${user.username}`)
+            : msg('Connected GitLab account'),
           'success'
         );
       }
@@ -1765,7 +1771,7 @@ export class GnGitLabDialog extends LitElement {
       if (targetAccountId && !targetAccountExists()) {
         await credentialService.deleteAccountToken('gitlab', targetAccountId);
       }
-      this.error = err instanceof Error ? err.message : 'Failed to complete OAuth';
+      this.error = err instanceof Error ? err.message : msg('Failed to complete OAuth');
     } finally {
       this.isLoading = false;
     }
@@ -1795,7 +1801,7 @@ export class GnGitLabDialog extends LitElement {
     if (result.success && result.data) {
       this.createMrDescription = result.data.body;
     } else {
-      showToast(result.error?.message ?? 'Failed to generate description', 'error');
+      showToast(result.error?.message ?? msg('Failed to generate description'), 'error');
     }
 
     this.generatingMrDescription = false;
@@ -1832,12 +1838,12 @@ export class GnGitLabDialog extends LitElement {
         this.createMrDraft = false;
         this.activeTab = 'merge-requests';
         await this.loadMergeRequests();
-        showToast('Merge request created successfully', 'success');
+        showToast(msg('Merge request created successfully'), 'success');
       } else {
-        this.error = result.error?.message ?? 'Failed to create merge request';
+        this.error = result.error?.message ?? msg('Failed to create merge request');
       }
     } catch (err) {
-      this.error = err instanceof Error ? err.message : 'Failed to create merge request';
+      this.error = err instanceof Error ? err.message : msg('Failed to create merge request');
     } finally {
       this.isLoading = false;
     }
@@ -1870,12 +1876,12 @@ export class GnGitLabDialog extends LitElement {
         this.createIssueLabels = [];
         this.activeTab = 'issues';
         await this.loadIssues();
-        showToast('Issue created successfully', 'success');
+        showToast(msg('Issue created successfully'), 'success');
       } else {
-        this.error = result.error?.message ?? 'Failed to create issue';
+        this.error = result.error?.message ?? msg('Failed to create issue');
       }
     } catch (err) {
-      this.error = err instanceof Error ? err.message : 'Failed to create issue';
+      this.error = err instanceof Error ? err.message : msg('Failed to create issue');
     } finally {
       this.isLoading = false;
     }
@@ -1901,10 +1907,10 @@ export class GnGitLabDialog extends LitElement {
     const diff = now.getTime() - date.getTime();
     const days = Math.floor(diff / (1000 * 60 * 60 * 24));
 
-    if (days === 0) return 'today';
-    if (days === 1) return 'yesterday';
-    if (days < 7) return `${days} days ago`;
-    if (days < 30) return `${Math.floor(days / 7)} weeks ago`;
+    if (days === 0) return msg('today');
+    if (days === 1) return msg('yesterday');
+    if (days < 7) return msg(str`${days} days ago`);
+    if (days < 30) return msg(str`${Math.floor(days / 7)} weeks ago`);
     return date.toLocaleDateString();
   }
 
@@ -1931,8 +1937,8 @@ export class GnGitLabDialog extends LitElement {
             <div class="user-login">@${user.username}</div>
           </div>
           <div class="connection-actions">
-            <button class="btn btn-danger" @click=${this.handleDisconnect} ?disabled=${this.isLoading}>Disconnect</button>
-            <button class="btn btn-danger-outline" @click=${this.handleDeleteIntegration} ?disabled=${this.isLoading}>Delete</button>
+            <button class="btn btn-danger" @click=${this.handleDisconnect} ?disabled=${this.isLoading}>${msg('Disconnect')}</button>
+            <button class="btn btn-danger-outline" @click=${this.handleDeleteIntegration} ?disabled=${this.isLoading}>${msg('Delete')}</button>
           </div>
         </div>
       `;
@@ -1944,7 +1950,7 @@ export class GnGitLabDialog extends LitElement {
     return html`
       <div class="token-form">
         <div class="form-group">
-          <label>GitLab Instance URL</label>
+          <label>${msg('GitLab Instance URL')}</label>
           <input
             type="text"
             placeholder="https://gitlab.com"
@@ -1953,7 +1959,7 @@ export class GnGitLabDialog extends LitElement {
             ?disabled=${isOAuthPending}
           />
           <span class="help-text">
-            Use https://gitlab.com for GitLab.com or your self-hosted instance URL
+            ${msg('Use https://gitlab.com for GitLab.com or your self-hosted instance URL')}
           </span>
         </div>
 
@@ -1964,14 +1970,14 @@ export class GnGitLabDialog extends LitElement {
               @click=${() => this.authMethod = 'oauth'}
               ?disabled=${isOAuthPending}
             >
-              Sign in with GitLab
+              ${msg('Sign in with GitLab')}
             </button>
             <button
               class="btn ${this.authMethod === 'pat' ? 'active' : ''}"
               @click=${() => this.authMethod = 'pat'}
               ?disabled=${isOAuthPending}
             >
-              Personal Access Token
+              ${msg('Personal Access Token')}
             </button>
           </div>
         ` : ''}
@@ -1984,28 +1990,28 @@ export class GnGitLabDialog extends LitElement {
           >
             ${isOAuthPending ? html`
               <div class="oauth-spinner"></div>
-              <span>${this.oauthState.status === 'exchanging' ? 'Completing sign in...' : 'Waiting for browser...'}</span>
+              <span>${this.oauthState.status === 'exchanging' ? msg('Completing sign in...') : msg('Waiting for browser...')}</span>
             ` : html`
               <svg viewBox="0 0 24 24" fill="currentColor">
                 <path d="M23.955 13.587l-1.342-4.135-2.664-8.189a.455.455 0 00-.867 0L16.418 9.45H7.582L4.918 1.263a.455.455 0 00-.867 0L1.387 9.452.045 13.587a.924.924 0 00.331 1.023L12 23.054l11.624-8.443a.92.92 0 00.331-1.024"/>
               </svg>
-              <span>Sign in with GitLab</span>
+              <span>${msg('Sign in with GitLab')}</span>
             `}
           </button>
 
           ${isOAuthPending ? html`
-            <button class="btn oauth-cancel" @click=${this.handleCancelOAuth}>Cancel</button>
+            <button class="btn oauth-cancel" @click=${this.handleCancelOAuth}>${msg('Cancel')}</button>
           ` : ''}
 
           ${this.oauthState.status === 'error' ? html`
             <div class="oauth-status error">${this.oauthState.error}</div>
           ` : ''}
 
-          <div class="oauth-divider">or</div>
+          <div class="oauth-divider">${msg('or')}</div>
         ` : ''}
 
         <div class="form-group">
-          <label>Personal Access Token</label>
+          <label>${msg('Personal Access Token')}</label>
           <input
             type="password"
             placeholder="glpat-xxxxxxxxxxxxxxxxxxxx"
@@ -2014,13 +2020,13 @@ export class GnGitLabDialog extends LitElement {
             ?disabled=${isOAuthPending}
           />
           <span class="help-text">
-            Create a token at
+            ${msg('Create a token at')}
             <a
               class="help-link"
               href="${this.instanceUrlInput}/-/user_settings/personal_access_tokens"
               @click=${handleExternalLink}
-            >GitLab Settings</a>
-            with <code>api</code> scope.
+            >${msg('GitLab Settings')}</a>
+            ${msg('with')} <code>api</code> ${msg('scope.')}
           </span>
         </div>
         <div class="btn-row">
@@ -2030,7 +2036,7 @@ export class GnGitLabDialog extends LitElement {
               @click=${this.handleDeleteIntegration}
               ?disabled=${this.isLoading}
             >
-              Delete Integration
+              ${msg('Delete Integration')}
             </button>
           ` : nothing}
           <button
@@ -2038,16 +2044,34 @@ export class GnGitLabDialog extends LitElement {
             @click=${this.handleSaveToken}
             ?disabled=${this.isLoading || isOAuthPending || !this.tokenInput.trim() || !this.instanceUrlInput.trim()}
           >
-            Connect with Token
+            ${msg('Connect with Token')}
           </button>
         </div>
       </div>
     `;
   }
 
+  /**
+   * The filter is a machine enum (`opened`/`merged`/`closed`/`all`), so each
+   * empty state is its own message instead of one sentence that would leave the
+   * filter word in English.
+   */
+  private noMergeRequestsMessage(): string {
+    if (this.mrFilter === 'opened') return msg('No opened merge requests');
+    if (this.mrFilter === 'merged') return msg('No merged merge requests');
+    if (this.mrFilter === 'closed') return msg('No closed merge requests');
+    return msg('No all merge requests');
+  }
+
+  private noIssuesMessage(): string {
+    if (this.issueFilter === 'opened') return msg('No opened issues');
+    if (this.issueFilter === 'closed') return msg('No closed issues');
+    return msg('No all issues');
+  }
+
   private renderMergeRequestsTab() {
     if (!this.connectionStatus?.connected) {
-      return this.renderNotConnected('merge requests');
+      return this.renderNotConnected(msg('Connect to GitLab to view merge requests'));
     }
 
     if (!this.detectedRepo) {
@@ -2057,17 +2081,17 @@ export class GnGitLabDialog extends LitElement {
     return html`
       <div class="filter-row">
         <select class="filter-select" @change=${this.handleMrFilterChange}>
-          <option value="opened" ?selected=${this.mrFilter === 'opened'}>Open</option>
-          <option value="merged" ?selected=${this.mrFilter === 'merged'}>Merged</option>
-          <option value="closed" ?selected=${this.mrFilter === 'closed'}>Closed</option>
-          <option value="all" ?selected=${this.mrFilter === 'all'}>All</option>
+          <option value="opened" ?selected=${this.mrFilter === 'opened'}>${msg('Open')}</option>
+          <option value="merged" ?selected=${this.mrFilter === 'merged'}>${msg('Merged')}</option>
+          <option value="closed" ?selected=${this.mrFilter === 'closed'}>${msg('Closed')}</option>
+          <option value="all" ?selected=${this.mrFilter === 'all'}>${msg('All')}</option>
         </select>
         <button class="btn" @click=${() => this.activeTab = 'create-mr'}>
-          + New MR
+          ${msg('+ New MR')}
         </button>
       </div>
 
-      ${this.isLoading ? html`<div class="loading">Loading merge requests...</div>` : ''}
+      ${this.isLoading ? html`<div class="loading">${msg('Loading merge requests...')}</div>` : ''}
 
       ${!this.isLoading && this.mergeRequests.length === 0 ? html`
         <div class="empty-state">
@@ -2076,7 +2100,7 @@ export class GnGitLabDialog extends LitElement {
             <circle cx="6" cy="6" r="3"></circle>
             <path d="M6 21V9a9 9 0 0 0 9 9"></path>
           </svg>
-          <p>No ${this.mrFilter} merge requests</p>
+          <p>${this.noMergeRequestsMessage()}</p>
         </div>
       ` : ''}
 
@@ -2088,9 +2112,9 @@ export class GnGitLabDialog extends LitElement {
               <div class="mr-info">
                 <div class="mr-title">${mr.title}</div>
                 <div class="mr-meta">
-                  <span class="mr-state ${mr.draft ? 'draft' : mr.state}">${mr.draft ? 'Draft' : mr.state}</span>
+                  <span class="mr-state ${mr.draft ? 'draft' : mr.state}">${mr.draft ? msg('Draft') : mr.state}</span>
                   <span class="mr-branch">${mr.sourceBranch} → ${mr.targetBranch}</span>
-                  <span>by ${mr.author.name}</span>
+                  <span>${msg(str`by ${mr.author.name}`)}</span>
                   <span>${this.formatDate(mr.createdAt)}</span>
                 </div>
               </div>
@@ -2098,10 +2122,10 @@ export class GnGitLabDialog extends LitElement {
                 <button
                   class="btn pr-comments-toggle"
                   data-testid="pr-comments-toggle-${mr.iid}"
-                  title="Review comments"
+                  title=${msg('Review comments')}
                   @click=${() => this.togglePrComments(mr.iid)}
                 >
-                  Comments${this.prComments[mr.iid] ? ` (${this.prComments[mr.iid].length})` : ''}
+                  ${msg('Comments')}${this.prComments[mr.iid] ? ` (${this.prComments[mr.iid].length})` : ''}
                 </button>
               </div>
             </div>
@@ -2112,7 +2136,7 @@ export class GnGitLabDialog extends LitElement {
       ${this.renderCappedListHint(
         this.mergeRequests.length,
         GITLAB_LIST_PAGE_SIZE,
-        'merge requests',
+        msg('merge requests'),
         'merge_requests',
         this.mrFilter,
       )}
@@ -2127,9 +2151,9 @@ export class GnGitLabDialog extends LitElement {
     return html`
       <div class="pr-comments-drawer" data-testid="pr-comments-drawer-${mrIid}" @click=${(e: Event) => e.stopPropagation()}>
         ${isLoadingComments ? html`
-          <div class="pr-comments-empty">Loading comments...</div>
+          <div class="pr-comments-empty">${msg('Loading comments...')}</div>
         ` : comments.length === 0 ? html`
-          <div class="pr-comments-empty">No comments yet</div>
+          <div class="pr-comments-empty">${msg('No comments yet')}</div>
         ` : html`
           <div class="pr-comments-list">
             ${comments.map(c => html`
@@ -2151,7 +2175,7 @@ export class GnGitLabDialog extends LitElement {
             <input
               type="text"
               class="pr-comment-file-input"
-              placeholder="File path (optional, for inline comment)"
+              placeholder=${msg('File path (optional, for inline comment)')}
               .value=${this.commentFilePathInput}
               @input=${(e: Event) => {
                 this.commentFilePathInput = (e.target as HTMLInputElement).value;
@@ -2161,7 +2185,7 @@ export class GnGitLabDialog extends LitElement {
               type="number"
               min="1"
               class="pr-comment-line-input"
-              placeholder="Line #"
+              placeholder=${msg('Line #')}
               .value=${this.commentLineInput}
               @input=${(e: Event) => {
                 this.commentLineInput = (e.target as HTMLInputElement).value;
@@ -2172,7 +2196,7 @@ export class GnGitLabDialog extends LitElement {
             <textarea
               class="pr-comment-body-input"
               rows="2"
-              placeholder="Write a review comment..."
+              placeholder=${msg('Write a review comment...')}
               .value=${this.commentBodyInput}
               @input=${(e: Event) => {
                 this.commentBodyInput = (e.target as HTMLTextAreaElement).value;
@@ -2184,7 +2208,7 @@ export class GnGitLabDialog extends LitElement {
               ?disabled=${!this.commentBodyInput.trim() || isPosting}
               @click=${() => this.handleAddPrComment(mrIid)}
             >
-              ${isPosting ? 'Posting...' : 'Post Comment'}
+              ${isPosting ? msg('Posting...') : msg('Post Comment')}
             </button>
           </div>
         </div>
@@ -2194,7 +2218,7 @@ export class GnGitLabDialog extends LitElement {
 
   private renderIssuesTab() {
     if (!this.connectionStatus?.connected) {
-      return this.renderNotConnected('issues');
+      return this.renderNotConnected(msg('Connect to GitLab to view issues'));
     }
 
     if (!this.detectedRepo) {
@@ -2204,12 +2228,12 @@ export class GnGitLabDialog extends LitElement {
     return html`
       <div class="filter-row">
         <select class="filter-select" @change=${this.handleIssueFilterChange}>
-          <option value="opened" ?selected=${this.issueFilter === 'opened'}>Open</option>
-          <option value="closed" ?selected=${this.issueFilter === 'closed'}>Closed</option>
-          <option value="all" ?selected=${this.issueFilter === 'all'}>All</option>
+          <option value="opened" ?selected=${this.issueFilter === 'opened'}>${msg('Open')}</option>
+          <option value="closed" ?selected=${this.issueFilter === 'closed'}>${msg('Closed')}</option>
+          <option value="all" ?selected=${this.issueFilter === 'all'}>${msg('All')}</option>
         </select>
         <button class="btn" @click=${() => { this.activeTab = 'create-issue'; this.loadLabels(); }}>
-          + New Issue
+          ${msg('+ New Issue')}
         </button>
       </div>
 
@@ -2220,7 +2244,7 @@ export class GnGitLabDialog extends LitElement {
             <line x1="12" y1="8" x2="12" y2="12"></line>
             <line x1="12" y1="16" x2="12.01" y2="16"></line>
           </svg>
-          <p>No ${this.issueFilter} issues</p>
+          <p>${this.noIssuesMessage()}</p>
         </div>
       ` : ''}
 
@@ -2232,7 +2256,7 @@ export class GnGitLabDialog extends LitElement {
               <div class="issue-title">${issue.title}</div>
               <div class="issue-meta">
                 <span class="issue-state ${issue.state}">${issue.state}</span>
-                <span>by ${issue.author.name}</span>
+                <span>${msg(str`by ${issue.author.name}`)}</span>
                 <span>${this.formatDate(issue.createdAt)}</span>
               </div>
               ${issue.labels.length > 0 ? html`
@@ -2249,7 +2273,7 @@ export class GnGitLabDialog extends LitElement {
       ${this.renderCappedListHint(
         this.issues.length,
         GITLAB_LIST_PAGE_SIZE,
-        'issues',
+        msg('issues'),
         'issues',
         this.issueFilter,
       )}
@@ -2258,7 +2282,7 @@ export class GnGitLabDialog extends LitElement {
 
   private renderPipelinesTab() {
     if (!this.connectionStatus?.connected) {
-      return this.renderNotConnected('pipelines');
+      return this.renderNotConnected(msg('Connect to GitLab to view pipelines'));
     }
 
     if (!this.detectedRepo) {
@@ -2271,7 +2295,7 @@ export class GnGitLabDialog extends LitElement {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M22 12h-4l-3 9L9 3l-3 9H2"></path>
           </svg>
-          <p>No pipelines found</p>
+          <p>${msg('No pipelines found')}</p>
         </div>
       `;
     }
@@ -2296,7 +2320,7 @@ export class GnGitLabDialog extends LitElement {
       ${this.renderCappedListHint(
         this.pipelines.length,
         GITLAB_PIPELINE_PAGE_SIZE,
-        'pipelines',
+        msg('pipelines'),
         'pipelines',
       )}
     `;
@@ -2314,12 +2338,12 @@ export class GnGitLabDialog extends LitElement {
     const query = state ? `?state=${encodeURIComponent(state)}` : '';
     return html`
       <p class="help-text capped-list-hint" style="text-align:center;padding-top:8px">
-        Showing the first ${limit} ${label}; more may exist.
+        ${msg(str`Showing the first ${limit} ${label}; more may exist.`)}
         <a
           class="help-link"
           href="${base}/${this.detectedRepo.projectPath}/-/${route}${query}"
           @click=${handleExternalLink}
-        >Open in GitLab</a> for the full list.
+        >${msg('Open in GitLab')}</a> ${msg('for the full list.')}
       </p>
     `;
   }
@@ -2328,35 +2352,35 @@ export class GnGitLabDialog extends LitElement {
     return html`
       <div class="token-form">
         <div class="form-group">
-          <label>Title</label>
+          <label>${msg('Title')}</label>
           <input
             type="text"
-            placeholder="Merge request title"
+            placeholder=${msg('Merge request title')}
             .value=${this.createMrTitle}
             @input=${(e: Event) => this.createMrTitle = (e.target as HTMLInputElement).value}
           />
         </div>
         <div class="form-group">
           <div style="display:flex;align-items:center;justify-content:space-between">
-            <label>Description</label>
+            <label>${msg('Description')}</label>
             <button
               class="btn btn-sm"
               style="font-size:12px;padding:2px 8px;display:flex;align-items:center;gap:4px"
               @click=${this.handleGenerateMrDescription}
               ?disabled=${this.generatingMrDescription || !this.createMrSource || !this.createMrTarget}
-              title="Generate description using AI"
+              title=${msg('Generate description using AI')}
             >
-              ${this.generatingMrDescription ? 'Generating...' : html`<svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a3.5 3.5 0 0 0-3.5 3.5c0 1.193.603 2.26 1.5 2.898V9.5a1 1 0 0 0 .293.707l1 1a1 1 0 0 0 1.414 0l1-1A1 1 0 0 0 10 9.5V7.398A3.496 3.496 0 0 0 11.5 4.5 3.5 3.5 0 0 0 8 1z"/></svg> AI Generate`}
+              ${this.generatingMrDescription ? msg('Generating...') : html`<svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a3.5 3.5 0 0 0-3.5 3.5c0 1.193.603 2.26 1.5 2.898V9.5a1 1 0 0 0 .293.707l1 1a1 1 0 0 0 1.414 0l1-1A1 1 0 0 0 10 9.5V7.398A3.496 3.496 0 0 0 11.5 4.5 3.5 3.5 0 0 0 8 1z"/></svg> ${msg('AI Generate')}`}
             </button>
           </div>
           <textarea
-            placeholder="Describe your changes..."
+            placeholder=${msg('Describe your changes...')}
             .value=${this.createMrDescription}
             @input=${(e: Event) => this.createMrDescription = (e.target as HTMLTextAreaElement).value}
           ></textarea>
         </div>
         <div class="form-group">
-          <label>Source Branch</label>
+          <label>${msg('Source Branch')}</label>
           <input
             type="text"
             placeholder="feature/my-branch"
@@ -2365,7 +2389,7 @@ export class GnGitLabDialog extends LitElement {
           />
         </div>
         <div class="form-group">
-          <label>Target Branch</label>
+          <label>${msg('Target Branch')}</label>
           <input
             type="text"
             placeholder="main"
@@ -2381,19 +2405,19 @@ export class GnGitLabDialog extends LitElement {
               .checked=${this.createMrDraft}
               @change=${(e: Event) => this.createMrDraft = (e.target as HTMLInputElement).checked}
             />
-            <label for="mr-draft">Create as draft</label>
+            <label for="mr-draft">${msg('Create as draft')}</label>
           </div>
         </div>
         <div class="btn-row">
           <button class="btn" @click=${() => this.activeTab = 'merge-requests'}>
-            Cancel
+            ${msg('Cancel')}
           </button>
           <button
             class="btn btn-primary"
             @click=${this.handleCreateMr}
             ?disabled=${this.isLoading || !this.createMrTitle.trim() || !this.createMrSource.trim() || !this.createMrTarget.trim()}
           >
-            Create Merge Request
+            ${msg('Create Merge Request')}
           </button>
         </div>
       </div>
@@ -2404,25 +2428,25 @@ export class GnGitLabDialog extends LitElement {
     return html`
       <div class="token-form">
         <div class="form-group">
-          <label>Title</label>
+          <label>${msg('Title')}</label>
           <input
             type="text"
-            placeholder="Issue title"
+            placeholder=${msg('Issue title')}
             .value=${this.createIssueTitle}
             @input=${(e: Event) => this.createIssueTitle = (e.target as HTMLInputElement).value}
           />
         </div>
         <div class="form-group">
-          <label>Description</label>
+          <label>${msg('Description')}</label>
           <textarea
-            placeholder="Describe the issue..."
+            placeholder=${msg('Describe the issue...')}
             .value=${this.createIssueDescription}
             @input=${(e: Event) => this.createIssueDescription = (e.target as HTMLTextAreaElement).value}
           ></textarea>
         </div>
         ${this.labels.length > 0 ? html`
           <div class="form-group">
-            <label>Labels</label>
+            <label>${msg('Labels')}</label>
             <div class="label-picker">
               ${this.labels.map(label => html`
                 <button
@@ -2439,27 +2463,27 @@ export class GnGitLabDialog extends LitElement {
         ` : ''}
         <div class="btn-row">
           <button class="btn" @click=${() => this.activeTab = 'issues'}>
-            Cancel
+            ${msg('Cancel')}
           </button>
           <button
             class="btn btn-primary"
             @click=${this.handleCreateIssue}
             ?disabled=${this.isLoading || !this.createIssueTitle.trim()}
           >
-            Create Issue
+            ${msg('Create Issue')}
           </button>
         </div>
       </div>
     `;
   }
 
-  private renderNotConnected(feature: string) {
+  private renderNotConnected(message: string) {
     return html`
       <div class="empty-state">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"></path>
         </svg>
-        <p>Connect to GitLab to view ${feature}</p>
+        <p>${message}</p>
       </div>
     `;
   }
@@ -2472,7 +2496,7 @@ export class GnGitLabDialog extends LitElement {
           <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
           <line x1="12" y1="17" x2="12.01" y2="17"></line>
         </svg>
-        <p>No GitLab repository detected</p>
+        <p>${msg('No GitLab repository detected')}</p>
       </div>
     `;
   }
@@ -2487,7 +2511,7 @@ export class GnGitLabDialog extends LitElement {
         </svg>
         <div>
           <div class="repo-name">${this.detectedRepo.projectPath}</div>
-          <div class="repo-remote">${this.detectedRepo.instanceUrl} via ${this.detectedRepo.remoteName}</div>
+          <div class="repo-remote">${msg(str`${this.detectedRepo.instanceUrl} via ${this.detectedRepo.remoteName}`)}</div>
         </div>
       </div>
     `;
@@ -2521,7 +2545,7 @@ export class GnGitLabDialog extends LitElement {
       >
         <div class="content">
           ${this.attachToProfileName
-            ? html`<div class="attach-breadcrumb" data-testid="attach-breadcrumb">Adding to <strong>${this.attachToProfileName}</strong></div>`
+            ? html`<div class="attach-breadcrumb" data-testid="attach-breadcrumb">${msg('Adding to')} <strong>${this.attachToProfileName}</strong></div>`
             : nothing}
           ${this.renderDetectedRepo()}
 
@@ -2540,25 +2564,25 @@ export class GnGitLabDialog extends LitElement {
               class="tab ${this.activeTab === 'connection' ? 'active' : ''}"
               @click=${() => this.activeTab = 'connection'}
             >
-              Connection
+              ${msg('Connection')}
             </button>
             <button
               class="tab ${this.activeTab === 'merge-requests' ? 'active' : ''}"
               @click=${() => { this.activeTab = 'merge-requests'; this.loadMergeRequests(); }}
             >
-              Merge Requests
+              ${msg('Merge Requests')}
             </button>
             <button
               class="tab ${this.activeTab === 'issues' ? 'active' : ''}"
               @click=${() => { this.activeTab = 'issues'; this.loadIssues(); }}
             >
-              Issues
+              ${msg('Issues')}
             </button>
             <button
               class="tab ${this.activeTab === 'pipelines' ? 'active' : ''}"
               @click=${() => { this.activeTab = 'pipelines'; this.loadPipelines(); }}
             >
-              Pipelines
+              ${msg('Pipelines')}
             </button>
           </div>
 

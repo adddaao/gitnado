@@ -5,6 +5,7 @@
 
 import { LitElement, html, css, nothing } from 'lit';
 import { customElement, state, property, query } from 'lit/decorators.js';
+import { localized, msg, str } from '@lit/localize';
 import { sharedStyles } from '../../styles/shared-styles.ts';
 import { cherryPick } from '../../services/git.service.ts';
 import './gn-modal.ts';
@@ -16,7 +17,9 @@ import {
   RefLockController,
 } from '../../utils/ref-lock.ts';
 
+import { backendErrorMatchText } from '../../services/backend-error.service.ts';
 @customElement('gn-cherry-pick-dialog')
+@localized()
 export class GnCherryPickDialog extends LitElement {
   static styles = [
     sharedStyles,
@@ -298,7 +301,7 @@ export class GnCherryPickDialog extends LitElement {
     // lists and the graph menu gate on the shared working-tree lock, so
     // without claiming it a concurrent checkout stayed enabled.
     if (!tryAcquireRefOp(repoPath)) {
-      this.error = 'Another operation is already running in this repository.';
+      this.error = msg('Another operation is already running in this repository.');
       return;
     }
 
@@ -335,7 +338,7 @@ export class GnCherryPickDialog extends LitElement {
         // other entry point, with the message match as a fallback.
         if (
           result.error?.code === 'CHERRY_PICK_CONFLICT' ||
-          result.error?.message?.toLowerCase().includes('conflict')
+          backendErrorMatchText(result.error).toLowerCase().includes('conflict')
         ) {
           this.dispatchEvent(new CustomEvent('cherry-pick-conflict', {
             detail: {
@@ -348,11 +351,11 @@ export class GnCherryPickDialog extends LitElement {
           }));
           this.close();
         } else {
-          this.error = result.error?.message ?? 'Failed to cherry-pick commit';
+          this.error = result.error?.message ?? msg('Failed to cherry-pick commit');
         }
       }
     } catch (err) {
-      this.error = err instanceof Error ? err.message : 'Unknown error occurred';
+      this.error = err instanceof Error ? err.message : msg('Unknown error occurred');
     } finally {
       this.isExecuting = false;
       releaseRefOp(repoPath);
@@ -391,12 +394,12 @@ export class GnCherryPickDialog extends LitElement {
 
   render() {
     if (!this.commit) {
-      return html`<gn-modal modalTitle="Cherry-Pick" ?open=${false}></gn-modal>`;
+      return html`<gn-modal modalTitle=${msg('Cherry-Pick')} ?open=${false}></gn-modal>`;
     }
 
     return html`
       <gn-modal
-        modalTitle="Cherry-Pick Commit"
+        modalTitle=${msg('Cherry-Pick Commit')}
         ?open=${this.isOpen}
         @close=${this.handleModalClose}
       >
@@ -412,28 +415,32 @@ export class GnCherryPickDialog extends LitElement {
               <div class="commit-body">${this.commit.body}</div>
             ` : nothing}
             <div class="commit-author">
-              by <strong>${this.commit.author.name}</strong>
-              &lt;${this.commit.author.email}&gt;
+              ${msg(
+                html`by <strong>${this.commit.author.name}</strong> &lt;${this.commit.author.email}&gt;`,
+              )}
             </div>
           </div>
 
           <!-- Target Info -->
           <div class="target-info">
-            <span class="target-label">Cherry-pick onto:</span>
-            <span class="target-branch">${this.pinnedCurrentBranch || 'current branch'}</span>
+            <span class="target-label">${msg('Cherry-pick onto:')}</span>
+            <span class="target-branch">
+              ${this.pinnedCurrentBranch || msg('current branch')}
+            </span>
           </div>
 
           <!-- Options -->
           <div class="options-section">
-            <div class="options-header">Options</div>
+            <div class="options-header">${msg('Options')}</div>
 
             ${this.isMergeCommit ? html`
               <div class="option-row">
                 <label class="option-label" for="mainline-select">
-                  <span class="option-label-main">Mainline parent</span>
+                  <span class="option-label-main">${msg('Mainline parent')}</span>
                   <span class="option-label-hint">
-                    This is a merge commit — choose which parent's changes to keep as
-                    the baseline (like <code>git cherry-pick -m</code>).
+                    ${msg(
+                      html`This is a merge commit — choose which parent's changes to keep as the baseline (like <code>git cherry-pick -m</code>).`,
+                    )}
                   </span>
                 </label>
                 <select
@@ -445,7 +452,11 @@ export class GnCherryPickDialog extends LitElement {
                 >
                   ${this.commit!.parentIds.map((parentId, i) => html`
                     <option value=${i + 1}>
-                      Parent ${i + 1}${i === 0 ? ' (mainline)' : ''} — ${parentId.substring(0, 7)}
+                      ${i === 0
+                        ? msg(
+                            str`Parent ${i + 1} (mainline) — ${parentId.substring(0, 7)}`,
+                          )
+                        : msg(str`Parent ${i + 1} — ${parentId.substring(0, 7)}`)}
                     </option>
                   `)}
                 </select>
@@ -461,8 +472,10 @@ export class GnCherryPickDialog extends LitElement {
                 ?disabled=${this.isExecuting}
               />
               <label class="option-label" for="no-commit">
-                <span class="option-label-main">Stage changes only (no commit)</span>
-                <span class="option-label-hint">Apply changes to working directory without committing</span>
+                <span class="option-label-main">${msg('Stage changes only (no commit)')}</span>
+                <span class="option-label-hint">
+                  ${msg('Apply changes to working directory without committing')}
+                </span>
               </label>
             </div>
           </div>
@@ -478,14 +491,14 @@ export class GnCherryPickDialog extends LitElement {
             @click=${this.close}
             ?disabled=${this.isExecuting}
           >
-            Cancel
+            ${msg('Cancel')}
           </button>
           <button
             class="btn btn-primary"
             @click=${this.handleCherryPick}
             ?disabled=${this.isExecuting || this.lock.busy}
           >
-            ${this.isExecuting ? 'Cherry-picking...' : 'Cherry-Pick'}
+            ${this.isExecuting ? msg('Cherry-picking...') : msg('Cherry-Pick')}
           </button>
         </div>
       </gn-modal>

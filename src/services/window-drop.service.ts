@@ -18,6 +18,7 @@ import type { UnlistenFn } from '@tauri-apps/api/event';
 import { classifyRepositoryPath } from './repo-scan.service.ts';
 import { openRepositoryPath } from './repository-open.service.ts';
 import { showToast } from './notification.service.ts';
+import { msg, str } from '@lit/localize';
 import { loggers } from '../utils/logger.ts';
 
 const log = loggers.ui;
@@ -114,7 +115,7 @@ export async function handleDroppedPaths(paths: string[]): Promise<DroppedPathsO
   // lives here rather than in the listener so every entry point into a drop
   // batch is covered by it, and so it can be exercised without a webview.
   if (dropInFlight) {
-    showToast('Still opening the previous drop — try again in a moment', 'info');
+    showToast(msg('Still opening the previous drop — try again in a moment'), 'info');
     log.warn('Ignored a drop while another was still being opened:', paths);
     return outcome;
   }
@@ -140,7 +141,7 @@ async function classifyAndOpen(
     if (!classification.success || !classification.data) {
       outcome.failures.push({
         path,
-        message: classification.error?.message ?? 'Could not inspect the dropped path',
+        message: classification.error?.message ?? msg('Could not inspect the dropped path'),
       });
       continue;
     }
@@ -169,7 +170,10 @@ async function classifyAndOpen(
       outcome.alreadyOpen.push(path);
       reportResolvedRepository(path);
     } else {
-      outcome.failures.push({ path, message: result.message ?? 'Failed to open repository' });
+      outcome.failures.push({
+        path,
+        message: result.message ?? msg('Failed to open repository'),
+      });
     }
   }
 }
@@ -179,22 +183,25 @@ function reportOutcome(outcome: DroppedPathsOutcome): void {
   const { opened, alreadyOpen, notRepositories, missing, files, failures } = outcome;
 
   if (opened.length === 1) {
-    showToast(`Opened ${baseName(opened[0])}`, 'success');
+    showToast(msg(str`Opened ${baseName(opened[0])}`), 'success');
   } else if (opened.length > 1) {
-    showToast(`Opened ${opened.length} repositories`, 'success');
+    showToast(msg(str`Opened ${opened.length} repositories`), 'success');
   }
 
   if (alreadyOpen.length === 1) {
-    showToast(`${baseName(alreadyOpen[0])} is already open`, 'info');
+    showToast(msg(str`${baseName(alreadyOpen[0])} is already open`), 'info');
   } else if (alreadyOpen.length > 1) {
-    showToast(`${alreadyOpen.length} of the dropped repositories were already open`, 'info');
+    showToast(
+      msg(str`${alreadyOpen.length} of the dropped repositories were already open`),
+      'info',
+    );
   }
 
   if (missing.length > 0) {
     showToast(
       missing.length === 1
-        ? `${missing[0]} no longer exists`
-        : `${missing.length} dropped paths no longer exist`,
+        ? msg(str`${missing[0]} no longer exists`)
+        : msg(str`${missing.length} dropped paths no longer exist`),
       'error',
     );
   }
@@ -202,14 +209,18 @@ function reportOutcome(outcome: DroppedPathsOutcome): void {
   if (files.length > 0) {
     showToast(
       files.length === 1
-        ? `${baseName(files[0])} is a file — drop a folder to open it as a repository`
-        : `${files.length} dropped items are files — drop a folder to open it as a repository`,
+        ? msg(
+            str`${baseName(files[0])} is a file — drop a folder to open it as a repository`
+          )
+        : msg(
+            str`${files.length} dropped items are files — drop a folder to open it as a repository`
+          ),
       'warning',
     );
   }
 
   for (const failure of failures) {
-    showToast(`${baseName(failure.path)}: ${failure.message}`, 'error');
+    showToast(msg(str`${baseName(failure.path)}: ${failure.message}`), 'error');
   }
 
   if (notRepositories.length === 0) return;
@@ -239,8 +250,8 @@ function reportOutcome(outcome: DroppedPathsOutcome): void {
   const named = notRepositories.slice(0, MAX_NAMED_SCAN_OFFERS);
   for (const path of named) {
     const name = baseName(path);
-    showToast(`${name} is not a Git repository`, 'warning', 8000, {
-      label: `Scan ${name}`,
+    showToast(msg(str`${name} is not a Git repository`), 'warning', 8000, {
+      label: msg(str`Scan ${name}`),
       callback: () => offerDirectoryScan(path),
     });
   }
@@ -254,8 +265,8 @@ function reportOutcome(outcome: DroppedPathsOutcome): void {
   if (remaining > 0) {
     showToast(
       remaining === 1
-        ? '1 more dropped folder is not a Git repository'
-        : `${remaining} more dropped folders are not Git repositories`,
+        ? msg('1 more dropped folder is not a Git repository')
+        : msg(str`${remaining} more dropped folders are not Git repositories`),
       'warning',
       8000,
     );

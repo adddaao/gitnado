@@ -22,6 +22,47 @@ use crate::services::ai::providers::{InferenceEngine, LoadedModelMeta};
 
 const MB: u64 = 1_048_576;
 
+/// Smallest context we will allocate. Below this the fixed per-context cost
+/// dominates and tiny models can behave oddly; it is also the floor the
+/// per-file commit pipeline never needs to exceed much for tiny prompts.
+const MIN_CONTEXT_TOKENS: u32 = 512;
+
+/// Largest context we will allocate, regardless of the model's training
+/// context. The KV cache is allocated for the whole window on every call, so
+/// using a 128K model's full window for a 200-token prompt would be a huge
+/// allocation to serve a tiny request.
+const MAX_CONTEXT_TOKENS: u32 = 8192;
+
+/// Headroom for chat-template tokens and the BOS token beyond the prompt and
+/// the requested generation.
+const CONTEXT_MARGIN_TOKENS: u32 = 16;
+
+/// The context window, in tokens, one generation call actually needs.
+///
+/// This used to be `min(n_ctx_train, 8192)` unconditionally: every per-file
+/// commit-pipeline call allocated an 8K KV cache (hundreds of MB for a mid-size
+/// model) even though its prompt was a couple of hundred tokens. Sizing the
+/// window to the request cuts the allocation (and its per-call setup) to what
+/// the call will actually use.
+///
+/// `prompt_tokens + max_tokens + margin`, clamped to `[512, min(model_ctx, 8192)]`.
+/// The lower clamp is raised above `model_ctx` for absurdly small training
+/// contexts so the range can never be inverted (`u32::clamp` panics when
+/// `min > max`); shipped models all train at 2048+.
+pub fn context_size_for_prompt(prompt_tokens: usize, max_tokens: u32, model_ctx: u32) -> u32 {
+    let cap = model_ctx.min(MAX_CONTEXT_TOKENS);
+    // A training context below the floor cannot invert the clamp (`clamp`
+    // panics when `min > max`). Shipped models train at 2048+, so this only
+    // guards the field.
+    if cap <= MIN_CONTEXT_TOKENS {
+        return MIN_CONTEXT_TOKENS;
+    }
+    let needed = (prompt_tokens as u64)
+        .saturating_add(max_tokens as u64)
+        .saturating_add(CONTEXT_MARGIN_TOKENS as u64);
+    needed.clamp(MIN_CONTEXT_TOKENS as u64, cap as u64) as u32
+}
+
 /// Compute the number of model layers to offload to the GPU based on model size and hardware.
 pub fn compute_gpu_layers(model_size_bytes: u64, caps: &SystemCapabilities) -> u32 {
     if !caps.gpu_acceleration_available {
@@ -162,12 +203,14 @@ pub fn generate_tokens_with_callback(
         return Err("Empty prompt after tokenization".to_string());
     }
 
-    // Use the model's training context length (e.g. 8192), capped at a reasonable max
+    // Size the context window to this request instead of always allocating the
+    // model's maximum: tiny per-file prompts get a tiny KV cache.
     let model_ctx = model.n_ctx_train();
-    let ctx_size = model_ctx.min(8192);
+    let ctx_size = context_size_for_prompt(prompt_tokens.len(), max_tokens, model_ctx);
 
     // Reserve space for generation output; truncate prompt if necessary
-    let max_prompt_tokens = (ctx_size as usize).saturating_sub(max_tokens as usize + 16);
+    let max_prompt_tokens =
+        (ctx_size as usize).saturating_sub(max_tokens as usize + CONTEXT_MARGIN_TOKENS as usize);
     if prompt_tokens.len() > max_prompt_tokens {
         tracing::warn!(
             "Prompt has {} tokens, truncating to {} to fit context window of {}",
@@ -389,5 +432,37 @@ mod tests {
         let mut none_cb: Option<&mut dyn FnMut(&str)> = None;
         push_decoded_piece(&mut output, "!", &mut none_cb);
         assert_eq!(output, "feat(ai): stream tokens!");
+    }
+
+    /// The per-file commit pipeline sends a few hundred prompt tokens and asks
+    /// for a few dozen; it must not allocate an 8K KV cache for that.
+    #[test]
+    fn test_context_size_tiny_prompt_is_floored_at_512() {
+        assert_eq!(context_size_for_prompt(0, 1, 8192), 512);
+        assert_eq!(context_size_for_prompt(10, 20, 8192), 512);
+        // 512 - 16 - 30 = 466 prompt tokens still fit under the floor.
+        assert_eq!(context_size_for_prompt(466, 30, 8192), 512);
+    }
+
+    #[test]
+    fn test_context_size_normal_prompt_is_prompt_plus_generation_plus_margin() {
+        assert_eq!(context_size_for_prompt(1000, 256, 8192), 1272);
+        assert_eq!(context_size_for_prompt(500, 30, 4096), 546);
+        // Model context smaller than the hard cap is honoured.
+        assert_eq!(context_size_for_prompt(1000, 256, 2048), 1272);
+    }
+
+    #[test]
+    fn test_context_size_huge_prompt_is_capped_at_8192() {
+        assert_eq!(context_size_for_prompt(10000, 256, 8192), 8192);
+        assert_eq!(context_size_for_prompt(10000, 256, 131072), 8192);
+        assert_eq!(context_size_for_prompt(100, 10000, 8192), 8192);
+    }
+
+    #[test]
+    fn test_context_size_never_exceeds_the_model_context() {
+        assert_eq!(context_size_for_prompt(5000, 256, 4096), 4096);
+        // A training context below the floor cannot invert the clamp.
+        assert_eq!(context_size_for_prompt(10, 10, 256), 512);
     }
 }

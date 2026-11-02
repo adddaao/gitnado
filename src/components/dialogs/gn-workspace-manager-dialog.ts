@@ -5,6 +5,7 @@
 
 import { LitElement, html, css, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
+import { localized, msg, str } from '@lit/localize';
 import { sharedStyles } from '../../styles/shared-styles.ts';
 import * as workspaceService from '../../services/workspace.service.ts';
 import * as gitService from '../../services/git.service.ts';
@@ -24,6 +25,7 @@ const WORKSPACE_COLORS = [
 ];
 
 @customElement('gn-workspace-manager-dialog')
+@localized()
 export class GnWorkspaceManagerDialog extends LitElement {
   static styles = [
     sharedStyles,
@@ -809,7 +811,7 @@ export class GnWorkspaceManagerDialog extends LitElement {
       workspaceStore.getState().addOrUpdateWorkspace(result.data);
       await this.loadWorkspaces();
     } else {
-      showToast(result.error?.message || 'Failed to save workspace', 'error');
+      showToast(result.error?.message || msg('Failed to save workspace'), 'error');
     }
   }
 
@@ -831,10 +833,14 @@ export class GnWorkspaceManagerDialog extends LitElement {
     // name which one and how much is in it.
     const count = ws.repositories.length;
     const confirmed = await showConfirm(
-      'Delete Workspace',
-      `Delete workspace "${ws.name}"? This removes the workspace and its ` +
-        `${count} tracked ${count === 1 ? 'repository' : 'repositories'}. ` +
-        `The repositories themselves are not touched.`,
+      msg('Delete Workspace'),
+      count === 1
+        ? msg(
+            str`Delete workspace "${ws.name}"? This removes the workspace and its ${count} tracked repository. The repositories themselves are not touched.`
+          )
+        : msg(
+            str`Delete workspace "${ws.name}"? This removes the workspace and its ${count} tracked repositories. The repositories themselves are not touched.`
+          ),
       'warning'
     );
     if (!confirmed) {
@@ -848,9 +854,9 @@ export class GnWorkspaceManagerDialog extends LitElement {
         workspaceStore.getState().removeWorkspace(ws.id);
         this.selectedWorkspaceId = null;
         await this.loadWorkspaces();
-        showToast(`Deleted workspace ${ws.name}`, 'success');
+        showToast(msg(str`Deleted workspace ${ws.name}`), 'success');
       } else {
-        showToast(result.error?.message || 'Failed to delete workspace', 'error');
+        showToast(result.error?.message || msg('Failed to delete workspace'), 'error');
       }
     } finally {
       this.deletingWorkspace = false;
@@ -870,7 +876,7 @@ export class GnWorkspaceManagerDialog extends LitElement {
       await this.loadWorkspaces();
       await this.refreshStatus();
     } else {
-      showToast(result.error?.message || 'Failed to add repository', 'error');
+      showToast(result.error?.message || msg('Failed to add repository'), 'error');
     }
   }
 
@@ -886,9 +892,10 @@ export class GnWorkspaceManagerDialog extends LitElement {
     // to it. A confirm naming the row is cheap next to that.
     const name = ws.repositories.find((r) => r.path === path)?.name ?? path;
     const confirmed = await showConfirm(
-      'Remove Repository',
-      `Remove "${name}" from the workspace "${ws.name}"? ` +
-        `The repository itself is not deleted — only its entry here.`,
+      msg('Remove Repository'),
+      msg(
+        str`Remove "${name}" from the workspace "${ws.name}"? The repository itself is not deleted — only its entry here.`
+      ),
       'warning'
     );
     if (!confirmed) {
@@ -903,9 +910,9 @@ export class GnWorkspaceManagerDialog extends LitElement {
       newStatuses.delete(path);
       this.repoStatuses = newStatuses;
       await this.loadWorkspaces();
-      showToast(`Removed ${name} from ${ws.name}`, 'success');
+      showToast(msg(str`Removed ${name} from ${ws.name}`), 'success');
     } else {
-      showToast(result.error?.message || 'Failed to remove repository', 'error');
+      showToast(result.error?.message || msg('Failed to remove repository'), 'error');
     }
   }
 
@@ -995,13 +1002,15 @@ export class GnWorkspaceManagerDialog extends LitElement {
 
     this.batchRunning = null;
     showToast(
-      `Fetch all: ${successCount} succeeded` +
-        (failCount > 0 ? `, ${failCount} failed` : '') +
+      msg(str`Fetch all: ${successCount} succeeded`) +
+        (failCount > 0 ? msg(str`, ${failCount} failed`) : '') +
         (noRemote.length > 0
-          ? `, ${noRemote.length} with no remote configured (${noRemote.join(', ')})`
+          ? msg(
+              str`, ${noRemote.length} with no remote configured (${noRemote.join(', ')})`
+            )
           : '') +
-        (skippedCount > 0 ? `, ${skippedCount} skipped by security settings` : '') +
-        (unavailableCount > 0 ? `, ${unavailableCount} unavailable` : ''),
+        (skippedCount > 0 ? msg(str`, ${skippedCount} skipped by security settings`) : '') +
+        (unavailableCount > 0 ? msg(str`, ${unavailableCount} unavailable`) : ''),
       failCount > 0 || unavailableCount > 0 || noRemote.length > 0
         ? 'warning'
         : skippedCount > 0
@@ -1086,22 +1095,26 @@ export class GnWorkspaceManagerDialog extends LitElement {
     const failCount = failed.length;
     this.batchRunning = null;
     showToast(
-      `Pull all: ${successCount} succeeded` +
+      msg(str`Pull all: ${successCount} succeeded`) +
         (conflicted.length > 0
-          ? `, ${conflicted.length} need conflict resolution (${conflicted.join(', ')})`
+          ? msg(
+              str`, ${conflicted.length} need conflict resolution (${conflicted.join(', ')})`
+            )
           : '') +
-        (failCount > 0 ? `, ${failCount} failed (${failed.join(', ')})` : '') +
+        (failCount > 0 ? msg(str`, ${failCount} failed (${failed.join(', ')})`) : '') +
         (noRemote.length > 0
-          ? `, ${noRemote.length} with no remote configured (${noRemote.join(', ')})`
+          ? msg(
+              str`, ${noRemote.length} with no remote configured (${noRemote.join(', ')})`
+            )
           : '') +
-        (skippedCount > 0 ? `, ${skippedCount} skipped by security settings` : '') +
+        (skippedCount > 0 ? msg(str`, ${skippedCount} skipped by security settings`) : '') +
         // Named, not just counted: a repo skipped because something else was
         // running in it did NOT pull, and a summary that stays silent about it
         // reads as "everything is up to date".
         (busy.length > 0
-          ? `, ${busy.length} busy with another operation (${busy.join(', ')})`
+          ? msg(str`, ${busy.length} busy with another operation (${busy.join(', ')})`)
           : '') +
-        (unavailableCount > 0 ? `, ${unavailableCount} unavailable` : ''),
+        (unavailableCount > 0 ? msg(str`, ${unavailableCount} unavailable`) : ''),
       failCount > 0 ||
       conflicted.length > 0 ||
       unavailableCount > 0 ||
@@ -1154,14 +1167,19 @@ export class GnWorkspaceManagerDialog extends LitElement {
     // A repo that failed to open (moved, deleted, invalid) must not hide
     // behind a green success toast
     if (failedCount === 0) {
-      showToast(`Opened workspace: ${ws.name}`, 'success');
+      showToast(msg(str`Opened workspace: ${ws.name}`), 'success');
     } else if (lastOpenedPath) {
       showToast(
-        `Opened workspace: ${ws.name} (${failedCount} of ${ws.repositories.length} repositories failed to open)`,
+        msg(
+          str`Opened workspace: ${ws.name} (${failedCount} of ${ws.repositories.length} repositories failed to open)`
+        ),
         'warning',
       );
     } else {
-      showToast(`Could not open workspace: ${ws.name} — no repository could be opened`, 'error');
+      showToast(
+        msg(str`Could not open workspace: ${ws.name} — no repository could be opened`),
+        'error',
+      );
     }
   }
 
@@ -1207,13 +1225,15 @@ export class GnWorkspaceManagerDialog extends LitElement {
         showToast(
           this.searchFailures.length === 1
             ? this.searchFailures[0]
-            : `Search completed with ${this.searchFailures.length} problems — see the details below`,
+            : msg(
+                str`Search completed with ${this.searchFailures.length} problems — see the details below`
+              ),
           this.searchResults.length > 0 ? 'warning' : 'error',
         );
       }
     } else {
-      showToast(result.error?.message ?? 'Search failed', 'error');
-      this.searchFailures = [result.error?.message ?? 'Search failed'];
+      showToast(result.error?.message ?? msg('Search failed'), 'error');
+      this.searchFailures = [result.error?.message ?? msg('Search failed')];
     }
     this.searching = false;
   }
@@ -1242,12 +1262,12 @@ export class GnWorkspaceManagerDialog extends LitElement {
 
     const result = await workspaceService.exportWorkspace(ws.id);
     if (!result.success || !result.data) {
-      showToast('Failed to export workspace', 'error');
+      showToast(msg('Failed to export workspace'), 'error');
       return;
     }
 
     const filePath = await saveDialog({
-      title: 'Export Workspace',
+      title: msg('Export Workspace'),
       defaultPath: `${ws.name.replace(/\s+/g, '-').toLowerCase()}-workspace.json`,
       filters: [{ name: 'JSON', extensions: ['json'] }],
     });
@@ -1256,16 +1276,16 @@ export class GnWorkspaceManagerDialog extends LitElement {
 
     try {
       await writeTextFile(filePath, result.data);
-      showToast(`Workspace exported to ${filePath}`, 'success');
+      showToast(msg(str`Workspace exported to ${filePath}`), 'success');
     } catch (err) {
       console.error('Failed to write file:', err);
-      showToast('Failed to write file', 'error');
+      showToast(msg('Failed to write file'), 'error');
     }
   }
 
   private async handleImportWorkspace(): Promise<void> {
     const filePath = await openDialog({
-      title: 'Import Workspace',
+      title: msg('Import Workspace'),
       filters: [{ name: 'JSON', extensions: ['json'] }],
     });
 
@@ -1275,15 +1295,18 @@ export class GnWorkspaceManagerDialog extends LitElement {
       const content = await readTextFile(filePath);
       const result = await workspaceService.importWorkspace(content);
       if (result.success && result.data) {
-        showToast(`Workspace "${result.data.name}" imported`, 'success');
+        showToast(msg(str`Workspace "${result.data.name}" imported`), 'success');
         await this.loadWorkspaces();
         this.selectWorkspace(result.data.id);
       } else {
-        showToast(`Import failed: ${result.error?.message ?? 'Unknown error'}`, 'error');
+        showToast(
+          msg(str`Import failed: ${result.error?.message ?? msg('Unknown error')}`),
+          'error',
+        );
       }
     } catch (err) {
       console.error('Failed to import workspace:', err);
-      showToast('Failed to read file', 'error');
+      showToast(msg('Failed to read file'), 'error');
     }
   }
 
@@ -1322,14 +1345,18 @@ export class GnWorkspaceManagerDialog extends LitElement {
     if (!status) return nothing;
 
     if (!status.exists || !status.isValidRepo) {
-      return html`<span class="repo-status missing">${!status.exists ? 'missing' : 'invalid'}</span>`;
+      return html`<span class="repo-status missing">${!status.exists
+        ? msg('missing')
+        : msg('invalid')}</span>`;
     }
 
     if (status.changedFilesCount > 0) {
-      return html`<span class="repo-status changed">${status.changedFilesCount} changed</span>`;
+      return html`<span class="repo-status changed">${msg(
+        str`${status.changedFilesCount} changed`
+      )}</span>`;
     }
 
-    return html`<span class="repo-status clean">clean</span>`;
+    return html`<span class="repo-status clean">${msg('clean')}</span>`;
   }
 
   private renderAheadBehind(status: WorkspaceRepoStatus | undefined) {
@@ -1357,7 +1384,7 @@ export class GnWorkspaceManagerDialog extends LitElement {
               <rect x="3" y="14" width="7" height="7"></rect>
               <rect x="14" y="14" width="7" height="7"></rect>
             </svg>
-            <span class="title">Workspace Manager</span>
+            <span class="title">${msg('Workspace Manager')}</span>
           </div>
           <button class="close-btn" @click=${this.close}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1374,7 +1401,7 @@ export class GnWorkspaceManagerDialog extends LitElement {
                 <line x1="12" y1="5" x2="12" y2="19"></line>
                 <line x1="5" y1="12" x2="19" y2="12"></line>
               </svg>
-              New Workspace
+              ${msg('New Workspace')}
             </button>
             <button class="new-btn" @click=${this.handleImportWorkspace}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1382,7 +1409,7 @@ export class GnWorkspaceManagerDialog extends LitElement {
                 <polyline points="7 10 12 15 17 10"></polyline>
                 <line x1="12" y1="15" x2="12" y2="3"></line>
               </svg>
-              Import
+              ${msg('Import')}
             </button>
             <div class="workspace-list">
               ${this.workspaces.map(
@@ -1406,7 +1433,7 @@ export class GnWorkspaceManagerDialog extends LitElement {
             ${ws
               ? html`
                   <div class="form-group">
-                    <label class="form-label">Name</label>
+                    <label class="form-label">${msg('Name')}</label>
                     <input
                       class="form-input"
                       type="text"
@@ -1419,7 +1446,7 @@ export class GnWorkspaceManagerDialog extends LitElement {
                   </div>
 
                   <div class="form-group">
-                    <label class="form-label">Description</label>
+                    <label class="form-label">${msg('Description')}</label>
                     <textarea
                       class="form-textarea"
                       .value=${this.editDescription}
@@ -1431,7 +1458,7 @@ export class GnWorkspaceManagerDialog extends LitElement {
                   </div>
 
                   <div class="form-group">
-                    <label class="form-label">Color</label>
+                    <label class="form-label">${msg('Color')}</label>
                     <div class="color-swatches">
                       ${WORKSPACE_COLORS.map(
                         (color) => html`
@@ -1456,7 +1483,7 @@ export class GnWorkspaceManagerDialog extends LitElement {
                         <input
                           class="search-input"
                           type="text"
-                          placeholder="Search across all repos..."
+                          placeholder=${msg('Search across all repos...')}
                           .value=${this.searchQuery}
                           @input=${(e: InputEvent) => {
                             this.searchQuery = (e.target as HTMLInputElement).value;
@@ -1473,7 +1500,7 @@ export class GnWorkspaceManagerDialog extends LitElement {
                           ?disabled=${this.searching || !this.searchQuery.trim()}
                           @click=${this.handleSearch}
                         >
-                          ${this.searching ? 'Searching...' : 'Search'}
+                          ${this.searching ? msg('Searching...') : msg('Search')}
                         </button>
                       </div>
                       ${this.searchFailures.length > 0 ? html`
@@ -1507,7 +1534,7 @@ export class GnWorkspaceManagerDialog extends LitElement {
                           )}
                         </div>
                       ` : this.searchCompleted && !this.searching ? html`
-                        <div class="search-no-results">No results found</div>
+                        <div class="search-no-results">${msg('No results found')}</div>
                       ` : nothing}
                     </div>
                     <hr class="section-divider" />
@@ -1515,23 +1542,23 @@ export class GnWorkspaceManagerDialog extends LitElement {
 
                   <div class="repos-header">
                     <span class="repos-title">
-                      Repositories (${ws.repositories.length})
+                      ${msg(str`Repositories (${ws.repositories.length})`)}
                     </span>
                     <div class="import-export-btns">
-                      <button class="ie-btn" @click=${this.handleExportWorkspace} title="Export workspace">
+                      <button class="ie-btn" @click=${this.handleExportWorkspace} title=${msg('Export workspace')}>
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                           <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"></path>
                           <polyline points="17 8 12 3 7 8"></polyline>
                           <line x1="12" y1="3" x2="12" y2="15"></line>
                         </svg>
-                        Export
+                        ${msg('Export')}
                       </button>
                       <button class="add-repo-btn" @click=${this.handleAddRepo}>
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                           <line x1="12" y1="5" x2="12" y2="19"></line>
                           <line x1="5" y1="12" x2="19" y2="12"></line>
                         </svg>
-                        Add Repo
+                        ${msg('Add Repo')}
                       </button>
                     </div>
                   </div>
@@ -1549,14 +1576,14 @@ export class GnWorkspaceManagerDialog extends LitElement {
                                   ${status?.currentBranch
                                     ? html`<span class="repo-branch">${status.currentBranch}</span>`
                                     : status?.isDetached
-                                      ? html`<span class="repo-branch detached">detached HEAD</span>`
+                                      ? html`<span class="repo-branch detached">${msg('detached HEAD')}</span>`
                                       : nothing}
                                   ${this.renderRepoStatus(status)}
                                   ${this.renderAheadBehind(status)}
                                 </div>
                                 <button
                                   class="repo-remove"
-                                  title="Remove from workspace"
+                                  title=${msg('Remove from workspace')}
                                   ?disabled=${this.removingRepoPath === repo.path}
                                   @click=${() => this.handleRemoveRepo(repo.path)}
                                 >
@@ -1576,25 +1603,31 @@ export class GnWorkspaceManagerDialog extends LitElement {
                             ?disabled=${this.batchRunning !== null}
                             @click=${this.handleFetchAll}
                           >
-                            ${this.batchRunning === 'fetch' ? 'Running...' : 'Fetch All'}
+                            ${this.batchRunning === 'fetch'
+                              ? msg('Running...')
+                              : msg('Fetch All')}
                           </button>
                           <button
                             class="batch-btn"
                             ?disabled=${this.batchRunning !== null}
                             @click=${this.handlePullAll}
                           >
-                            ${this.batchRunning === 'pull' ? 'Running...' : 'Pull All'}
+                            ${this.batchRunning === 'pull'
+                              ? msg('Running...')
+                              : msg('Pull All')}
                           </button>
                           <button
                             class="batch-btn"
                             ?disabled=${this.statusLoading}
                             @click=${() => this.refreshStatus()}
                           >
-                            ${this.statusLoading ? 'Loading...' : 'Refresh Status'}
+                            ${this.statusLoading
+                              ? msg('Loading...')
+                              : msg('Refresh Status')}
                           </button>
                         </div>
                       `
-                    : html`<div class="no-repos">No repositories added yet</div>`}
+                    : html`<div class="no-repos">${msg('No repositories added yet')}</div>`}
                 `
               : html`
                   <div class="empty-state">
@@ -1604,7 +1637,7 @@ export class GnWorkspaceManagerDialog extends LitElement {
                       <rect x="3" y="14" width="7" height="7"></rect>
                       <rect x="14" y="14" width="7" height="7"></rect>
                     </svg>
-                    <div>Select a workspace or create a new one</div>
+                    <div>${msg('Select a workspace or create a new one')}</div>
                   </div>
                 `}
           </div>
@@ -1619,7 +1652,7 @@ export class GnWorkspaceManagerDialog extends LitElement {
                     ?disabled=${this.deletingWorkspace}
                     @click=${this.handleDelete}
                   >
-                    Delete
+                    ${msg('Delete')}
                   </button>
                 `
               : nothing}
@@ -1632,11 +1665,11 @@ export class GnWorkspaceManagerDialog extends LitElement {
                     ?disabled=${!hasRepos}
                     @click=${this.handleOpenWorkspace}
                   >
-                    Open Workspace
+                    ${msg('Open Workspace')}
                   </button>
                 `
               : nothing}
-            <button class="btn btn-secondary" @click=${this.close}>Close</button>
+            <button class="btn btn-secondary" @click=${this.close}>${msg('Close')}</button>
           </div>
         </div>
       </div>

@@ -5,6 +5,7 @@
 
 import { LitElement, html, css, nothing } from 'lit';
 import { customElement, property, state, query } from 'lit/decorators.js';
+import { localized, msg, str } from '@lit/localize';
 import { sharedStyles } from '../../styles/shared-styles.ts';
 import * as gitService from '../../services/git.service.ts';
 import { showConfirm } from '../../services/dialog.service.ts';
@@ -41,6 +42,7 @@ interface ContextMenuState {
 }
 
 @customElement('gn-tag-list')
+@localized()
 export class GnTagList extends LitElement {
   static styles = [
     sharedStyles,
@@ -573,7 +575,7 @@ export class GnTagList extends LitElement {
           composed: true,
         }));
       } else {
-        this.error = result.error?.message || 'Failed to load tags';
+        this.error = result.error?.message || msg('Failed to load tags');
         this.tags = [];
         this.dispatchEvent(new CustomEvent('tag-count-changed', {
           detail: { count: 0 },
@@ -585,14 +587,14 @@ export class GnTagList extends LitElement {
     } catch (err) {
       console.error('Failed to load tags:', err);
       if (isFresh()) {
-        this.error = err instanceof Error ? err.message : 'Failed to load tags';
+        this.error = err instanceof Error ? err.message : msg('Failed to load tags');
         this.tags = [];
         this.dispatchEvent(new CustomEvent('tag-count-changed', {
           detail: { count: 0 },
           bubbles: true,
           composed: true,
         }));
-        showToast('Failed to load tags', 'error');
+        showToast(msg('Failed to load tags'), 'error');
       }
     } finally {
       if (isFresh()) {
@@ -719,8 +721,10 @@ export class GnTagList extends LitElement {
     // switches tabs while the confirm is up and the prop rebinds.
     const repoPath = this.repositoryPath;
     const confirmed = await showConfirm(
-      'Checkout Tag',
-      `Checking out tag "${tag.name}" will put you in 'detached HEAD' state. Any new commits won't belong to any branch. Continue?`,
+      msg('Checkout Tag'),
+      msg(
+        str`Checking out tag "${tag.name}" will put you in 'detached HEAD' state. Any new commits won't belong to any branch. Continue?`
+      ),
       'warning'
     );
     if (!confirmed) {
@@ -746,7 +750,10 @@ export class GnTagList extends LitElement {
       if (result.success && result.data?.success) {
         const data = result.data;
         if (data.stashed && data.stashConflict) {
-          showToast(`Switched to ${tag.name} — stash conflicts need resolution`, 'warning');
+          showToast(
+            msg(str`Switched to ${tag.name} — stash conflicts need resolution`),
+            'warning',
+          );
           // Open the conflict resolution dialog so the user can resolve the failed
           // auto-stash pop (pop semantics: drop it once resolved). Identified by
           // oid, not position — another surface or a terminal can push a stash
@@ -773,10 +780,10 @@ export class GnTagList extends LitElement {
           composed: true,
         }));
       } else {
-        const errorMsg = result.data?.message || result.error?.message || '';
+        const errorMsg = result.data?.message || result.error;
         console.error('Failed to checkout tag:', errorMsg);
         // Same translation the branch and graph checkout paths get.
-        showErrorWithSuggestion(errorMsg, 'Failed to checkout tag');
+        showErrorWithSuggestion(errorMsg, msg('Failed to checkout tag'));
       }
     } finally {
       this.releaseOperation(lockedRepo);
@@ -815,7 +822,7 @@ export class GnTagList extends LitElement {
         // handleDeleteTag). Here the row just vanished from a list that is
         // often filtered or scrolled away from the deleted row, so the only
         // signal the destructive operation ran at all was absence.
-        showToast(`Deleted tag ${tag.name}`, 'success');
+        showToast(msg(str`Deleted tag ${tag.name}`), 'success');
         this.dispatchEvent(new CustomEvent('tags-changed', {
           detail: { repositoryPath: repoPath },
           bubbles: true,
@@ -827,7 +834,10 @@ export class GnTagList extends LitElement {
         await offerRemoteTagDelete(repoPath, tag.name);
       } else {
         console.error('Failed to delete tag:', result.error);
-        showToast(`Failed to delete tag: ${result.error?.message ?? 'Unknown error'}`, 'error');
+        showToast(
+          msg(str`Failed to delete tag: ${result.error?.message ?? msg('Unknown error')}`),
+          'error',
+        );
       }
     } finally {
       this.releaseOperation(lockedRepo);
@@ -894,7 +904,7 @@ export class GnTagList extends LitElement {
     // which reads as a bug rather than as missing setup.
     if (destination === undefined && this.remotes?.length === 0) {
       this.contextMenu = { ...this.contextMenu, visible: false };
-      showToast('No remotes configured. Add a remote before pushing tags.', 'error');
+      showToast(msg('No remotes configured. Add a remote before pushing tags.'), 'error');
       return;
     }
     const lockedRepo = this.repositoryPath;
@@ -922,7 +932,9 @@ export class GnTagList extends LitElement {
         const remoteResult = await gitService.getPushRemote(repoPath);
         if (!remoteResult.success || !remoteResult.data) {
           showToast(
-            `Could not determine the tag destination: ${remoteResult.error?.message ?? 'Unknown error'}`,
+            msg(
+              str`Could not determine the tag destination: ${remoteResult.error?.message ?? msg('Unknown error')}`
+            ),
             'error',
           );
           return;
@@ -941,7 +953,7 @@ export class GnTagList extends LitElement {
       if (result.success) {
         await this.loadTags();
         showToast(
-          `Pushed tag ${tag.name} to ${destination}`,
+          msg(str`Pushed tag ${tag.name} to ${destination}`),
           'success',
         );
         this.dispatchEvent(new CustomEvent('tags-changed', {
@@ -953,7 +965,7 @@ export class GnTagList extends LitElement {
         console.error('Failed to push tag:', result.error);
         // Same routing the graph's push-tag gesture gets — this was the last
         // push surface still building a raw toast.
-        showErrorWithSuggestion(result.error?.message ?? '', 'Failed to push tag', {
+        showErrorWithSuggestion(result.error, msg('Failed to push tag'), {
           operation: 'push-tag',
           // The Force Push Tag action needs the tag name; without it the
           // suggestion renders a button that dispatches an undefined target.
@@ -1034,7 +1046,7 @@ export class GnTagList extends LitElement {
           <line x1="12" y1="19" x2="12" y2="5"></line>
           <polyline points="5 12 12 5 19 12"></polyline>
         </svg>
-        ${sole ? `Push to ${sole}` : 'Push to Remote'}
+        ${sole ? msg(str`Push to ${sole}`) : msg('Push to Remote')}
       </button>
       ${many && this.pushRemotesExpanded
         ? remotes!.map(
@@ -1060,7 +1072,7 @@ export class GnTagList extends LitElement {
       <div
         class="context-menu"
         role="menu"
-        aria-label="Tag actions"
+        aria-label=${msg('Tag actions')}
         style="left: ${this.contextMenu.x}px; top: ${this.contextMenu.y}px;"
         @click=${(e: Event) => e.stopPropagation()}
         @keydown=${(e: KeyboardEvent) => this.handleContextMenuKeydown(e)}
@@ -1069,7 +1081,7 @@ export class GnTagList extends LitElement {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
             <polyline points="20 6 9 17 4 12"></polyline>
           </svg>
-          Checkout
+          ${msg('Checkout')}
         </button>
         <button class="context-menu-item" role="menuitem" @click=${this.handleCreateTagFromContext}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
@@ -1078,7 +1090,7 @@ export class GnTagList extends LitElement {
             <line x1="12" y1="8" x2="12" y2="14"></line>
             <line x1="9" y1="11" x2="15" y2="11"></line>
           </svg>
-          Create Tag Here
+          ${msg('Create Tag Here')}
         </button>
         ${this.renderPushMenuItems()}
         <div class="context-menu-divider" role="separator" style="height: 1px; background: var(--color-border); margin: var(--spacing-xs) 0;"></div>
@@ -1087,7 +1099,7 @@ export class GnTagList extends LitElement {
             <polyline points="3 6 5 6 21 6"></polyline>
             <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"></path>
           </svg>
-          Delete
+          ${msg('Delete')}
         </button>
       </div>
     `;
@@ -1110,7 +1122,7 @@ export class GnTagList extends LitElement {
         </svg>
         <div class="tag-info">
           <div class="tag-name">${tag.name}</div>
-          <div class="tag-type">${tag.isAnnotated ? 'annotated' : 'lightweight'}</div>
+          <div class="tag-type">${tag.isAnnotated ? msg('annotated') : msg('lightweight')}</div>
         </div>
       </li>
     `;
@@ -1121,8 +1133,8 @@ export class GnTagList extends LitElement {
       <div class="controls" style="position: relative;">
         <button
           class="controls-btn ${this.showFilter ? 'active' : ''}"
-          title="Filter tags"
-          aria-label="Filter tags"
+          title=${msg('Filter tags')}
+          aria-label=${msg('Filter tags')}
           @click=${this.toggleFilter}
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
@@ -1132,8 +1144,8 @@ export class GnTagList extends LitElement {
         </button>
         <button
           class="controls-btn ${this.showSortMenu ? 'active' : ''}"
-          title="Sort tags"
-          aria-label="Sort tags"
+          title=${msg('Sort tags')}
+          aria-label=${msg('Sort tags')}
           @click=${(e: Event) => this.toggleSortMenu(e)}
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
@@ -1143,12 +1155,12 @@ export class GnTagList extends LitElement {
           </svg>
         </button>
         ${this.showSortMenu ? html`
-          <div class="sort-menu" role="menu" aria-label="Sort options" @click=${(e: Event) => e.stopPropagation()}>
+          <div class="sort-menu" role="menu" aria-label=${msg('Sort options')} @click=${(e: Event) => e.stopPropagation()}>
             <button class="sort-option ${this.sortMode === 'name' ? 'active' : ''}" role="menuitem" @click=${() => this.setSortMode('name')}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                 <path d="M4 6h7M4 12h5M4 18h3M17 6v12M14 18l3 3 3-3"></path>
               </svg>
-              Name (A-Z)
+              ${msg('Name (A-Z)')}
             </button>
             <button class="sort-option ${this.sortMode === 'date' ? 'active' : ''}" role="menuitem" @click=${() => this.setSortMode('date')}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
@@ -1157,7 +1169,7 @@ export class GnTagList extends LitElement {
                 <line x1="8" y1="2" x2="8" y2="6"></line>
                 <line x1="3" y1="10" x2="21" y2="10"></line>
               </svg>
-              Date (Newest)
+              ${msg('Date (Newest)')}
             </button>
             <button class="sort-option ${this.sortMode === 'date-asc' ? 'active' : ''}" role="menuitem" @click=${() => this.setSortMode('date-asc')}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
@@ -1166,7 +1178,7 @@ export class GnTagList extends LitElement {
                 <line x1="8" y1="2" x2="8" y2="6"></line>
                 <line x1="3" y1="10" x2="21" y2="10"></line>
               </svg>
-              Date (Oldest)
+              ${msg('Date (Oldest)')}
             </button>
           </div>
         ` : nothing}
@@ -1180,13 +1192,13 @@ export class GnTagList extends LitElement {
           <input
             class="filter-input"
             type="text"
-            placeholder="Filter tags..."
-            aria-label="Filter tags"
+            placeholder=${msg('Filter tags...')}
+            aria-label=${msg('Filter tags')}
             .value=${this.filterText}
             @input=${this.handleFilterInput}
           />
           ${this.filterText ? html`
-            <button class="filter-clear" aria-label="Clear filter" @click=${this.clearFilter}>
+            <button class="filter-clear" aria-label=${msg('Clear filter')} @click=${this.clearFilter}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                 <line x1="18" y1="6" x2="6" y2="18"></line>
                 <line x1="6" y1="6" x2="18" y2="18"></line>
@@ -1213,7 +1225,7 @@ export class GnTagList extends LitElement {
 
   private renderBody() {
     if (this.loading) {
-      return html`<div class="loading">Loading tags...</div>`;
+      return html`<div class="loading">${msg('Loading tags...')}</div>`;
     }
 
     // Before the empty check: "No tags" over a repo whose tag load failed is a
@@ -1225,7 +1237,7 @@ export class GnTagList extends LitElement {
     if (this.tags.length === 0) {
       return html`
         ${this.renderControls()}
-        <div class="empty">No tags</div>
+        <div class="empty">${msg('No tags')}</div>
       `;
     }
 
@@ -1237,7 +1249,7 @@ export class GnTagList extends LitElement {
       ${this.renderControls()}
 
       ${filtered.length === 0
-        ? html`<div class="empty">No matching tags</div>`
+        ? html`<div class="empty">${msg('No matching tags')}</div>`
         : groups.length === 1 && groups[0].name === ''
           ? html`
               <ul class="tag-list" role="list">
@@ -1251,14 +1263,16 @@ export class GnTagList extends LitElement {
                   role="button"
                   tabindex="0"
                   aria-expanded=${!collapsed}
-                  aria-label="${group.name} tags group, ${group.tags.length} tags"
+                  aria-label=${msg(
+                    str`${group.name === 'Other' ? msg('Other') : group.name} tags group, ${group.tags.length} tags`
+                  )}
                   @click=${() => this.toggleGroupCollapse(group.name)}
                   @keydown=${(e: KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this.toggleGroupCollapse(group.name); } }}
                 >
                   <svg class="chevron ${collapsed ? '' : 'expanded'}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                     <polyline points="9 18 15 12 9 6"></polyline>
                   </svg>
-                  <span class="group-name">${group.name}</span>
+                  <span class="group-name">${group.name === 'Other' ? msg('Other') : group.name}</span>
                   <span class="group-count">${group.tags.length}</span>
                 </div>
                 ${!collapsed ? html`

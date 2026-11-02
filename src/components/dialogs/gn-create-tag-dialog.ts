@@ -5,6 +5,7 @@
 
 import { LitElement, html, css, nothing } from 'lit';
 import { customElement, state, property, query } from 'lit/decorators.js';
+import { localized, msg } from '@lit/localize';
 import { sharedStyles } from '../../styles/shared-styles.ts';
 import { createTag } from '../../services/git.service.ts';
 import { containsDeepActiveElement } from '../../utils/focus.ts';
@@ -13,6 +14,7 @@ import './gn-modal.ts';
 import type { GnModal } from './gn-modal.ts';
 
 @customElement('gn-create-tag-dialog')
+@localized()
 export class GnCreateTagDialog extends LitElement {
   static styles = [
     sharedStyles,
@@ -277,17 +279,17 @@ export class GnCreateTagDialog extends LitElement {
     const tagName = this.name.trim();
 
     if (!tagName) {
-      this.error = 'Please enter a tag name';
+      this.error = msg('Please enter a tag name');
       return;
     }
 
     if (tagName.startsWith('-') || tagName.startsWith('.')) {
-      this.error = 'Tag name cannot start with - or .';
+      this.error = msg('Tag name cannot start with - or .');
       return;
     }
 
     if (this.isAnnotated && !this.message.trim()) {
-      this.error = 'Please enter a message for the annotated tag';
+      this.error = msg('Please enter a message for the annotated tag');
       return;
     }
 
@@ -311,10 +313,10 @@ export class GnCreateTagDialog extends LitElement {
         }));
         this.close();
       } else {
-        this.error = result.error?.message ?? 'Failed to create tag';
+        this.error = result.error?.message ?? msg('Failed to create tag');
       }
     } catch (err) {
-      this.error = err instanceof Error ? err.message : 'Unknown error occurred';
+      this.error = err instanceof Error ? err.message : msg('Unknown error occurred');
     } finally {
       this.isCreating = false;
     }
@@ -367,12 +369,12 @@ export class GnCreateTagDialog extends LitElement {
   render() {
     return html`
       <gn-modal
-        modalTitle="Create Tag"
+        modalTitle=${msg('Create Tag')}
         @close=${this.handleModalClose}
       >
         <div class="form" @keydown=${this.handleKeyDown}>
           <div class="field">
-            <label for="tag-name-input">Tag Name</label>
+            <label for="tag-name-input">${msg('Tag Name')}</label>
             <input
               id="tag-name-input"
               type="text"
@@ -381,11 +383,13 @@ export class GnCreateTagDialog extends LitElement {
               @input=${this.handleNameChange}
               ?disabled=${this.isCreating}
             />
-            <span class="field-hint">Use semantic versioning (e.g., v1.0.0, v2.1.0-beta)</span>
+            <span class="field-hint">
+              ${msg('Use semantic versioning (e.g., v1.0.0, v2.1.0-beta)')}
+            </span>
           </div>
 
           <div class="field">
-            <label for="target-input">Target (optional)</label>
+            <label for="target-input">${msg('Target (optional)')}</label>
             <input
               id="target-input"
               type="text"
@@ -394,35 +398,37 @@ export class GnCreateTagDialog extends LitElement {
               @input=${this.handleTargetChange}
               ?disabled=${this.isCreating}
             />
-            <span class="field-hint">Commit, branch, or tag to create from (defaults to HEAD)</span>
+            <span class="field-hint">
+              ${msg('Commit, branch, or tag to create from (defaults to HEAD)')}
+            </span>
           </div>
 
           <div class="toggle-field">
             <gn-toggle
-              label="Annotated Tag"
+              label=${msg('Annotated Tag')}
               description=${this.isAnnotated
-                ? 'Includes message, author, and date'
-                : 'Lightweight tag (just a reference to a commit)'}
+                ? msg('Includes message, author, and date')
+                : msg('Lightweight tag (just a reference to a commit)')}
               .checked=${this.isAnnotated}
               ?disabled=${this.isCreating}
               @change=${this.handleAnnotatedChange}
             ></gn-toggle>
             <div class="toggle-label">
-              <span class="toggle-label-main">Annotated Tag</span>
+              <span class="toggle-label-main">${msg('Annotated Tag')}</span>
               <span class="toggle-label-hint">
                 ${this.isAnnotated
-                  ? 'Includes message, author, and date'
-                  : 'Lightweight tag (just a reference to a commit)'}
+                  ? msg('Includes message, author, and date')
+                  : msg('Lightweight tag (just a reference to a commit)')}
               </span>
             </div>
           </div>
 
           ${this.isAnnotated ? html`
             <div class="field">
-              <label for="message-input">Message</label>
+              <label for="message-input">${msg('Message')}</label>
               <textarea
                 id="message-input"
-                placeholder="Release notes or description..."
+                placeholder=${msg('Release notes or description...')}
                 .value=${this.message}
                 @input=${this.handleMessageChange}
                 ?disabled=${this.isCreating}
@@ -441,14 +447,14 @@ export class GnCreateTagDialog extends LitElement {
             @click=${this.close}
             ?disabled=${this.isCreating}
           >
-            Cancel
+            ${msg('Cancel')}
           </button>
           <button
             class="btn btn-primary"
             @click=${this.handleCreate}
             ?disabled=${!this.canCreate}
           >
-            ${this.isCreating ? 'Creating...' : 'Create Tag'}
+            ${this.isCreating ? msg('Creating...') : msg('Create Tag')}
           </button>
         </div>
       </gn-modal>

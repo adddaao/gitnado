@@ -5,6 +5,7 @@
 
 import { LitElement, html, css, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
+import { localized, msg, str } from '@lit/localize';
 import { sharedStyles } from '../../styles/shared-styles.ts';
 import * as gitService from '../../services/git.service.ts';
 import { showConfirm } from '../../services/dialog.service.ts';
@@ -15,6 +16,7 @@ import { pushOverlay, removeOverlay, isTopOverlay } from '../../utils/overlay-st
 type DialogMode = 'list' | 'add' | 'edit' | 'rename';
 
 @customElement('gn-remote-dialog')
+@localized()
 export class GnRemoteDialog extends LitElement {
   static styles = [
     sharedStyles,
@@ -440,12 +442,12 @@ export class GnRemoteDialog extends LitElement {
         this.remotes = result.data;
       } else {
         this.remotes = [];
-        this.error = result.error?.message ?? 'Failed to load remotes';
+        this.error = result.error?.message ?? msg('Failed to load remotes');
       }
     } catch (err) {
       if (repoPath !== this.pinnedRepoPath) return;
       this.remotes = [];
-      this.error = err instanceof Error ? err.message : 'Unknown error';
+      this.error = err instanceof Error ? err.message : msg('Unknown error');
     } finally {
       if (repoPath === this.pinnedRepoPath) {
         this.loading = false;
@@ -547,11 +549,11 @@ export class GnRemoteDialog extends LitElement {
         await this.loadRemotes(repoPath);
         this.dispatchEvent(new CustomEvent('remotes-changed', { bubbles: true, composed: true }));
       } else if (repoPath === this.pinnedRepoPath) {
-        this.error = result.error?.message ?? 'Failed to add remote';
+        this.error = result.error?.message ?? msg('Failed to add remote');
       }
     } catch (err) {
       if (repoPath === this.pinnedRepoPath) {
-        this.error = err instanceof Error ? err.message : 'Unknown error';
+        this.error = err instanceof Error ? err.message : msg('Unknown error');
       }
     } finally {
       this.saving = false;
@@ -580,7 +582,7 @@ export class GnRemoteDialog extends LitElement {
 
       if (!result.success) {
         if (repoPath === this.pinnedRepoPath) {
-          this.error = result.error?.message ?? 'Failed to update URL';
+          this.error = result.error?.message ?? msg('Failed to update URL');
         }
         return;
       }
@@ -604,7 +606,7 @@ export class GnRemoteDialog extends LitElement {
           if (repoPath === this.pinnedRepoPath) {
             this.error =
               result.error?.message ??
-              (wantsPushUrl ? 'Failed to update push URL' : 'Failed to clear push URL');
+              (wantsPushUrl ? msg('Failed to update push URL') : msg('Failed to clear push URL'));
           }
           return;
         }
@@ -617,7 +619,7 @@ export class GnRemoteDialog extends LitElement {
       this.dispatchEvent(new CustomEvent('remotes-changed', { bubbles: true, composed: true }));
     } catch (err) {
       if (repoPath === this.pinnedRepoPath) {
-        this.error = err instanceof Error ? err.message : 'Unknown error';
+        this.error = err instanceof Error ? err.message : msg('Unknown error');
       }
     } finally {
       this.saving = false;
@@ -652,11 +654,11 @@ export class GnRemoteDialog extends LitElement {
         await this.loadRemotes(repoPath);
         this.dispatchEvent(new CustomEvent('remotes-changed', { bubbles: true, composed: true }));
       } else if (repoPath === this.pinnedRepoPath) {
-        this.error = result.error?.message ?? 'Failed to rename remote';
+        this.error = result.error?.message ?? msg('Failed to rename remote');
       }
     } catch (err) {
       if (repoPath === this.pinnedRepoPath) {
-        this.error = err instanceof Error ? err.message : 'Unknown error';
+        this.error = err instanceof Error ? err.message : msg('Unknown error');
       }
     } finally {
       this.saving = false;
@@ -673,15 +675,17 @@ export class GnRemoteDialog extends LitElement {
         silent: true,
       });
       if (result.success) {
-        showToast(`Fetched from ${remote.name}`, 'success');
+        showToast(msg(str`Fetched from ${remote.name}`), 'success');
         this.dispatchEvent(new CustomEvent('remotes-changed', { bubbles: true, composed: true }));
       } else if (!gitService.isNetworkGateRefusal(result.error)) {
         // A gate refusal already announced itself, and a declined confirm is
         // the user's own decision — reporting either back is a lie.
-        showToast(`Fetch failed: ${result.error?.message ?? 'Unknown error'}`, 'error');
+        const reason = result.error?.message ?? msg('Unknown error');
+        showToast(msg(str`Fetch failed: ${reason}`), 'error');
       }
     } catch (err) {
-      showToast(`Fetch failed: ${err instanceof Error ? err.message : 'Unknown error'}`, 'error');
+      const reason = err instanceof Error ? err.message : msg('Unknown error');
+      showToast(msg(str`Fetch failed: ${reason}`), 'error');
     } finally {
       this.fetchingRemote = null;
     }
@@ -698,17 +702,25 @@ export class GnRemoteDialog extends LitElement {
       if (result.success && result.data) {
         const count = result.data.branchesPruned.length;
         if (count === 0) {
-          showToast(`Nothing to prune from ${remote.name}`, 'info');
+          showToast(msg(str`Nothing to prune from ${remote.name}`), 'info');
         } else {
-          showToast(`Pruned ${count} stale tracking branch${count !== 1 ? 'es' : ''} from ${remote.name}`, 'success');
+          // Two full messages instead of `branch${count !== 1 ? 'es' : ''}`.
+          showToast(
+            count === 1
+              ? msg(str`Pruned ${count} stale tracking branch from ${remote.name}`)
+              : msg(str`Pruned ${count} stale tracking branches from ${remote.name}`),
+            'success',
+          );
           await this.loadRemotes(repoPath);
           this.dispatchEvent(new CustomEvent('remotes-changed', { bubbles: true, composed: true }));
         }
       } else if (!gitService.isNetworkGateRefusal(result.error)) {
-        showToast(`Prune failed: ${result.error?.message ?? 'Unknown error'}`, 'error');
+        const reason = result.error?.message ?? msg('Unknown error');
+        showToast(msg(str`Prune failed: ${reason}`), 'error');
       }
     } catch (err) {
-      showToast(`Prune failed: ${err instanceof Error ? err.message : 'Unknown error'}`, 'error');
+      const reason = err instanceof Error ? err.message : msg('Unknown error');
+      showToast(msg(str`Prune failed: ${reason}`), 'error');
     } finally {
       this.pruningRemote = null;
     }
@@ -730,8 +742,8 @@ export class GnRemoteDialog extends LitElement {
     const repoPath = this.pinnedRepoPath;
 
     const confirmed = await showConfirm(
-      'Remove Remote',
-      `Are you sure you want to remove the remote "${remote.name}"?\n\nThis will not delete the remote repository, only the local reference.`,
+      msg('Remove Remote'),
+      msg(str`Are you sure you want to remove the remote "${remote.name}"?\n\nThis will not delete the remote repository, only the local reference.`),
       'warning'
     );
 
@@ -751,20 +763,16 @@ export class GnRemoteDialog extends LitElement {
       if (result.success) {
         await this.loadRemotes(repoPath);
         this.dispatchEvent(new CustomEvent('remotes-changed', { bubbles: true, composed: true }));
-        showToast(`Removed remote ${remote.name}`, 'success');
+        showToast(msg(str`Removed remote ${remote.name}`), 'success');
       } else {
         // Match the toast pattern used by sibling list-row actions
         // (handleFetchRemote, handlePruneRemote).
-        showToast(
-          `Failed to remove remote: ${result.error?.message ?? 'Unknown error'}`,
-          'error',
-        );
+        const reason = result.error?.message ?? msg('Unknown error');
+        showToast(msg(str`Failed to remove remote: ${reason}`), 'error');
       }
     } catch (err) {
-      showToast(
-        `Failed to remove remote: ${err instanceof Error ? err.message : 'Unknown error'}`,
-        'error',
-      );
+      const reason = err instanceof Error ? err.message : msg('Unknown error');
+      showToast(msg(str`Failed to remove remote: ${reason}`), 'error');
     } finally {
       this.removingRemote = null;
     }
@@ -772,16 +780,16 @@ export class GnRemoteDialog extends LitElement {
 
   private getTitle(): string {
     switch (this.mode) {
-      case 'add': return 'Add Remote';
-      case 'edit': return 'Edit Remote URL';
-      case 'rename': return 'Rename Remote';
-      default: return 'Remotes';
+      case 'add': return msg('Add Remote');
+      case 'edit': return msg('Edit Remote URL');
+      case 'rename': return msg('Rename Remote');
+      default: return msg('Remotes');
     }
   }
 
   private renderRemoteList() {
     if (this.loading) {
-      return html`<div class="loading">Loading remotes...</div>`;
+      return html`<div class="loading">${msg('Loading remotes...')}</div>`;
     }
 
     if (this.remotes.length === 0) {
@@ -792,9 +800,9 @@ export class GnRemoteDialog extends LitElement {
             <line x1="2" y1="12" x2="22" y2="12"></line>
             <path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"></path>
           </svg>
-          <div>No remotes configured</div>
+          <div>${msg('No remotes configured')}</div>
           <div style="font-size: var(--font-size-xs); margin-top: var(--spacing-xs);">
-            Add a remote to push and pull changes
+            ${msg('Add a remote to push and pull changes')}
           </div>
         </div>
         ${this.error ? html`<div class="error">${this.error}</div>` : nothing}
@@ -817,13 +825,13 @@ export class GnRemoteDialog extends LitElement {
               <div class="remote-name">${remote.name}</div>
               <div class="remote-url" title="${remote.url}">${remote.url}</div>
               ${remote.pushUrl && remote.pushUrl !== remote.url ? html`
-                <div class="remote-url" title="Push: ${remote.pushUrl}">Push: ${remote.pushUrl}</div>
+                <div class="remote-url" title=${msg(str`Push: ${remote.pushUrl}`)}>${msg(str`Push: ${remote.pushUrl}`)}</div>
               ` : nothing}
             </div>
             <div class="remote-actions">
               <button
                 class="action-btn"
-                title="Fetch"
+                title=${msg('Fetch')}
                 ?disabled=${this.fetchingRemote === remote.name}
                 @click=${() => this.handleFetchRemote(remote)}
               >
@@ -835,7 +843,7 @@ export class GnRemoteDialog extends LitElement {
               </button>
               <button
                 class="action-btn"
-                title="Prune stale tracking branches"
+                title=${msg('Prune stale tracking branches')}
                 ?disabled=${this.pruningRemote === remote.name}
                 @click=${() => this.handlePruneRemote(remote)}
               >
@@ -849,7 +857,7 @@ export class GnRemoteDialog extends LitElement {
               </button>
               <button
                 class="action-btn"
-                title="Edit URL"
+                title=${msg('Edit URL')}
                 @click=${() => this.startEdit(remote)}
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -858,7 +866,7 @@ export class GnRemoteDialog extends LitElement {
               </button>
               <button
                 class="action-btn"
-                title="Rename"
+                title=${msg('Rename')}
                 @click=${() => this.startRename(remote)}
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -868,7 +876,7 @@ export class GnRemoteDialog extends LitElement {
               </button>
               <button
                 class="action-btn danger"
-                title="Remove"
+                title=${msg('Remove')}
                 ?disabled=${this.removingRemote === remote.name}
                 @click=${() => this.handleRemove(remote)}
               >
@@ -888,18 +896,18 @@ export class GnRemoteDialog extends LitElement {
     return html`
       <div class="form">
         <div class="form-group">
-          <label class="form-label">Name</label>
+          <label class="form-label">${msg('Name')}</label>
           <input
             type="text"
             class="form-input"
-            placeholder="e.g., origin, upstream"
+            placeholder=${msg('e.g., origin, upstream')}
             .value=${this.formName}
             @input=${(e: Event) => { this.formName = (e.target as HTMLInputElement).value; }}
           />
-          <div class="form-hint">A short name to identify this remote</div>
+          <div class="form-hint">${msg('A short name to identify this remote')}</div>
         </div>
         <div class="form-group">
-          <label class="form-label">URL</label>
+          <label class="form-label">${msg('URL')}</label>
           <input
             type="text"
             class="form-input mono"
@@ -907,7 +915,7 @@ export class GnRemoteDialog extends LitElement {
             .value=${this.formUrl}
             @input=${(e: Event) => { this.formUrl = (e.target as HTMLInputElement).value; }}
           />
-          <div class="form-hint">HTTPS or SSH URL of the remote repository</div>
+          <div class="form-hint">${msg('HTTPS or SSH URL of the remote repository')}</div>
         </div>
         ${this.error ? html`<div class="error">${this.error}</div>` : nothing}
       </div>
@@ -918,7 +926,7 @@ export class GnRemoteDialog extends LitElement {
     return html`
       <div class="form">
         <div class="form-group">
-          <label class="form-label">Fetch URL</label>
+          <label class="form-label">${msg('Fetch URL')}</label>
           <input
             type="text"
             class="form-input mono"
@@ -927,15 +935,15 @@ export class GnRemoteDialog extends LitElement {
           />
         </div>
         <div class="form-group">
-          <label class="form-label">Push URL (optional)</label>
+          <label class="form-label">${msg('Push URL (optional)')}</label>
           <input
             type="text"
             class="form-input mono"
-            placeholder="Same as fetch URL if empty"
+            placeholder=${msg('Same as fetch URL if empty')}
             .value=${this.formPushUrl}
             @input=${(e: Event) => { this.formPushUrl = (e.target as HTMLInputElement).value; }}
           />
-          <div class="form-hint">Set a different URL for push operations</div>
+          <div class="form-hint">${msg('Set a different URL for push operations')}</div>
         </div>
         ${this.error ? html`<div class="error">${this.error}</div>` : nothing}
       </div>
@@ -946,7 +954,7 @@ export class GnRemoteDialog extends LitElement {
     return html`
       <div class="form">
         <div class="form-group">
-          <label class="form-label">New Name</label>
+          <label class="form-label">${msg('New Name')}</label>
           <input
             type="text"
             class="form-input"
@@ -973,7 +981,7 @@ export class GnRemoteDialog extends LitElement {
       return html`
         <div class="footer-left"></div>
         <button class="btn btn-primary" @click=${this.startAdd}>
-          Add Remote
+          ${msg('Add Remote')}
         </button>
       `;
     }
@@ -991,13 +999,13 @@ export class GnRemoteDialog extends LitElement {
         : () => this.handleSaveUrl();
 
     return html`
-      <button class="btn btn-secondary" @click=${this.resetForm}>Cancel</button>
+      <button class="btn btn-secondary" @click=${this.resetForm}>${msg('Cancel')}</button>
       <button
         class="btn btn-primary"
         ?disabled=${!canSave || this.saving}
         @click=${handleSave}
       >
-        ${this.saving ? 'Saving...' : 'Save'}
+        ${this.saving ? msg('Saving...') : msg('Save')}
       </button>
     `;
   }

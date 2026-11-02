@@ -13,6 +13,7 @@
 
 import { LitElement, html, css, type PropertyValues } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
+import { localized, msg, str } from '@lit/localize';
 import { sharedStyles } from '../../styles/shared-styles.ts';
 import {
   scanForRepositories,
@@ -37,6 +38,7 @@ function folderName(path: string): string {
 }
 
 @customElement('gn-scan-repositories-dialog')
+@localized()
 export class GnScanRepositoriesDialog extends LitElement {
   static styles = [
     sharedStyles,
@@ -411,11 +413,13 @@ export class GnScanRepositoriesDialog extends LitElement {
   /** What a drop onto the already-open dialog just did. */
   private retargetMessage(sameFolder: boolean, rescanSameFolder: boolean): string {
     const name = folderName(this.scanPath);
-    if (rescanSameFolder) return `Rescanning ${name}`;
+    if (rescanSameFolder) return msg(str`Rescanning ${name}`);
     // Re-dropped onto its own unanswered offer: nothing changed, so say why the
     // same question is still on screen rather than leaving the drop unexplained.
-    if (sameFolder) return `${name} is still not a Git repository`;
-    return this.mode === 'scan' ? `Now scanning ${name}` : `Now showing ${name}`;
+    if (sameFolder) return msg(str`${name} is still not a Git repository`);
+    return this.mode === 'scan'
+      ? msg(str`Now scanning ${name}`)
+      : msg(str`Now showing ${name}`);
   }
 
   disconnectedCallback(): void {
@@ -443,7 +447,7 @@ export class GnScanRepositoriesDialog extends LitElement {
   private async startScan(): Promise<void> {
     if (!this.scanPath) {
       this.phase = 'error';
-      this.error = 'No folder was chosen to scan';
+      this.error = msg('No folder was chosen to scan');
       return;
     }
 
@@ -490,7 +494,7 @@ export class GnScanRepositoriesDialog extends LitElement {
 
     if (!response.success || !response.data) {
       this.phase = 'error';
-      this.error = response.error?.message ?? 'Failed to scan for repositories';
+      this.error = response.error?.message ?? msg('Failed to scan for repositories');
       return;
     }
 
@@ -512,7 +516,7 @@ export class GnScanRepositoriesDialog extends LitElement {
       // The walk is still running, so closing the dialog (or dropping another
       // folder on it) must still be allowed to try to stop it.
       this.scanIssued = true;
-      showToast(result.error?.message ?? 'Failed to cancel the scan', 'error');
+      showToast(result.error?.message ?? msg('Failed to cancel the scan'), 'error');
     }
   }
 
@@ -560,7 +564,7 @@ export class GnScanRepositoriesDialog extends LitElement {
       .getState()
       .openRepositories.some((repo) => repo.repository.path === path);
     if (alreadyOpen) {
-      showToast(`${folderName(path)} is already a Git repository`, 'info');
+      showToast(msg(str`${folderName(path)} is already a Git repository`), 'info');
       this.close();
       return;
     }
@@ -618,7 +622,7 @@ export class GnScanRepositoriesDialog extends LitElement {
         const outcome = await openRepositoryPath(path);
         if (outcome.status === 'opened') opened++;
         else if (outcome.status === 'already-open') alreadyOpen++;
-        else failures.push(`${outcome.path}: ${outcome.message ?? 'failed to open'}`);
+        else failures.push(`${outcome.path}: ${outcome.message ?? msg('failed to open')}`);
       }
     } finally {
       // `reset()` already cleared this for the folder that replaced ours; only
@@ -637,12 +641,14 @@ export class GnScanRepositoriesDialog extends LitElement {
       // deselect the ones that did not.
       this.error =
         failures.length === 1
-          ? `Could not open ${failures[0]}`
-          : `Could not open ${failures.length} of ${paths.length} repositories: ${failures.join('; ')}`;
+          ? msg(str`Could not open ${failures[0]}`)
+          : msg(
+              str`Could not open ${failures.length} of ${paths.length} repositories: ${failures.join('; ')}`
+            );
       showToast(
         opened > 0
-          ? `Opened ${opened} of ${paths.length} repositories`
-          : 'Could not open the selected repositories',
+          ? msg(str`Opened ${opened} of ${paths.length} repositories`)
+          : msg('Could not open the selected repositories'),
         opened > 0 ? 'warning' : 'error',
       );
       this.openPaths = repositoryStore
@@ -653,14 +659,16 @@ export class GnScanRepositoriesDialog extends LitElement {
 
     if (opened > 0) {
       showToast(
-        opened === 1 ? 'Opened 1 repository' : `Opened ${opened} repositories`,
+        opened === 1
+          ? msg('Opened 1 repository')
+          : msg(str`Opened ${opened} repositories`),
         'success',
       );
     } else if (alreadyOpen > 0) {
       showToast(
         alreadyOpen === 1
-          ? 'That repository is already open'
-          : 'Those repositories are already open',
+          ? msg('That repository is already open')
+          : msg('Those repositories are already open'),
         'info',
       );
     }
@@ -679,12 +687,14 @@ export class GnScanRepositoriesDialog extends LitElement {
   private reportAbandonedOpen(opened: number, failures: string[]): void {
     if (opened > 0) {
       showToast(
-        opened === 1 ? 'Opened 1 repository' : `Opened ${opened} repositories`,
+        opened === 1
+          ? msg('Opened 1 repository')
+          : msg(str`Opened ${opened} repositories`),
         'success',
       );
     }
     for (const failure of failures) {
-      showToast(`Could not open ${failure}`, 'error');
+      showToast(msg(str`Could not open ${failure}`), 'error');
     }
     // Anything that did open belongs in the "already open" badges of whatever
     // the dialog is showing now.
@@ -708,14 +718,14 @@ export class GnScanRepositoriesDialog extends LitElement {
   private renderOffer() {
     return html`
       <div class="body">
-        <div class="explanation">This folder is not a Git repository.</div>
+        <div class="explanation">${msg('This folder is not a Git repository.')}</div>
         <div class="folder-path">${this.scanPath}</div>
         <div class="offer-actions">
           <button class="btn btn-primary" @click=${this.handleScanFromOffer}>
-            Scan it for repositories
+            ${msg('Scan it for repositories')}
           </button>
           <button class="btn btn-secondary" @click=${this.handleInitialize}>
-            Initialize a repository here
+            ${msg('Initialize a repository here')}
           </button>
         </div>
       </div>
@@ -730,8 +740,14 @@ export class GnScanRepositoriesDialog extends LitElement {
           <span class="spinner" aria-hidden="true"></span>
           <span role="status">
             ${this.progress
-              ? `Searched ${this.progress.scannedDirectories} folders — found ${this.progress.found} ${this.progress.found === 1 ? 'repository' : 'repositories'}`
-              : 'Searching for repositories…'}
+              ? this.progress.found === 1
+                ? msg(
+                    str`Searched ${this.progress.scannedDirectories} folders — found ${this.progress.found} repository`
+                  )
+                : msg(
+                    str`Searched ${this.progress.scannedDirectories} folders — found ${this.progress.found} repositories`
+                  )
+              : msg('Searching for repositories…')}
           </span>
         </div>
       </div>
@@ -745,15 +761,15 @@ export class GnScanRepositoriesDialog extends LitElement {
         <input
           type="checkbox"
           .checked=${this.selected.has(repo.path)}
-          aria-label="Select ${repo.name}"
+          aria-label=${msg(str`Select ${repo.name}`)}
           @change=${() => this.toggleSelection(repo.path)}
         />
         <div class="result-info">
           <div class="result-name">${repo.name}</div>
           <div class="result-path">${repo.path}</div>
         </div>
-        ${repo.isBare ? html`<span class="badge">bare</span>` : ''}
-        ${isOpen ? html`<span class="badge">already open</span>` : ''}
+        ${repo.isBare ? html`<span class="badge">${msg('bare')}</span>` : ''}
+        ${isOpen ? html`<span class="badge">${msg('already open')}</span>` : ''}
       </label>
     `;
   }
@@ -767,19 +783,25 @@ export class GnScanRepositoriesDialog extends LitElement {
       return html`
         <div class="body">
           <div class="explanation">
-            No Git repositories were found in this folder
-            ${result.cancelled ? ' before the scan was cancelled' : ''}.
+            ${result.cancelled
+              ? msg(
+                  'No Git repositories were found in this folder before the scan was cancelled.'
+                )
+              : msg('No Git repositories were found in this folder.')}
           </div>
           <div class="folder-path">${result.root}</div>
           <div class="notice">
-            Searched ${result.scannedDirectories}
-            ${result.scannedDirectories === 1 ? 'folder' : 'folders'}. Nested folders more than a
-            few levels deep, hidden folders and dependency folders such as node_modules are
-            skipped.
+            ${result.scannedDirectories === 1
+              ? msg(
+                  str`Searched ${result.scannedDirectories} folder. Nested folders more than a few levels deep, hidden folders and dependency folders such as node_modules are skipped.`
+                )
+              : msg(
+                  str`Searched ${result.scannedDirectories} folders. Nested folders more than a few levels deep, hidden folders and dependency folders such as node_modules are skipped.`
+                )}
           </div>
           <div class="offer-actions">
             <button class="btn btn-secondary" @click=${this.handleInitialize}>
-              Initialize a repository here
+              ${msg('Initialize a repository here')}
             </button>
           </div>
         </div>
@@ -791,28 +813,40 @@ export class GnScanRepositoriesDialog extends LitElement {
         <div class="folder-path">${result.root}</div>
         <div class="results-toolbar">
           <span>
-            ${repositories.length}
-            ${repositories.length === 1 ? 'repository' : 'repositories'} found in
-            ${result.scannedDirectories}
-            ${result.scannedDirectories === 1 ? 'folder' : 'folders'}
+            ${repositories.length === 1
+              ? result.scannedDirectories === 1
+                ? msg(
+                    str`${repositories.length} repository found in ${result.scannedDirectories} folder`
+                  )
+                : msg(
+                    str`${repositories.length} repository found in ${result.scannedDirectories} folders`
+                  )
+              : result.scannedDirectories === 1
+                ? msg(
+                    str`${repositories.length} repositories found in ${result.scannedDirectories} folder`
+                  )
+                : msg(
+                    str`${repositories.length} repositories found in ${result.scannedDirectories} folders`
+                  )}
           </span>
           <span class="toolbar-actions">
-            <button class="link-btn" @click=${this.selectAll}>Select all</button>
-            <button class="link-btn" @click=${this.clearSelection}>Clear</button>
+            <button class="link-btn" @click=${this.selectAll}>${msg('Select all')}</button>
+            <button class="link-btn" @click=${this.clearSelection}>${msg('Clear')}</button>
           </span>
         </div>
         ${result.cancelled
           ? html`<div class="notice warning">
-              Scan cancelled — showing what was found before you stopped it.
+              ${msg('Scan cancelled — showing what was found before you stopped it.')}
             </div>`
           : ''}
         ${result.truncated
           ? html`<div class="notice warning">
-              The scan stopped early because this folder is very large. Choose a folder closer to
-              your repositories to see the rest.
+              ${msg(
+                'The scan stopped early because this folder is very large. Choose a folder closer to your repositories to see the rest.'
+              )}
             </div>`
           : ''}
-        <div class="results-list" role="group" aria-label="Repositories found">
+        <div class="results-list" role="group" aria-label=${msg('Repositories found')}>
           ${repositories.map((repo) => this.renderResultItem(repo))}
         </div>
         ${this.error ? html`<div class="error-message">${this.error}</div>` : ''}
@@ -837,7 +871,7 @@ export class GnScanRepositoriesDialog extends LitElement {
           @click=${this.handleCancelScan}
           ?disabled=${this.isCancelling}
         >
-          ${this.isCancelling ? 'Cancelling…' : 'Cancel scan'}
+          ${this.isCancelling ? msg('Cancelling…') : msg('Cancel scan')}
         </button>
       `;
     }
@@ -845,14 +879,16 @@ export class GnScanRepositoriesDialog extends LitElement {
     if (this.phase === 'results' && (this.result?.repositories.length ?? 0) > 0) {
       return html`
         <button class="btn btn-secondary" @click=${this.close} ?disabled=${this.isOpening}>
-          Close
+          ${msg('Close')}
         </button>
         <button
           class="btn btn-primary"
           @click=${this.handleOpenSelected}
           ?disabled=${this.selected.size === 0 || this.isOpening}
         >
-          ${this.isOpening ? 'Opening…' : `Open selected (${this.selected.size})`}
+          ${this.isOpening
+            ? msg('Opening…')
+            : msg(str`Open selected (${this.selected.size})`)}
         </button>
       `;
     }
@@ -863,18 +899,18 @@ export class GnScanRepositoriesDialog extends LitElement {
     // retry against, so the empty-path failure keeps Close alone.
     if (this.phase === 'error' && this.scanPath) {
       return html`
-        <button class="btn btn-secondary" @click=${this.close}>Close</button>
-        <button class="btn btn-primary" @click=${this.handleScanFromOffer}>Try again</button>
+        <button class="btn btn-secondary" @click=${this.close}>${msg('Close')}</button>
+        <button class="btn btn-primary" @click=${this.handleScanFromOffer}>${msg('Try again')}</button>
       `;
     }
 
-    return html`<button class="btn btn-secondary" @click=${this.close}>Close</button>`;
+    return html`<button class="btn btn-secondary" @click=${this.close}>${msg('Close')}</button>`;
   }
 
   render() {
     return html`
       <gn-modal
-        modalTitle="Scan for Repositories"
+        modalTitle=${msg('Scan for Repositories')}
         ?open=${this.open}
         @close=${this.handleModalClose}
       >

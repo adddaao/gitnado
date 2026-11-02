@@ -19,6 +19,7 @@ import type { GitHook, HookExecutionLog } from '../../services/git.service.ts';
 import { showToast } from '../../services/notification.service.ts';
 import { showConfirm } from '../../services/dialog.service.ts';
 import { pushOverlay, removeOverlay, isTopOverlay } from '../../utils/overlay-stack.ts';
+import { localized, msg, str } from '@lit/localize';
 
 const HOOK_TEMPLATES: Record<string, string> = {
   'pre-commit': `#!/bin/sh
@@ -93,6 +94,7 @@ exit 0
 };
 
 @customElement('gn-hooks-dialog')
+@localized()
 export class GnHooksDialog extends LitElement {
   static styles = [
     sharedStyles,
@@ -904,18 +906,21 @@ export class GnHooksDialog extends LitElement {
       if (logsResult.success && Array.isArray(logsResult.data)) {
         this.executionLogs = logsResult.data;
       } else if (!logsResult.success) {
-        showToast(logsResult.error?.message || 'Failed to load hook execution logs', 'error');
+        showToast(
+          logsResult.error?.message || msg('Failed to load hook execution logs'),
+          'error',
+        );
       }
 
       if (result.success && result.data) {
         this.hooks = result.data;
       } else if (!result.success) {
-        showToast(result.error?.message || 'Failed to load hooks', 'error');
+        showToast(result.error?.message || msg('Failed to load hooks'), 'error');
       }
     } catch (err) {
       if (targetRepo === this.pinnedRepoPath) {
         console.error('Failed to load hooks:', err);
-        showToast('Failed to load hooks', 'error');
+        showToast(msg('Failed to load hooks'), 'error');
       }
     } finally {
       if (targetRepo === this.pinnedRepoPath) {
@@ -934,12 +939,15 @@ export class GnHooksDialog extends LitElement {
       if (result.success && Array.isArray(result.data)) {
         this.executionLogs = result.data;
       } else if (!result.success) {
-        showToast(result.error?.message || 'Failed to load hook execution logs', 'error');
+        showToast(
+          result.error?.message || msg('Failed to load hook execution logs'),
+          'error',
+        );
       }
     } catch (err) {
       if (targetRepo === this.pinnedRepoPath) {
         console.error('Failed to load hook execution logs:', err);
-        showToast('Failed to load hook execution logs', 'error');
+        showToast(msg('Failed to load hook execution logs'), 'error');
       }
     }
   }
@@ -954,16 +962,18 @@ export class GnHooksDialog extends LitElement {
         this.executionLogs = [];
         this.collapsedLogIds = new Set();
         await this.loadExecutionLogs();
-        showToast('Hook execution logs cleared', 'success');
+        showToast(msg('Hook execution logs cleared'), 'success');
       } else {
         showToast(
-          `Failed to clear hook execution logs: ${result.error?.message ?? 'Unknown error'}`,
+          msg(
+            str`Failed to clear hook execution logs: ${result.error?.message ?? msg('Unknown error')}`
+          ),
           'error',
         );
       }
     } catch (err) {
       console.error('Failed to clear hook execution logs:', err);
-      showToast('Failed to clear hook execution logs', 'error');
+      showToast(msg('Failed to clear hook execution logs'), 'error');
     } finally {
       this.clearingLogs = false;
     }
@@ -988,7 +998,11 @@ export class GnHooksDialog extends LitElement {
 
   private async selectHook(hook: GitHook): Promise<void> {
     if (this.hasUnsavedChanges) {
-      const discard = await showConfirm('Unsaved Changes', 'You have unsaved changes. Discard them?', 'warning');
+      const discard = await showConfirm(
+        msg('Unsaved Changes'),
+        msg('You have unsaved changes. Discard them?'),
+        'warning',
+      );
       if (!discard) return;
     }
 
@@ -1052,7 +1066,10 @@ export class GnHooksDialog extends LitElement {
       const result = await saveHook(this.pinnedRepoPath, this.selectedHook.name, this.editContent);
 
       if (result.success) {
-        showToast(`Hook "${this.selectedHook.name}" saved successfully`, 'success');
+        showToast(
+          msg(str`Hook "${this.selectedHook.name}" saved successfully`),
+          'success',
+        );
         this.hasUnsavedChanges = false;
         // Reload hooks to update status
         const hooksResult = await getHooks(this.pinnedRepoPath);
@@ -1065,11 +1082,14 @@ export class GnHooksDialog extends LitElement {
           }
         }
       } else {
-        showToast(`Failed to save hook: ${result.error?.message ?? 'Unknown error'}`, 'error');
+        showToast(
+          msg(str`Failed to save hook: ${result.error?.message ?? msg('Unknown error')}`),
+          'error',
+        );
       }
     } catch (err) {
       console.error('Failed to save hook:', err);
-      showToast('Failed to save hook', 'error');
+      showToast(msg('Failed to save hook'), 'error');
     } finally {
       this.saving = false;
     }
@@ -1083,7 +1103,9 @@ export class GnHooksDialog extends LitElement {
 
       if (result.success) {
         showToast(
-          `Hook "${hook.name}" ${!hook.enabled ? 'enabled' : 'disabled'}`,
+          !hook.enabled
+            ? msg(str`Hook "${hook.name}" enabled`)
+            : msg(str`Hook "${hook.name}" disabled`),
           'success'
         );
         // Reload hooks
@@ -1098,11 +1120,14 @@ export class GnHooksDialog extends LitElement {
           }
         }
       } else {
-        showToast(`Failed to toggle hook: ${result.error?.message ?? 'Unknown error'}`, 'error');
+        showToast(
+          msg(str`Failed to toggle hook: ${result.error?.message ?? msg('Unknown error')}`),
+          'error',
+        );
       }
     } catch (err) {
       console.error('Failed to toggle hook:', err);
-      showToast('Failed to toggle hook', 'error');
+      showToast(msg('Failed to toggle hook'), 'error');
     }
   }
 
@@ -1124,7 +1149,7 @@ export class GnHooksDialog extends LitElement {
       const result = await deleteHook(this.pinnedRepoPath, hookName);
 
       if (result.success) {
-        showToast(`Hook "${hookName}" deleted`, 'success');
+        showToast(msg(str`Hook "${hookName}" deleted`), 'success');
         // Clear editor if we deleted the selected hook
         if (this.selectedHook?.name === hookName) {
           this.selectedHook = null;
@@ -1137,11 +1162,14 @@ export class GnHooksDialog extends LitElement {
           this.hooks = hooksResult.data;
         }
       } else {
-        showToast(`Failed to delete hook: ${result.error?.message ?? 'Unknown error'}`, 'error');
+        showToast(
+          msg(str`Failed to delete hook: ${result.error?.message ?? msg('Unknown error')}`),
+          'error',
+        );
       }
     } catch (err) {
       console.error('Failed to delete hook:', err);
-      showToast('Failed to delete hook', 'error');
+      showToast(msg('Failed to delete hook'), 'error');
     }
   }
 
@@ -1177,7 +1205,11 @@ export class GnHooksDialog extends LitElement {
 
   public async close(): Promise<void> {
     if (this.hasUnsavedChanges) {
-      const discard = await showConfirm('Unsaved Changes', 'You have unsaved changes. Discard them?', 'warning');
+      const discard = await showConfirm(
+        msg('Unsaved Changes'),
+        msg('You have unsaved changes. Discard them?'),
+        'warning',
+      );
       if (!discard) return;
     }
     // Cleared HERE: close() left them set, and the element stays mounted, so
@@ -1205,7 +1237,10 @@ export class GnHooksDialog extends LitElement {
     if (!template) return;
 
     if (this.editContent.trim() && this.editContent !== this.getDefaultHookContent(this.selectedHook.name)) {
-      const replace = await showConfirm('Replace Content', 'Replace current content with template?');
+      const replace = await showConfirm(
+        msg('Replace Content'),
+        msg('Replace current content with template?'),
+      );
       if (!replace) return;
     }
 
@@ -1226,13 +1261,17 @@ export class GnHooksDialog extends LitElement {
         @click=${() => this.selectHook(hook)}
       >
         <span class="hook-status-dot ${this.getHookStatusClass(hook)}"
-              title=${hook.exists ? (hook.enabled ? 'Enabled' : 'Disabled') : 'Not configured'}
+              title=${hook.exists
+                ? hook.enabled
+                  ? msg('Enabled')
+                  : msg('Disabled')
+                : msg('Not configured')}
         ></span>
         <div class="hook-item-info">
           <div class="hook-item-name">${hook.name}</div>
           <div class="hook-item-desc">${hook.description}</div>
         </div>
-        ${isActive && this.hasUnsavedChanges ? html`<span class="unsaved-dot" title="Unsaved changes"></span>` : nothing}
+        ${isActive && this.hasUnsavedChanges ? html`<span class="unsaved-dot" title=${msg('Unsaved changes')}></span>` : nothing}
       </div>
     `;
   }
@@ -1244,9 +1283,9 @@ export class GnHooksDialog extends LitElement {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
             <path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"></path>
           </svg>
-          <div class="editor-empty-text">Select a hook to view or edit</div>
+          <div class="editor-empty-text">${msg('Select a hook to view or edit')}</div>
           <div class="editor-empty-hint">
-            Choose a hook from the list to configure it
+            ${msg('Choose a hook from the list to configure it')}
           </div>
         </div>
       `;
@@ -1261,14 +1300,15 @@ export class GnHooksDialog extends LitElement {
           <span class="editor-hook-name">${hook.name}</span>
           ${isExisting
             ? html`<span class="editor-badge ${hook.enabled ? 'enabled' : 'disabled'}">
-                ${hook.enabled ? 'Enabled' : 'Disabled'}
+                ${hook.enabled ? msg('Enabled') : msg('Disabled')}
               </span>`
-            : html`<span class="editor-badge new-hook">New</span>`
+            : html`<span class="editor-badge new-hook">${msg('New')}</span>`
           }
         </div>
         <div class="editor-header-right">
           ${isExisting ? html`
-            <label class="toggle" title="${hook.enabled ? 'Disable hook' : 'Enable hook'}">
+            <label class="toggle"
+              title=${hook.enabled ? msg('Disable hook') : msg('Enable hook')}>
               <input
                 class="toggle-input"
                 type="checkbox"
@@ -1282,7 +1322,7 @@ export class GnHooksDialog extends LitElement {
             </label>
             <button
               class="icon-btn danger"
-              title="Delete hook"
+              title=${msg('Delete hook')}
               @click=${() => this.requestDelete(hook.name)}
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1295,7 +1335,7 @@ export class GnHooksDialog extends LitElement {
       </div>
       ${this.hasTemplate(hook.name) ? html`
         <div class="template-bar">
-          <span>Template available for this hook</span>
+          <span>${msg('Template available for this hook')}</span>
           <button class="template-btn" @click=${this.handleUseTemplate}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"></path>
@@ -1304,7 +1344,7 @@ export class GnHooksDialog extends LitElement {
               <line x1="16" y1="17" x2="8" y2="17"></line>
               <polyline points="10 9 9 9 8 9"></polyline>
             </svg>
-            Use template
+            ${msg('Use template')}
           </button>
         </div>
       ` : nothing}
@@ -1314,7 +1354,7 @@ export class GnHooksDialog extends LitElement {
           .value=${this.editContent}
           @input=${this.handleContentChange}
           @keydown=${this.handleTabKey}
-          placeholder="Enter hook script content..."
+          placeholder=${msg('Enter hook script content...')}
           spellcheck="false"
         ></textarea>
       </div>
@@ -1325,18 +1365,18 @@ export class GnHooksDialog extends LitElement {
     return html`
       <div class="execution-logs-section">
         <div class="execution-logs-header">
-          <span class="execution-logs-title">Recent Execution Logs</span>
+          <span class="execution-logs-title">${msg('Recent Execution Logs')}</span>
           <button
             class="clear-logs-btn"
             type="button"
             ?disabled=${this.clearingLogs}
             @click=${this.handleClearLogs}
           >
-            Clear Logs
+            ${msg('Clear Logs')}
           </button>
         </div>
         ${this.executionLogs.length === 0
-          ? html`<div class="execution-logs-empty">No hook executions recorded yet</div>`
+          ? html`<div class="execution-logs-empty">${msg('No hook executions recorded yet')}</div>`
           : html`
               <div class="execution-logs-list">
                 ${this.executionLogs.map((log) => {
@@ -1351,10 +1391,10 @@ export class GnHooksDialog extends LitElement {
                           <span class="execution-log-hook-name">${log.hookName}</span>
                           <span class="execution-log-badge ${log.success ? 'pass' : 'fail'}">
                             ${log.success
-                              ? 'Pass'
+                              ? msg('Pass')
                               : log.exitCode !== null && log.exitCode !== undefined
-                                ? `Fail (exit ${log.exitCode})`
-                                : 'Fail'}
+                                ? msg(str`Fail (exit ${log.exitCode})`)
+                                : msg('Fail')}
                           </span>
                         </div>
                         <div class="execution-log-meta">
@@ -1384,14 +1424,15 @@ export class GnHooksDialog extends LitElement {
         if (e.target === e.currentTarget) this.cancelDelete();
       }}>
         <div class="confirm-dialog">
-          <div class="confirm-title">Delete Hook</div>
+          <div class="confirm-title">${msg('Delete Hook')}</div>
           <div class="confirm-message">
-            Are you sure you want to delete the <strong>${this.confirmingDelete}</strong> hook?
-            This action cannot be undone.
+            ${msg(
+              html`Are you sure you want to delete the <strong>${this.confirmingDelete}</strong> hook? This action cannot be undone.`
+            )}
           </div>
           <div class="confirm-actions">
-            <button class="btn btn-secondary" @click=${this.cancelDelete}>Cancel</button>
-            <button class="btn btn-danger" @click=${this.confirmDelete}>Delete</button>
+            <button class="btn btn-secondary" @click=${this.cancelDelete}>${msg('Cancel')}</button>
+            <button class="btn btn-danger" @click=${this.confirmDelete}>${msg('Delete')}</button>
           </div>
         </div>
       </div>
@@ -1409,7 +1450,7 @@ export class GnHooksDialog extends LitElement {
             <svg class="header-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"></path>
             </svg>
-            <span class="title">Git Hooks</span>
+            <span class="title">${msg('Git Hooks')}</span>
           </div>
           <button class="close-btn" @click=${this.close}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1422,14 +1463,14 @@ export class GnHooksDialog extends LitElement {
         <div class="body">
           <div class="hook-list-panel">
             <div class="hook-list-header">
-              <span class="hook-list-title">Hooks</span>
-              <span class="hook-count">${activeCount} active</span>
+              <span class="hook-list-title">${msg('Hooks')}</span>
+              <span class="hook-count">${msg(str`${activeCount} active`)}</span>
             </div>
             <div class="hook-list">
               ${this.loading
-                ? html`<div class="loading">Loading hooks...</div>`
+                ? html`<div class="loading">${msg('Loading hooks...')}</div>`
                 : this.hooks.length === 0
-                  ? html`<div class="empty">No hooks found</div>`
+                  ? html`<div class="empty">${msg('No hooks found')}</div>`
                   : this.hooks.map(hook => this.renderHookItem(hook))
               }
             </div>
@@ -1445,21 +1486,27 @@ export class GnHooksDialog extends LitElement {
         <div class="footer">
           <div class="footer-left">
             ${this.selectedHook && this.hasUnsavedChanges
-              ? html`Unsaved changes`
+              ? html`${msg('Unsaved changes')}`
               : this.selectedHook
                 ? html`${this.selectedHook.description}`
-                : html`${this.hooks.filter(h => h.exists).length} of ${this.hooks.length} hooks configured`
+                : html`${msg(
+                    str`${this.hooks.filter(h => h.exists).length} of ${this.hooks.length} hooks configured`
+                  )}`
             }
           </div>
           <div class="footer-right">
-            <button class="btn btn-secondary" @click=${this.close}>Close</button>
+            <button class="btn btn-secondary" @click=${this.close}>${msg('Close')}</button>
             ${this.selectedHook ? html`
               <button
                 class="btn btn-primary"
                 ?disabled=${!this.hasUnsavedChanges || this.saving}
                 @click=${this.handleSave}
               >
-                ${this.saving ? 'Saving...' : this.selectedHook.exists ? 'Save Hook' : 'Create Hook'}
+                ${this.saving
+                  ? msg('Saving...')
+                  : this.selectedHook.exists
+                    ? msg('Save Hook')
+                    : msg('Create Hook')}
               </button>
             ` : nothing}
           </div>

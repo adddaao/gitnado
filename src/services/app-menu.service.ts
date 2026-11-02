@@ -15,6 +15,7 @@
  *   included.
  */
 
+import { msg } from '@lit/localize';
 import type { PaletteCommand } from '../components/dialogs/gn-command-palette.ts';
 import { keyboardService, type ShortcutBinding } from './keyboard.service.ts';
 import { invokeCommand } from './tauri-api.ts';
@@ -230,6 +231,72 @@ export function buildMenuUpdates(hasRepository: boolean): MenuItemUpdate[] {
  */
 export async function syncAppMenu(hasRepository: boolean): Promise<CommandResult<void>> {
   return invokeCommand<void>('sync_app_menu', { items: buildMenuUpdates(hasRepository) });
+}
+
+/**
+ * The text each native menu row shows, in the ACTIVE locale.
+ *
+ * The structure and the English labels live in `src-tauri/src/menu.rs`; this
+ * table mirrors them so the native menu can follow the language setting.
+ * `scripts/menu-contract.test.mjs` compares the two sides — an id or an English
+ * label that drifts in one place fails the build — and any id missing from the
+ * map keeps its English label in Rust, so a partial locale degrades row by row
+ * instead of blanking the menu bar.
+ *
+ * A function, not a module-level constant: `msg()` resolves against the locale
+ * active when it runs, so a constant would freeze the menu in whatever language
+ * happened to be active at import time.
+ */
+export function localizedMenuLabels(): Record<string, string> {
+  return Object.fromEntries([
+    // Sections. Item ids share this map; the two id spaces never collide.
+    ['file', msg('File')],
+    ['repository', msg('Repository')],
+    ['branch', msg('Branch')],
+    ['view', msg('View')],
+    ['help', msg('Help')],
+    // The macOS Edit submenu Tauri builds for the standard clipboard roles.
+    ['edit', msg('Edit')],
+    // Items, in menu order.
+    ['open-repository', msg('Open Repository…')],
+    ['clone-repository', msg('Clone Repository…')],
+    ['init-repository', msg('New Repository…')],
+    ['close-repository-tab', msg('Close Repository Tab')],
+    ['fetch', msg('Fetch')],
+    ['pull', msg('Pull')],
+    ['push', msg('Push')],
+    ['remotes', msg('Remotes…')],
+    ['clean', msg('Clean Working Directory…')],
+    ['bisect', msg('Bisect…')],
+    ['worktrees', msg('Worktrees…')],
+    ['submodules', msg('Submodules…')],
+    ['lfs', msg('Git LFS…')],
+    ['hooks', msg('Hooks…')],
+    ['config', msg('Git Configuration…')],
+    ['gitignore', msg('.gitignore & .gitattributes…')],
+    ['repository-health', msg('Repository Health & Maintenance…')],
+    ['create-branch', msg('New Branch…')],
+    ['switch-branch', msg('Switch Branch…')],
+    ['compare-branches', msg('Compare Branches…')],
+    ['branch-cleanup', msg('Clean Up Branches…')],
+    ['toggle-left-panel', msg('Toggle Left Panel')],
+    ['toggle-right-panel', msg('Toggle Right Panel')],
+    ['toggle-output-panel', msg('Toggle Output Panel')],
+    ['command-palette', msg('Command Palette…')],
+    ['keyboard-shortcuts', msg('Keyboard Shortcuts')],
+    ['about', msg('About Gitnado')],
+  ] satisfies [string, string][]);
+}
+
+/**
+ * Push the localised labels to the native menu.
+ *
+ * The native layer cannot retitle an attached menu in place, so `menu.rs`
+ * rebuilds it; that resets the per-item enabled state and accelerators, so a
+ * caller re-runs `syncAppMenu()` right after this resolves.
+ */
+export async function syncAppMenuLabels(): Promise<CommandResult<void>> {
+  return invokeCommand<void>('set_app_menu_labels', { labels: localizedMenuLabels() });
 }
 
 /**

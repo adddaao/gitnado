@@ -1,3 +1,5 @@
+import { msg, str } from '@lit/localize';
+
 /**
  * The one wording for "the rebase stopped, and here is how to carry on".
  *
@@ -10,10 +12,15 @@
  * Continue Rebase" without first naming Resolve Conflicts leaves Abort as the
  * most obvious button — and Abort discards the rebase this message exists to
  * protect.
+ *
+ * A function, not a module-level constant: the copy has to follow the locale
+ * that is active when it is shown, not the one that was active at module load.
  */
-export const REBASE_PAUSED_MESSAGE =
-  'Rebase paused — amend the commit, then click "Resolve Conflicts" ' +
-  'in the banner and choose Continue Rebase';
+export function rebasePausedMessage(): string {
+  return msg(
+    'Rebase paused — amend the commit, then click "Resolve Conflicts" in the banner and choose Continue Rebase'
+  );
+}
 
 /**
  * The one wording for "and it dropped N of your commits", shared by every
@@ -27,19 +34,31 @@ export const REBASE_PAUSED_MESSAGE =
  * skipped M already applied upstream"); the suffix is worded to match — the
  * noun included, because pull's sentence names `commit(s)` earlier and this
  * one has nothing else to say WHAT was skipped.
+ *
+ * Singular and plural are two full messages: a suffix inflected in code
+ * ("commit(s)") cannot be translated as a proper plural.
  */
 export function skippedCommitsSuffix(skipped?: number | null): string {
-  return skipped ? `, skipped ${skipped} commit(s) already applied upstream` : '';
+  if (!skipped) return '';
+  return skipped === 1
+    ? msg(str`, skipped ${skipped} commit already applied upstream`)
+    : msg(str`, skipped ${skipped} commits already applied upstream`);
 }
 
 /**
  * The one wording for "the rebase finished" across the four surfaces that
  * start one (branch context menu, the two drag-drop arms, and the graph's ref
  * menu).
+ *
+ * The skipped-commits clause is folded into each branch instead of being
+ * concatenated afterwards, so a translation can reorder the sentence.
  */
 export function rebasedOntoMessage(
   target: string,
   skipped?: number | null
 ): string {
-  return `Rebased onto ${target}${skippedCommitsSuffix(skipped)}`;
+  if (!skipped) return msg(str`Rebased onto ${target}`);
+  return skipped === 1
+    ? msg(str`Rebased onto ${target}, skipped ${skipped} commit already applied upstream`)
+    : msg(str`Rebased onto ${target}, skipped ${skipped} commits already applied upstream`);
 }

@@ -5,6 +5,7 @@
 
 import { LitElement, html, css, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
+import { localized, msg, str } from '@lit/localize';
 import { sharedStyles, buttonStyles } from '../../styles/shared-styles.ts';
 import {
   type OutputLogEntry,
@@ -49,6 +50,7 @@ export function formatDuration(ms: number): string {
 const SYNTHESIZED_MARK = '≈';
 
 @customElement('gn-output-panel')
+@localized()
 export class GnOutputPanel extends LitElement {
   static styles = [
     sharedStyles,
@@ -339,7 +341,7 @@ export class GnOutputPanel extends LitElement {
     if (!this.repositoryPath) return;
     const result = await gitService.openTerminal(this.repositoryPath);
     if (!result.success) {
-      showToast(result.error?.message ?? 'Failed to open terminal', 'error');
+      showToast(result.error?.message ?? msg('Failed to open terminal'), 'error');
     }
   }
 
@@ -364,7 +366,9 @@ export class GnOutputPanel extends LitElement {
     const duration =
       entry.durationMs === undefined ? '' : formatDuration(entry.durationMs);
     const tooltip = synthesized
-      ? `${line}\n\nEquivalent command — Gitnado performed this with libgit2 (IPC: ${entry.command})`
+      ? msg(
+          str`${line}\n\nEquivalent command — Gitnado performed this with libgit2 (IPC: ${entry.command})`
+        )
       : line;
 
     return html`
@@ -382,7 +386,7 @@ export class GnOutputPanel extends LitElement {
           ${synthesized
             ? html`<span
                 class="synth-mark"
-                aria-label="Equivalent command — performed with libgit2"
+                aria-label=${msg('Equivalent command — performed with libgit2')}
                 >${SYNTHESIZED_MARK}</span
               >`
             : nothing}
@@ -401,8 +405,8 @@ export class GnOutputPanel extends LitElement {
               // explanation of why the row is empty.
               html`<div class="entry-output empty-output">
                 ${entry.success
-                  ? 'Completed with no output.'
-                  : 'Failed with no output.'}
+                  ? msg('Completed with no output.')
+                  : msg('Failed with no output.')}
               </div>`
           : nothing}
       </div>
@@ -415,7 +419,7 @@ export class GnOutputPanel extends LitElement {
     return html`
       <div class="header">
         <span class="header-title">
-          Output
+          ${msg('Output')}
           ${visible.length > 0
             ? html`<span class="entry-count">(${visible.length})</span>`
             : nothing}
@@ -424,8 +428,8 @@ export class GnOutputPanel extends LitElement {
           <input
             class="filter-input"
             type="text"
-            placeholder="Filter output..."
-            aria-label="Filter output"
+            placeholder=${msg('Filter output...')}
+            aria-label=${msg('Filter output')}
             .value=${this.filterText}
             @input=${(e: Event) => {
               this.filterText = (e.target as HTMLInputElement).value;
@@ -435,17 +439,17 @@ export class GnOutputPanel extends LitElement {
             ? html`
                 <button
                   class="terminal-btn open-terminal-btn"
-                  title="Open in Terminal"
+                  title=${msg('Open in Terminal')}
                   @click=${() => void this.handleOpenTerminal()}
                 >
-                  Open in Terminal
+                  ${msg('Open in Terminal')}
                 </button>
               `
             : nothing}
           ${this.repoEntries.length > 0
             ? html`
                 <button class="clear-btn" @click=${this.handleClear}>
-                  Clear
+                  ${msg('Clear')}
                 </button>
               `
             : nothing}
@@ -453,8 +457,8 @@ export class GnOutputPanel extends LitElement {
             ? html`
                 <button
                   class="close-btn"
-                  title="Close output panel"
-                  aria-label="Close output panel"
+                  title=${msg('Close output panel')}
+                  aria-label=${msg('Close output panel')}
                   @click=${() =>
                     this.dispatchEvent(
                       new CustomEvent('close', { bubbles: true, composed: true })
@@ -468,14 +472,14 @@ export class GnOutputPanel extends LitElement {
       </div>
       <div class="entries">
         ${visible.length === 0
-          ? html`<div class="empty">No output yet</div>`
+          ? html`<div class="empty">${msg('No output yet')}</div>`
           : visible.map((entry) => this.renderEntry(entry))}
       </div>
       ${hasSynthesized
         ? html`<div class="legend">
-            ${SYNTHESIZED_MARK} Gitnado runs these operations with libgit2 —
-            the line shown is the equivalent <code>git</code> command, not one
-            that was executed.
+            ${SYNTHESIZED_MARK}
+            ${msg('Gitnado runs these operations with libgit2 — the line shown is the equivalent')}
+            <code>git</code> ${msg('command, not one that was executed.')}
           </div>`
         : nothing}
     `;

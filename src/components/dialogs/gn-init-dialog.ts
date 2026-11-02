@@ -5,6 +5,7 @@
 
 import { LitElement, html, css } from 'lit';
 import { customElement, state, query } from 'lit/decorators.js';
+import { localized, msg } from '@lit/localize';
 import { sharedStyles } from '../../styles/shared-styles.ts';
 import { initRepository } from '../../services/git.service.ts';
 import { openDialog } from '../../services/dialog.service.ts';
@@ -14,6 +15,7 @@ import './gn-modal.ts';
 import type { GnModal } from './gn-modal.ts';
 
 @customElement('gn-init-dialog')
+@localized()
 export class GnInitDialog extends LitElement {
   static styles = [
     sharedStyles,
@@ -237,7 +239,7 @@ export class GnInitDialog extends LitElement {
 
   private async handleBrowse(): Promise<void> {
     const result = await openDialog({
-      title: 'Select Folder for New Repository',
+      title: msg('Select Folder for New Repository'),
       directory: true,
       multiple: false,
       defaultPath: this.path || undefined,
@@ -252,7 +254,7 @@ export class GnInitDialog extends LitElement {
 
   private async handleInit(): Promise<void> {
     if (!this.path.trim()) {
-      this.error = 'Please select a folder';
+      this.error = msg('Please select a folder');
       return;
     }
 
@@ -275,10 +277,10 @@ export class GnInitDialog extends LitElement {
         // Close dialog
         this.close();
       } else {
-        this.error = result.error?.message ?? 'Failed to initialize repository';
+        this.error = result.error?.message ?? msg('Failed to initialize repository');
       }
     } catch (err) {
-      this.error = err instanceof Error ? err.message : 'Unknown error occurred';
+      this.error = err instanceof Error ? err.message : msg('Unknown error occurred');
     } finally {
       this.isInitializing = false;
     }
@@ -311,7 +313,7 @@ export class GnInitDialog extends LitElement {
   render() {
     return html`
       <gn-modal
-        modalTitle="Initialize Repository"
+        modalTitle=${msg('Initialize Repository')}
         @close=${this.handleModalClose}
       >
         <div class="form">
@@ -322,14 +324,15 @@ export class GnInitDialog extends LitElement {
               <line x1="12" y1="8" x2="12.01" y2="8"></line>
             </svg>
             <div class="info-box-text">
-              Initialize a new Git repository in the selected folder.
-              This will create a .git directory to track your project's history.
+              ${msg(
+                'Initialize a new Git repository in the selected folder. This will create a .git directory to track your project\'s history.',
+              )}
             </div>
           </div>
 
           <div class="field-row">
             <div class="field">
-              <label for="path">Repository Location</label>
+              <label for="path">${msg('Repository Location')}</label>
               <input
                 id="path"
                 type="text"
@@ -344,16 +347,16 @@ export class GnInitDialog extends LitElement {
               @click=${this.handleBrowse}
               ?disabled=${this.isInitializing}
             >
-              Browse...
+              ${msg('Browse...')}
             </button>
           </div>
 
           <div class="field">
-            <label for="initial-branch">Initial Branch Name</label>
+            <label for="initial-branch">${msg('Initial Branch Name')}</label>
             <input
               id="initial-branch"
               type="text"
-              placeholder="Use git's default"
+              placeholder=${msg("Use git's default")}
               .value=${this.initialBranch}
               @input=${this.handleInitialBranchChange}
               ?disabled=${this.isInitializing}
@@ -368,10 +371,12 @@ export class GnInitDialog extends LitElement {
               @change=${this.handleBareChange}
               ?disabled=${this.isInitializing}
             />
-            <label for="bare">Create a bare repository</label>
+            <label for="bare">${msg('Create a bare repository')}</label>
           </div>
           <div class="checkbox-hint">
-            Bare repositories are typically used as central repositories for collaboration.
+            ${msg(
+              'Bare repositories are typically used as central repositories for collaboration.',
+            )}
           </div>
 
           ${this.error
@@ -385,14 +390,14 @@ export class GnInitDialog extends LitElement {
             @click=${this.close}
             ?disabled=${this.isInitializing}
           >
-            Cancel
+            ${msg('Cancel')}
           </button>
           <button
             class="btn btn-primary"
             @click=${this.handleInit}
             ?disabled=${!this.canInit}
           >
-            ${this.isInitializing ? 'Initializing...' : 'Initialize Repository'}
+            ${this.isInitializing ? msg('Initializing...') : msg('Initialize Repository')}
           </button>
         </div>
       </gn-modal>

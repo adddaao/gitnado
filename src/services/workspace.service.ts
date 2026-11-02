@@ -4,6 +4,7 @@
  */
 
 import { invokeCommand } from './tauri-api.ts';
+import { msg } from '@lit/localize';
 import { showToast } from './notification.service.ts';
 import type {
   Workspace,
@@ -23,7 +24,7 @@ export async function getWorkspace(workspaceId: string): Promise<CommandResult<W
 export async function saveWorkspace(workspace: Workspace): Promise<CommandResult<Workspace>> {
   const result = await invokeCommand<Workspace>('save_workspace', { workspace });
   if (result.success) {
-    showToast('Workspace saved', 'success');
+    showToast(msg('Workspace saved'), 'success');
   }
   return result;
 }

@@ -199,7 +199,12 @@ index 1234567..abcdefg 100644
     eprintln!("Generating commit message from diff...");
     let result = {
         let service = ai_state.read().await;
-        service.generate_commit_message(diff.to_string()).await
+        service
+            .generate_commit_message(
+                diff.to_string(),
+                gitnado_lib::services::ai::PromptLanguage::En,
+            )
+            .await
     };
 
     let message = result.expect("generate_commit_message failed");

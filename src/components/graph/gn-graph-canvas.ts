@@ -1,5 +1,6 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, property, state, query } from 'lit/decorators.js';
+import { localized, msg, str } from '@lit/localize';
 import { sharedStyles } from '../../styles/shared-styles.ts';
 import { loggers, openExternalUrl } from '../../utils/index.ts';
 
@@ -115,6 +116,7 @@ function commitToGraphCommit(commit: Commit): GraphCommit {
  * - Smooth momentum scrolling
  */
 @customElement('gn-graph-canvas')
+@localized()
 export class GnGraphCanvas extends LitElement {
   static styles = [
     sharedStyles,
@@ -436,6 +438,15 @@ export class GnGraphCanvas extends LitElement {
         align-items: center;
         gap: 2px;
         z-index: 10;
+        /*
+         * The toolbar floats over the canvas-painted column header row. Each
+         * button had its own background, so the 2px gaps between them leaked
+         * fragments of the header text behind ("更改" / "CHANGES"), which read
+         * as a clipped glyph. The toolbar owns a solid backdrop of the canvas
+         * colour so the row under it stays hidden.
+         */
+        background: var(--color-bg-primary, #1e1e1e);
+        border-radius: var(--radius-sm);
       }
 
       .toolbar-btn {
@@ -451,6 +462,10 @@ export class GnGraphCanvas extends LitElement {
         color: var(--color-text-secondary);
         cursor: pointer;
         font-size: 10px;
+        /* Localised labels must not break between characters when the graph
+           area gets narrow. */
+        white-space: nowrap;
+        flex-shrink: 0;
         transition: background 0.15s ease, color 0.15s ease;
       }
 
@@ -1341,7 +1356,7 @@ export class GnGraphCanvas extends LitElement {
 
   private async loadCommits(options: { background?: boolean } = {}): Promise<void> {
     if (!this.repositoryPath) {
-      this.loadError = 'No repository path specified';
+      this.loadError = msg('No repository path specified');
       // Nothing was loaded and nothing will be — the error panel owns this
       // state, so the empty-state panel must stay out of it
       this.hasCompletedLoad = false;
@@ -1401,7 +1416,7 @@ export class GnGraphCanvas extends LitElement {
         if (options.background) {
           log.warn('Background graph revalidation failed:', commitsResult.error?.message);
         } else {
-          this.loadError = commitsResult.error?.message ?? 'Failed to load commits';
+          this.loadError = commitsResult.error?.message ?? msg('Failed to load commits');
         }
         this.isLoading = false;
         return;
@@ -1453,7 +1468,9 @@ export class GnGraphCanvas extends LitElement {
             this.dispatchEvent(
               new CustomEvent('graph-notice', {
                 detail: {
-                  message: 'Semantic search is unavailable — showing keyword results instead',
+                  message: msg(
+                    'Semantic search is unavailable — showing keyword results instead',
+                  ),
                   type: 'info',
                 },
                 bubbles: true,
@@ -1532,7 +1549,9 @@ export class GnGraphCanvas extends LitElement {
               this.dispatchEvent(
                 new CustomEvent('graph-notice', {
                   detail: {
-                    message: `Search failed: ${matchResult.error?.message ?? 'unknown error'}`,
+                    message: msg(
+                      str`Search failed: ${matchResult.error?.message ?? msg('unknown error')}`,
+                    ),
                     type: 'error',
                   },
                   bubbles: true,
@@ -1588,7 +1607,8 @@ export class GnGraphCanvas extends LitElement {
       if (options.background) {
         log.warn('Background graph revalidation failed:', err);
       } else {
-        this.loadError = err instanceof Error ? err.message : 'Unknown error loading commits';
+        this.loadError =
+          err instanceof Error ? err.message : msg('Unknown error loading commits');
       }
     } finally {
       // Only the NEWEST load owns the shared state. A superseded load (the
@@ -1687,7 +1707,9 @@ export class GnGraphCanvas extends LitElement {
         this.dispatchEvent(
           new CustomEvent('graph-notice', {
             detail: {
-              message: `Could not load more commits: ${result.error?.message ?? 'unknown error'}`,
+              message: msg(
+                str`Could not load more commits: ${result.error?.message ?? msg('unknown error')}`,
+              ),
               type: 'error',
             },
             bubbles: true,
@@ -2619,9 +2641,10 @@ export class GnGraphCanvas extends LitElement {
           this.tooltipX = e.clientX + 12;
           this.tooltipY = e.clientY - 8;
           this.tooltipAuthorName = refLabelHit.fullName;
-          this.tooltipAuthorEmail = refLabelHit.refType === 'pullRequest'
-            ? 'Click to open'
-            : this.getRefTypeLabel(refLabelHit.refType);
+          this.tooltipAuthorEmail =
+            refLabelHit.refType === 'pullRequest'
+              ? msg('Click to open')
+              : this.getRefTypeLabel(refLabelHit.refType);
         } else {
           // Check overflow indicator
           const overflowHit = this.renderer.getOverflowAtPoint(canvasX, canvasY);
@@ -2629,7 +2652,7 @@ export class GnGraphCanvas extends LitElement {
             this.tooltipVisible = true;
             this.tooltipX = e.clientX + 12;
             this.tooltipY = e.clientY - 8;
-            this.tooltipAuthorName = 'Hidden labels:';
+            this.tooltipAuthorName = msg('Hidden labels:');
             this.tooltipAuthorEmail = overflowHit.hiddenLabels.join(', ');
           } else {
             this.tooltipVisible = false;
@@ -2950,7 +2973,7 @@ export class GnGraphCanvas extends LitElement {
             .catch(() => {
               this.dispatchEvent(
                 new CustomEvent('graph-notice', {
-                  detail: { message: 'Failed to copy SHA to clipboard', type: 'error' },
+                  detail: { message: msg('Failed to copy SHA to clipboard'), type: 'error' },
                   bubbles: true,
                   composed: true,
                 })
@@ -3118,8 +3141,10 @@ export class GnGraphCanvas extends LitElement {
     const headOid = this.getHeadOid();
     const message =
       headOid !== undefined && this.hasLoadedCommit(headOid)
-        ? 'HEAD commit is hidden by the branch visibility filter — show its branch to reveal it'
-        : 'HEAD commit is not loaded in the graph';
+        ? msg(
+            'HEAD commit is hidden by the branch visibility filter — show its branch to reveal it',
+          )
+        : msg('HEAD commit is not loaded in the graph');
     this.dispatchEvent(
       new CustomEvent('graph-notice', {
         detail: { message, type: 'info' },
@@ -3320,17 +3345,17 @@ export class GnGraphCanvas extends LitElement {
   private getRefTypeLabel(refType: string): string {
     switch (refType) {
       case 'localBranch':
-        return 'Local branch';
+        return msg('Local branch');
       case 'remoteBranch':
-        return 'Remote branch';
+        return msg('Remote branch');
       case 'tag':
-        return 'Tag';
+        return msg('Tag');
       case 'pullRequest':
-        return 'Pull request';
+        return msg('Pull request');
       case 'detachedHead':
-        return 'Detached HEAD';
+        return msg('Detached HEAD');
       default:
-        return 'Reference';
+        return msg('Reference');
     }
   }
 
@@ -3373,12 +3398,18 @@ export class GnGraphCanvas extends LitElement {
       const position = this.selectedNode.row + 1;
       const total = this.layout?.totalRows ?? this.sortedNodesByRow.length;
       const selectedCount = this.selectedNodes.size;
-      const prefix = selectedCount > 1 ? `${selectedCount} commits selected. ` : '';
-      this.srAnnouncement = `${prefix}Commit ${position} of ${total}: ${commit.summary} by ${commit.author.name}`;
+      this.srAnnouncement =
+        selectedCount > 1
+          ? msg(
+              str`${selectedCount} commits selected. Commit ${position} of ${total}: ${commit.summary} by ${commit.author.name}`,
+            )
+          : msg(
+              str`Commit ${position} of ${total}: ${commit.summary} by ${commit.author.name}`,
+            );
     } else if (this.selectedNodes.size > 1) {
       // No primary (its commit is not loaded) but the set is not empty — say
       // so rather than going silent while the graph paints a highlight.
-      this.srAnnouncement = `${this.selectedNodes.size} commits selected`;
+      this.srAnnouncement = msg(str`${this.selectedNodes.size} commits selected`);
     } else {
       this.srAnnouncement = '';
     }
@@ -3800,6 +3831,10 @@ export class GnGraphCanvas extends LitElement {
    * scrollLeft 0 and has to be moved to the current position.
    */
   protected updated(): void {
+    // A locale change re-renders this component but does not repaint the
+    // canvas, whose header labels, ref tooltips and relative times are
+    // msg() text too — schedule one repaint so they follow the language.
+    this.scheduleRender();
     if (!this.hscrollEl || !this.scrollState) return;
     const { scrollLeft } = this.scrollState.getScroll();
     if (Math.abs(this.hscrollEl.scrollLeft - scrollLeft) > 0.5) {
@@ -3839,16 +3874,16 @@ export class GnGraphCanvas extends LitElement {
     return html`
       <div class="branch-panel">
         <div class="branch-panel-header">
-          <span>Branch Visibility</span>
+          <span>${msg('Branch Visibility')}</span>
           <div class="branch-panel-actions">
-            <button @click=${() => this.showAllBranches()}>Show All</button>
-            <button @click=${() => this.hideAllBranches()}>Hide All</button>
+            <button @click=${() => this.showAllBranches()}>${msg('Show All')}</button>
+            <button @click=${() => this.hideAllBranches()}>${msg('Hide All')}</button>
           </div>
         </div>
         <div class="branch-panel-list">
           ${branches.local.length > 0
             ? html`
-                <div class="branch-group-label">Local</div>
+                <div class="branch-group-label">${msg('Local')}</div>
                 ${branches.local.map(
                   (branch) => html`
                     <label class="branch-item">
@@ -3865,7 +3900,7 @@ export class GnGraphCanvas extends LitElement {
             : ''}
           ${branches.remote.length > 0
             ? html`
-                <div class="branch-group-label">Remote</div>
+                <div class="branch-group-label">${msg('Remote')}</div>
                 ${branches.remote.map(
                   (branch) => html`
                     <label class="branch-item">
@@ -3892,10 +3927,10 @@ export class GnGraphCanvas extends LitElement {
         style=${this.exportMenuRight !== null ? `right: ${this.exportMenuRight}px` : ''}
       >
         <button class="export-menu-item" @click=${() => this.exportAsImage()}>
-          Export as PNG
+          ${msg('Export as PNG')}
         </button>
         <button class="export-menu-item" @click=${() => this.exportAsSvg()}>
-          Export as SVG
+          ${msg('Export as SVG')}
         </button>
       </div>
     `;
@@ -3913,7 +3948,7 @@ export class GnGraphCanvas extends LitElement {
             .checked=${this.showAuthorColumn}
             @change=${() => this.toggleOptionalColumn('author')}
           />
-          <span class="branch-name">Author</span>
+          <span class="branch-name">${msg('Author')}</span>
         </label>
         <label class="branch-item">
           <input
@@ -3921,7 +3956,7 @@ export class GnGraphCanvas extends LitElement {
             .checked=${this.showDateColumn}
             @change=${() => this.toggleOptionalColumn('date')}
           />
-          <span class="branch-name">Date</span>
+          <span class="branch-name">${msg('Date')}</span>
         </label>
       </div>
     `;
@@ -3950,13 +3985,16 @@ export class GnGraphCanvas extends LitElement {
    * commit count.
    */
   private canvasAriaLabel(): string {
-    if (this.isLoading) return 'Loading commit graph...';
+    if (this.isLoading) return msg('Loading commit graph...');
     if (this.totalLoadedCommits > 0) {
-      const total = this.commitTotal !== null ? ` of ${this.commitTotal}` : '';
-      return `Git commit history showing ${this.totalLoadedCommits}${total} commits`;
+      return this.commitTotal !== null
+        ? msg(
+            str`Git commit history showing ${this.totalLoadedCommits} of ${this.commitTotal} commits`,
+          )
+        : msg(str`Git commit history showing ${this.totalLoadedCommits} commits`);
     }
-    if (this.loadError) return 'Commit graph failed to load';
-    return 'No commits';
+    if (this.loadError) return msg('Commit graph failed to load');
+    return msg('No commits');
   }
 
   /** Re-run the failed load from the error panel's Retry button */
@@ -3981,7 +4019,7 @@ export class GnGraphCanvas extends LitElement {
             ? html`
                 <div
                   class="hscroll-container"
-                  title="Scroll graph lanes"
+                  title=${msg('Scroll graph lanes')}
                   style="left: ${graphColumn.left}px; width: ${graphColumn.width}px"
                   @scroll=${this.handleNativeHScroll}
                 >
@@ -4012,7 +4050,7 @@ export class GnGraphCanvas extends LitElement {
             ? html`
                 <div
                   class="resize-handle ${this.resizing === 'graph' ? 'dragging' : ''}"
-                  title="Resize graph column"
+                  title=${msg('Resize graph column')}
                   style="left: ${handlePositions.graphEnd}px"
                   @mousedown=${(e: MouseEvent) => this.handleResizeStart(e, 'graph')}
                 ></div>
@@ -4032,16 +4070,16 @@ export class GnGraphCanvas extends LitElement {
           ${this.loadError
             ? html`
                 <div class="info-panel error-panel" role="alert">
-                  <div class="error-title">Error</div>
+                  <div class="error-title">${msg('Error')}</div>
                   <div class="message">${this.loadError}</div>
                   <div class="panel-actions">
                     <button
                       class="retry-btn"
-                      title="Retry loading the commit graph"
+                      title=${msg('Retry loading the commit graph')}
                       ?disabled=${this.isLoading}
                       @click=${this.handleRetryLoad}
                     >
-                      ${this.isLoading ? 'Retrying...' : 'Retry'}
+                      ${this.isLoading ? msg('Retrying...') : msg('Retry')}
                     </button>
                   </div>
                 </div>
@@ -4057,16 +4095,17 @@ export class GnGraphCanvas extends LitElement {
                 -->
                 <div class="graph-overlay loading-state" aria-hidden="true">
                   <div class="spinner"></div>
-                  <div class="overlay-title">Loading commits...</div>
+                  <div class="overlay-title">${msg('Loading commits...')}</div>
                 </div>
               `
             : this.showEmptyState()
               ? html`
                   <div class="graph-overlay empty-state" role="status">
-                    <div class="overlay-title">No commits yet</div>
+                    <div class="overlay-title">${msg('No commits yet')}</div>
                     <div class="overlay-hint">
-                      Stage a file and write a message in the Commit panel to
-                      create the first commit in this repository.
+                      ${msg(
+                        'Stage a file and write a message in the Commit panel to create the first commit in this repository.',
+                      )}
                     </div>
                   </div>
                 `
@@ -4086,7 +4125,7 @@ export class GnGraphCanvas extends LitElement {
             ? html`
                 <div class="loading-indicator">
                   <div class="spinner"></div>
-                  <span>Loading stats...</span>
+                  <span>${msg('Loading stats...')}</span>
                 </div>
               `
             : ''}
@@ -4096,9 +4135,11 @@ export class GnGraphCanvas extends LitElement {
                 <div class="loading-indicator">
                   <div class="spinner"></div>
                   <span>
-                    Loading more commits...${this.commitTotal !== null
-                      ? ` (${this.totalLoadedCommits} of ${this.commitTotal})`
-                      : ''}
+                    ${this.commitTotal !== null
+                      ? msg(
+                          str`Loading more commits... (${this.totalLoadedCommits} of ${this.commitTotal})`,
+                        )
+                      : msg('Loading more commits...')}
                   </span>
                 </div>
               `
@@ -4107,7 +4148,7 @@ export class GnGraphCanvas extends LitElement {
           <div class="graph-toolbar">
             <button
               class="toolbar-btn"
-              title="Jump to HEAD"
+              title=${msg('Jump to HEAD')}
               @click=${this.handleJumpToHeadClick}
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -4122,7 +4163,7 @@ export class GnGraphCanvas extends LitElement {
             </button>
             <button
               class="toolbar-btn ${this.showMinimap ? 'active' : ''}"
-              title="Toggle minimap"
+              title=${msg('Toggle minimap')}
               @click=${() => this.toggleMinimap()}
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -4131,11 +4172,11 @@ export class GnGraphCanvas extends LitElement {
                 <line x1="19" y1="7" x2="19" y2="9"></line>
                 <line x1="19" y1="13" x2="19" y2="16"></line>
               </svg>
-              Map
+              ${msg('Map')}
             </button>
             <button
               class="toolbar-btn ${this.showColumnsMenu ? 'active' : ''}"
-              title="Toggle optional columns"
+              title=${msg('Toggle optional columns')}
               @click=${(e: MouseEvent) => {
                 this.columnsMenuRight = this.menuRightOffset(e);
                 this.showColumnsMenu = !this.showColumnsMenu;
@@ -4148,11 +4189,11 @@ export class GnGraphCanvas extends LitElement {
                 <line x1="9" y1="3" x2="9" y2="21"></line>
                 <line x1="15" y1="3" x2="15" y2="21"></line>
               </svg>
-              Columns
+              ${msg('Columns')}
             </button>
             <button
               class="toolbar-btn ${this.showBranchPanel ? 'active' : ''}"
-              title="Toggle branch visibility"
+              title=${msg('Toggle branch visibility')}
               @click=${() => { this.showBranchPanel = !this.showBranchPanel; this.showExportMenu = false; this.showColumnsMenu = false; }}
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -4161,11 +4202,11 @@ export class GnGraphCanvas extends LitElement {
                 <circle cx="6" cy="18" r="3"></circle>
                 <path d="M18 9a9 9 0 01-9 9"></path>
               </svg>
-              Branches
+              ${msg('Branches')}
             </button>
             <button
               class="toolbar-btn ${this.showExportMenu ? 'active' : ''}"
-              title="Export graph"
+              title=${msg('Export graph')}
               @click=${(e: MouseEvent) => {
                 this.exportMenuRight = this.menuRightOffset(e);
                 this.showExportMenu = !this.showExportMenu;
@@ -4178,7 +4219,7 @@ export class GnGraphCanvas extends LitElement {
                 <polyline points="7 10 12 15 17 10"></polyline>
                 <line x1="12" y1="15" x2="12" y2="3"></line>
               </svg>
-              Export
+              ${msg('Export')}
             </button>
           </div>
 
@@ -4186,7 +4227,12 @@ export class GnGraphCanvas extends LitElement {
           ${this.showExportMenu ? this.renderExportMenu() : ''}
           ${this.showColumnsMenu ? this.renderColumnsMenu() : ''}
 
-          <div class="sr-only" role="listbox" aria-label="Commits" aria-multiselectable="true">
+          <div
+            class="sr-only"
+            role="listbox"
+            aria-label=${msg('Commits')}
+            aria-multiselectable="true"
+          >
             ${this.mirrorNodes.map((node) => {
               const commit = this.realCommits.get(node.oid);
               return html`
@@ -4196,8 +4242,9 @@ export class GnGraphCanvas extends LitElement {
                   aria-setsize=${this.layout?.totalRows ?? this.mirrorNodes.length}
                   aria-posinset=${node.row + 1}
                 >
-                  ${commit?.summary ?? node.commit.message} by
-                  ${commit?.author.name ?? node.commit.author}
+                  ${msg(
+                    str`${commit?.summary ?? node.commit.message} by ${commit?.author.name ?? node.commit.author}`,
+                  )}
                 </div>
               `;
             })}

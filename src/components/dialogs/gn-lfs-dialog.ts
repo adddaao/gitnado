@@ -5,6 +5,7 @@
 
 import { LitElement, html, css } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
+import { localized, msg, str } from '@lit/localize';
 import { sharedStyles } from '../../styles/shared-styles.ts';
 import * as gitService from '../../services/git.service.ts';
 import { showConfirm } from '../../services/dialog.service.ts';
@@ -19,6 +20,7 @@ import {
 import { warnRepositoryBusy, subscribeRefOps } from '../../utils/ref-lock.ts';
 
 @customElement('gn-lfs-dialog')
+@localized()
 export class GnLfsDialog extends LitElement {
   static styles = [
     sharedStyles,
@@ -529,13 +531,13 @@ export class GnLfsDialog extends LitElement {
       } else {
         this.status = null;
         this.files = [];
-        this.error = result.error?.message || 'Failed to load LFS status';
+        this.error = result.error?.message || msg('Failed to load LFS status');
       }
     } catch (err) {
       if (repoPath !== this.pinnedRepoPath) return;
       this.status = null;
       this.files = [];
-      this.error = err instanceof Error ? err.message : 'Failed to load LFS status';
+      this.error = err instanceof Error ? err.message : msg('Failed to load LFS status');
     } finally {
       if (repoPath === this.pinnedRepoPath) {
         this.loading = false;
@@ -557,14 +559,14 @@ export class GnLfsDialog extends LitElement {
       } else {
         this.files = [];
         if (!result.success && !this.error) {
-          this.error = result.error?.message || 'Failed to load LFS files';
+          this.error = result.error?.message || msg('Failed to load LFS files');
         }
       }
     } catch (err) {
       if (repoPath !== this.pinnedRepoPath) return;
       this.files = [];
       if (!this.error) {
-        this.error = err instanceof Error ? err.message : 'Failed to load LFS files';
+        this.error = err instanceof Error ? err.message : msg('Failed to load LFS files');
       }
     }
   }
@@ -586,13 +588,13 @@ export class GnLfsDialog extends LitElement {
     if (result.success) {
       // Says what actually happened: `git lfs install` sets hooks and config
       // but writes no .gitattributes, so nothing is tracked yet.
-      this.success = 'Git LFS hooks installed — add a pattern below to start tracking files';
+      this.success = msg('Git LFS hooks installed — add a pattern below to start tracking files');
       await this.loadStatus(repoPath);
       this.dispatchEvent(new CustomEvent('lfs-changed', {
         detail: { repositoryPath: repoPath || this.repositoryPath },
       }));
     } else {
-      this.error = result.error?.message || 'Failed to initialize LFS';
+      this.error = result.error?.message || msg('Failed to initialize LFS');
     }
     } finally {
       this.loading = false;
@@ -626,14 +628,14 @@ export class GnLfsDialog extends LitElement {
       // Untrack did not, and the pattern list is long enough that a row
       // appearing or vanishing is not by itself a signal. The dialog stays
       // open, so it gets the same inline message its siblings use.
-      this.success = `Now tracking ${pattern}`;
+      this.success = msg(str`Now tracking ${pattern}`);
       this.newPattern = '';
       await this.loadStatus(repoPath);
       this.dispatchEvent(new CustomEvent('lfs-changed', {
         detail: { repositoryPath: repoPath || this.repositoryPath },
       }));
     } else {
-      this.error = result.error?.message || 'Failed to track pattern';
+      this.error = result.error?.message || msg('Failed to track pattern');
     }
     } finally {
       this.loading = false;
@@ -663,13 +665,13 @@ export class GnLfsDialog extends LitElement {
 
     if (result.success) {
       // Same asymmetry as handleTrack — see the note there.
-      this.success = `No longer tracking ${pattern}`;
+      this.success = msg(str`No longer tracking ${pattern}`);
       await this.loadStatus(repoPath);
       this.dispatchEvent(new CustomEvent('lfs-changed', {
         detail: { repositoryPath: repoPath || this.repositoryPath },
       }));
     } else {
-      this.error = result.error?.message || 'Failed to untrack pattern';
+      this.error = result.error?.message || msg('Failed to untrack pattern');
     }
     } finally {
       this.loading = false;
@@ -698,14 +700,14 @@ export class GnLfsDialog extends LitElement {
     const result = await gitService.lfsPull(repoPath);
 
     if (result.success) {
-      this.success = 'LFS files pulled successfully';
+      this.success = msg('LFS files pulled successfully');
       await this.loadFiles(repoPath);
       this.dispatchEvent(new CustomEvent('lfs-changed', {
         detail: { repositoryPath: repoPath || this.repositoryPath },
       }));
     } else if (!gitService.isNetworkGateRefusal(result.error)) {
       // The gate already said why; a declined confirm needs no message at all.
-      this.error = result.error?.message || 'Failed to pull LFS files';
+      this.error = result.error?.message || msg('Failed to pull LFS files');
     }
     } finally {
       this.loading = false;
@@ -742,9 +744,10 @@ export class GnLfsDialog extends LitElement {
     // verify the objects exist on the remote first, so blobs from a commit that
     // was never pushed can be deleted with no copy left anywhere.
     const confirmed = await showConfirm(
-      'Prune LFS Files',
-      'This permanently deletes local LFS objects that recent commits do not ' +
-        'reference. Objects that were never pushed cannot be recovered. Continue?',
+      msg('Prune LFS Files'),
+      msg(
+        'This permanently deletes local LFS objects that recent commits do not reference. Objects that were never pushed cannot be recovered. Continue?'
+      ),
       'warning'
     );
 
@@ -767,13 +770,13 @@ export class GnLfsDialog extends LitElement {
       const result = await gitService.lfsPrune(repoPath);
 
       if (result.success) {
-        this.success = result.data || 'LFS files pruned';
+        this.success = result.data || msg('LFS files pruned');
         await this.loadStatus(repoPath);
         this.dispatchEvent(new CustomEvent('lfs-changed', {
         detail: { repositoryPath: repoPath || this.repositoryPath },
       }));
       } else {
-        this.error = result.error?.message || 'Failed to prune LFS files';
+        this.error = result.error?.message || msg('Failed to prune LFS files');
       }
     } finally {
       this.loading = false;
@@ -826,7 +829,7 @@ export class GnLfsDialog extends LitElement {
           </div>
 
           <div class="dialog-content">
-            ${this.loading ? html`<div class="loading">Loading...</div>` : ''}
+            ${this.loading ? html`<div class="loading">${msg('Loading...')}</div>` : ''}
 
             ${this.error ? html`<div class="message error">${this.error}</div>` : ''}
 
@@ -841,7 +844,7 @@ export class GnLfsDialog extends LitElement {
               @click=${this.handleClose}
               ?disabled=${this.operationInFlight}
             >
-              Close
+              ${msg('Close')}
             </button>
           </div>
         </div>
@@ -858,10 +861,10 @@ export class GnLfsDialog extends LitElement {
     if (!this.status.installed) {
       return html`
         <div class="message warning">
-          Git LFS is not installed. Please install it to manage large files.
+          ${msg('Git LFS is not installed. Please install it to manage large files.')}
           <br><br>
           <a href="https://git-lfs.github.io/" @click=${handleExternalLink} style="color: inherit; text-decoration: underline;">
-            Learn more about Git LFS
+            ${msg('Learn more about Git LFS')}
           </a>
         </div>
       `;
@@ -870,9 +873,9 @@ export class GnLfsDialog extends LitElement {
     return html`
       <div class="status-section">
         <div class="status-header">
-          <span class="status-title">Status</span>
+          <span class="status-title">${msg('Status')}</span>
           <span class="status-badge ${this.status.enabled ? 'enabled' : 'disabled'}">
-            ${this.status.enabled ? 'Enabled' : 'Not configured'}
+            ${this.status.enabled ? msg('Enabled') : msg('Not configured')}
           </span>
         </div>
         <div style="font-size: var(--font-size-xs); color: var(--color-text-muted);">
@@ -883,18 +886,18 @@ export class GnLfsDialog extends LitElement {
               <div class="status-stats">
                 <div class="stat">
                   <div class="stat-value">${this.status.fileCount}</div>
-                  <div class="stat-label">Files</div>
+                  <div class="stat-label">${msg('Files')}</div>
                 </div>
                 <div class="stat">
                   <div class="stat-value">${this.formatSize(this.status.totalSize)}</div>
-                  <div class="stat-label">Total size</div>
+                  <div class="stat-label">${msg('Total size')}</div>
                 </div>
               </div>
             `
           : html`
               <div class="actions">
                 <button class="btn btn-primary" @click=${this.handleInit} ?disabled=${this.loading || this.pruning || this.maintenanceBlocked}>
-                  Initialize LFS
+                  ${msg('Initialize LFS')}
                 </button>
               </div>
             `}
@@ -912,18 +915,18 @@ export class GnLfsDialog extends LitElement {
         ? html`
             <div class="section">
               <div class="section-header">
-                <span class="section-title">Tracked Patterns</span>
+                <span class="section-title">${msg('Tracked Patterns')}</span>
               </div>
               <div class="pattern-list">
                 ${patterns.length === 0
-                  ? html`<span class="empty-text">No patterns configured</span>`
+                  ? html`<span class="empty-text">${msg('No patterns configured')}</span>`
                   : patterns.map(
                       (p) => html`
                         <div class="pattern-item">
                           <span class="pattern-text">${p.pattern}</span>
                           <button
                             class="btn-icon danger"
-                            title="Remove"
+                            title=${msg('Remove')}
                             @click=${() => this.handleUntrack(p.pattern)}
                             ?disabled=${this.loading || this.pruning || this.maintenanceBlocked}
                           >
@@ -954,7 +957,7 @@ export class GnLfsDialog extends LitElement {
                   @click=${this.handleTrack}
                   ?disabled=${this.loading || this.pruning || this.maintenanceBlocked || !this.newPattern}
                 >
-                  Track
+                  ${msg('Track')}
                 </button>
               </div>
             </div>
@@ -966,14 +969,14 @@ export class GnLfsDialog extends LitElement {
 
             <div class="section">
               <div class="section-header">
-                <span class="section-title">LFS Files (${this.files.length})</span>
+                <span class="section-title">${msg(str`LFS Files (${this.files.length})`)}</span>
                 <button
                   class="btn btn-secondary btn-sm"
                   @click=${() => {
                     this.showFiles = !this.showFiles;
                   }}
                 >
-                  ${this.showFiles ? 'Hide' : 'Show'}
+                  ${this.showFiles ? msg('Hide') : msg('Show')}
                 </button>
               </div>
               ${this.showFiles
@@ -981,7 +984,7 @@ export class GnLfsDialog extends LitElement {
                     <div class="files-list">
                       ${this.files.length === 0
                         ? html`<div style="padding: var(--spacing-md); color: var(--color-text-muted); text-align: center;">
-                            No LFS files
+                            ${msg('No LFS files')}
                           </div>`
                         : this.files.map(
                             (f) => html`
@@ -1005,7 +1008,7 @@ export class GnLfsDialog extends LitElement {
                   <polyline points="7 10 12 15 17 10"/>
                   <line x1="12" y1="15" x2="12" y2="3"/>
                 </svg>
-                Pull Files
+                ${msg('Pull Files')}
               </button>
               <button
                 class="btn btn-secondary"
@@ -1016,7 +1019,7 @@ export class GnLfsDialog extends LitElement {
                   <polyline points="3 6 5 6 21 6"/>
                   <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
                 </svg>
-                Prune Old Files
+                ${msg('Prune Old Files')}
               </button>
             </div>
           `

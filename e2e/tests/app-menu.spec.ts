@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { setupOpenRepository, setupTauriMocks, initializeRepositoryStore } from '../fixtures/tauri-mock';
+import { setupOpenRepository, setupTauriMocks, initializeRepositoryStore, emptyRepository } from '../fixtures/tauri-mock';
 import {
   emitBackendEvent,
   findCommand,
@@ -168,5 +168,130 @@ test.describe('Application menu — enabled state follows the open repository', 
     expect(items.find((i) => i.id === 'toggle-left-panel')?.accelerator).toBe('CmdOrCtrl+B');
     // Nothing invented for an action with no binding.
     expect(items.find((i) => i.id === 'bisect')?.accelerator).toBe(null);
+  });
+});
+
+/**
+ * Menu labels follow the language setting.
+ *
+ * The native layer cannot retitle an attached menu, so the frontend pushes a
+ * label map (`set_app_menu_labels`) and Rust rebuilds the menu; the enabled
+ * state and accelerators — which a rebuild resets — are re-pushed right after.
+ * Playwright cannot read the OS menu bar, so what is pinned here is that IPC
+ * traffic and its contents.
+ */
+type MenuLabels = Record<string, string>;
+
+/** Wrap the mocked IPC before the app boots, so the STARTUP labels are seen. */
+async function captureMenuLabelsFromBoot(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const win = window as unknown as {
+      __TAURI_INTERNALS__?: { invoke: (cmd: string, args?: unknown) => Promise<unknown> };
+      __MENU_LABEL_CALLS__?: Array<{ labels?: MenuLabels }>;
+    };
+    const internals = win.__TAURI_INTERNALS__;
+    if (!internals) return;
+    const original = internals.invoke;
+    win.__MENU_LABEL_CALLS__ = [];
+    internals.invoke = async (command: string, args?: unknown) => {
+      if (command === 'set_app_menu_labels') {
+        (win.__MENU_LABEL_CALLS__ as Array<{ labels?: MenuLabels }>).push(
+          args as { labels?: MenuLabels }
+        );
+      }
+      return original(command, args);
+    };
+  });
+}
+
+/**
+ * The label map from the first push whose File row is `fileLabel`.
+ *
+ * A first launch can push the source-locale labels before the persisted
+ * language finishes loading (its templates arrive through a dynamic import) and
+ * push the localised ones right after — so wait for the push being asserted on
+ * rather than for "any push".
+ */
+async function waitForBootMenuLabels(
+  page: Page,
+  fileLabel: string,
+  timeoutMs = 15000
+): Promise<MenuLabels> {
+  await page.waitForFunction(
+    (expected) => {
+      const calls =
+        (window as unknown as {
+          __MENU_LABEL_CALLS__?: Array<{ labels?: MenuLabels }>;
+        }).__MENU_LABEL_CALLS__ ?? [];
+      return calls.some((call) => call?.labels?.file === expected);
+    },
+    fileLabel,
+    { timeout: timeoutMs }
+  );
+  return page.evaluate((expected) => {
+    const calls = (window as unknown as { __MENU_LABEL_CALLS__?: Array<{ labels?: MenuLabels }> })
+      .__MENU_LABEL_CALLS__!;
+    const match = calls.filter((call) => call?.labels?.file === expected).pop();
+    return match?.labels ?? {};
+  }, fileLabel);
+}
+
+test.describe('Application menu — labels follow the language', () => {
+  test('installs the English labels for a source-locale install', async ({ page }) => {
+    await setupTauriMocks(page, emptyRepository());
+    await captureMenuLabelsFromBoot(page);
+    await page.goto('/');
+    await page.waitForLoadState('domcontentloaded');
+
+    const labels = await waitForBootMenuLabels(page, 'File');
+    expect(labels.file, 'sections are labelled too').toBeTruthy();
+    expect(labels.edit, 'the macOS Edit menu is labelled too').toBe('Edit');
+    expect(labels.fetch).toBe('Fetch');
+    expect(labels['repository-health']).toBe('Repository Health & Maintenance…');
+  });
+
+  test('installs the persisted Chinese labels at startup', async ({ page }) => {
+    await setupTauriMocks(page, emptyRepository());
+    // A returning user who chose Chinese: the menu must be Chinese on the
+    // first push, not only after they open Settings again.
+    await page.addInitScript(() => {
+      localStorage.setItem(
+        'gitnado-settings',
+        JSON.stringify({ state: { language: 'zh' }, version: 8 })
+      );
+    });
+    await captureMenuLabelsFromBoot(page);
+    await page.goto('/');
+    await page.waitForLoadState('domcontentloaded');
+
+    const labels = await waitForBootMenuLabels(page, '文件');
+    expect(labels.file).toBe('文件');
+    expect(labels.fetch).toBe('获取');
+    expect(labels['command-palette']).toBe('命令面板…');
+  });
+
+  test('a language switch relabels the menu and re-pushes its state', async ({ page }) => {
+    await setupOpenRepository(page);
+    await startCommandCapture(page);
+
+    await page.keyboard.press('Meta+,');
+    const select = page.locator('gn-settings-dialog #language-select');
+    await expect(select).toBeVisible();
+    await select.selectOption('zh');
+    await expect(page.locator('gn-settings-dialog .section-title').first()).toHaveText('外观');
+
+    // The label map that reached the backend is Chinese...
+    await page.waitForFunction(() => {
+      const calls = (window as unknown as {
+        __INVOKED_COMMANDS__?: Array<{ command: string; args?: { labels?: MenuLabels } }>;
+      }).__INVOKED_COMMANDS__;
+      return (calls ?? []).some(
+        (call) => call.command === 'set_app_menu_labels' && call.args?.labels?.file === '文件'
+      );
+    });
+
+    // ...and the rebuilt menu got its enabled state and accelerators back.
+    const calls = await findCommand(page, 'sync_app_menu');
+    expect(calls.length, 'enabled state is re-pushed after the rebuild').toBeGreaterThan(0);
   });
 });

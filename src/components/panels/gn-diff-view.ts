@@ -1,5 +1,6 @@
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
+import { localized, msg, str } from '@lit/localize';
 import { sharedStyles } from '../../styles/shared-styles.ts';
 import { codeStyles } from '../../styles/code-styles.ts';
 import * as gitService from '../../services/git.service.ts';
@@ -8,7 +9,7 @@ import { showConfirm } from '../../services/dialog.service.ts';
 import {
   settingsStore,
   clampDiffContextLines,
-  DIFF_WHITESPACE_MODES,
+  getDiffWhitespaceModes,
   MIN_DIFF_CONTEXT_LINES,
   MAX_DIFF_CONTEXT_LINES,
 } from '../../stores/settings.store.ts';
@@ -170,6 +171,7 @@ type LineKey = `${number}-${number}`;
  * Supports unified and split view modes
  */
 @customElement('gn-diff-view')
+@localized()
 export class GnDiffView extends CodeRenderMixin(LitElement) {
   static styles = [
     sharedStyles,
@@ -1256,12 +1258,15 @@ export class GnDiffView extends CodeRenderMixin(LitElement) {
         this.commitFile?.commitOid,
       );
       if (result.success && result.data?.success) {
-        showToast('Diff tool completed', 'success');
+        showToast(msg('Diff tool completed'), 'success');
       } else {
-        showToast(result.data?.message ?? result.error?.message ?? 'Diff tool failed', 'error');
+        showToast(
+          result.data?.message ?? result.error?.message ?? msg('Diff tool failed'),
+          'error',
+        );
       }
     } catch {
-      showToast('Failed to launch diff tool', 'error');
+      showToast(msg('Failed to launch diff tool'), 'error');
     } finally {
       this.launchingDiffTool = false;
     }
@@ -1387,11 +1392,11 @@ export class GnDiffView extends CodeRenderMixin(LitElement) {
         this.diff = result.data!;
         this.loadedWorkingDiffContext = { repositoryPath, filePath, isStaged };
       } else {
-        this.error = result.error?.message ?? 'Failed to load diff';
+        this.error = result.error?.message ?? msg('Failed to load diff');
       }
     } catch (err) {
       if (requestId !== this.diffRequestId) return;
-      this.error = err instanceof Error ? err.message : 'Unknown error';
+      this.error = err instanceof Error ? err.message : msg('Unknown error');
     } finally {
       if (requestId === this.diffRequestId) this.loading = false;
     }
@@ -1427,11 +1432,11 @@ export class GnDiffView extends CodeRenderMixin(LitElement) {
       if (result.success) {
         this.diff = result.data!;
       } else {
-        this.error = result.error?.message ?? 'Failed to load diff';
+        this.error = result.error?.message ?? msg('Failed to load diff');
       }
     } catch (err) {
       if (requestId !== this.diffRequestId) return;
-      this.error = err instanceof Error ? err.message : 'Unknown error';
+      this.error = err instanceof Error ? err.message : msg('Unknown error');
     } finally {
       if (requestId === this.diffRequestId) this.loading = false;
     }
@@ -1498,11 +1503,11 @@ export class GnDiffView extends CodeRenderMixin(LitElement) {
    * misleading on its own — the file does differ, git is just not showing it.
    */
   private get emptyDiffMessage(): string {
-    if (this.ignoreWhitespace === 'none') return 'No changes in this file';
+    if (this.ignoreWhitespace === 'none') return msg('No changes in this file');
     const label =
-      DIFF_WHITESPACE_MODES.find((m) => m.value === this.ignoreWhitespace)?.label ??
+      getDiffWhitespaceModes().find((m) => m.value === this.ignoreWhitespace)?.label ??
       this.ignoreWhitespace;
-    return `No changes in this file with "${label}" applied`;
+    return msg(str`No changes in this file with "${label}" applied`);
   }
 
   /**
@@ -1577,8 +1582,8 @@ export class GnDiffView extends CodeRenderMixin(LitElement) {
     // separate codes because they are presented very differently.
     showToast(
       result.error?.code === 'FILE_NOT_FOUND'
-        ? `${filePath} is no longer on disk — refresh to see its current state`
-        : result.error?.message ?? 'Could not open this file for editing',
+        ? msg(str`${filePath} is no longer on disk — refresh to see its current state`)
+        : result.error?.message ?? msg('Could not open this file for editing'),
       'error'
     );
   }
@@ -1626,7 +1631,7 @@ export class GnDiffView extends CodeRenderMixin(LitElement) {
       (this.editPath && this.editPath !== this.file.path) ||
       (this.editRepositoryPath && this.editRepositoryPath !== this.repositoryPath)
     ) {
-      showToast('The editor no longer matches the selected file', 'error');
+      showToast(msg('The editor no longer matches the selected file'), 'error');
       return;
     }
 
@@ -1663,8 +1668,10 @@ export class GnDiffView extends CodeRenderMixin(LitElement) {
     } else {
       showToast(
         this.saveContextChanged
-          ? `Failed to save ${filePath}; its unsaved edits were discarded when the selection changed`
-          : `Failed to save file: ${result.error?.message ?? 'Unknown error'}`,
+          ? msg(
+              str`Failed to save ${filePath}; its unsaved edits were discarded when the selection changed`
+            )
+          : msg(str`Failed to save file: ${result.error?.message ?? msg('Unknown error')}`),
         'error'
       );
     }
@@ -1727,7 +1734,7 @@ export class GnDiffView extends CodeRenderMixin(LitElement) {
     const lost = this.hasChanges && !this.saving ? this.editPath : null;
     this.discardEditBuffer();
     if (lost) {
-      showToast(`Unsaved edits to ${lost} were discarded`, 'warning');
+      showToast(msg(str`Unsaved edits to ${lost} were discarded`), 'warning');
     }
   }
 
@@ -1742,8 +1749,8 @@ export class GnDiffView extends CodeRenderMixin(LitElement) {
     if (this.saving) return;
     if (this.hasChanges) {
       const confirmed = await showConfirm(
-        'Discard edits?',
-        `This file has unsaved edits — closing the editor discards them.`,
+        msg('Discard edits?'),
+        msg('This file has unsaved edits — closing the editor discards them.'),
         'warning'
       );
       if (!confirmed) return;
@@ -1789,10 +1796,12 @@ export class GnDiffView extends CodeRenderMixin(LitElement) {
           <line x1="12" y1="9" x2="12" y2="13"></line>
           <line x1="12" y1="17" x2="12.01" y2="17"></line>
         </svg>
-        <div class="conflict-redirect-title">${this.file?.path ?? ''} has merge conflicts</div>
-        <div>Resolve them side by side in the merge editor.</div>
+        <div class="conflict-redirect-title">
+          ${msg(str`${this.file?.path ?? ''} has merge conflicts`)}
+        </div>
+        <div>${msg('Resolve them side by side in the merge editor.')}</div>
         <button class="conflict-redirect-btn" @click=${this.handleOpenMergeEditor}>
-          Open Merge Editor
+          ${msg('Open Merge Editor')}
         </button>
       </div>
     `;
@@ -2142,10 +2151,16 @@ export class GnDiffView extends CodeRenderMixin(LitElement) {
         return true;
       }
       console.error('Failed to stage selected lines:', result.error);
-      showToast(`Failed to stage lines: ${result.error?.message ?? 'Unknown error'}`, 'error');
+      showToast(
+        msg(str`Failed to stage lines: ${result.error?.message ?? msg('Unknown error')}`),
+        'error',
+      );
     } catch (err) {
       console.error('Failed to stage selected lines:', err);
-      showToast(`Failed to stage lines: ${err instanceof Error ? err.message : 'Unknown error'}`, 'error');
+      showToast(
+        msg(str`Failed to stage lines: ${err instanceof Error ? err.message : msg('Unknown error')}`),
+        'error',
+      );
     } finally {
       this.diffMutationInProgress = false;
     }
@@ -2182,10 +2197,16 @@ export class GnDiffView extends CodeRenderMixin(LitElement) {
         return true;
       }
       console.error('Failed to unstage selected lines:', result.error);
-      showToast(`Failed to unstage lines: ${result.error?.message ?? 'Unknown error'}`, 'error');
+      showToast(
+        msg(str`Failed to unstage lines: ${result.error?.message ?? msg('Unknown error')}`),
+        'error',
+      );
     } catch (err) {
       console.error('Failed to unstage selected lines:', err);
-      showToast(`Failed to unstage lines: ${err instanceof Error ? err.message : 'Unknown error'}`, 'error');
+      showToast(
+        msg(str`Failed to unstage lines: ${err instanceof Error ? err.message : msg('Unknown error')}`),
+        'error',
+      );
     } finally {
       this.diffMutationInProgress = false;
     }
@@ -2220,11 +2241,17 @@ export class GnDiffView extends CodeRenderMixin(LitElement) {
         }
       } else {
         console.error('Failed to stage hunk:', result.error);
-        showToast(`Failed to stage hunk: ${result.error?.message ?? 'Unknown error'}`, 'error');
+        showToast(
+          msg(str`Failed to stage hunk: ${result.error?.message ?? msg('Unknown error')}`),
+          'error',
+        );
       }
     } catch (err) {
       console.error('Failed to stage hunk:', err);
-      showToast(`Failed to stage hunk: ${err instanceof Error ? err.message : 'Unknown error'}`, 'error');
+      showToast(
+        msg(str`Failed to stage hunk: ${err instanceof Error ? err.message : msg('Unknown error')}`),
+        'error',
+      );
     } finally {
       this.diffMutationInProgress = false;
     }
@@ -2258,11 +2285,17 @@ export class GnDiffView extends CodeRenderMixin(LitElement) {
         }
       } else {
         console.error('Failed to unstage hunk:', result.error);
-        showToast(`Failed to unstage hunk: ${result.error?.message ?? 'Unknown error'}`, 'error');
+        showToast(
+          msg(str`Failed to unstage hunk: ${result.error?.message ?? msg('Unknown error')}`),
+          'error',
+        );
       }
     } catch (err) {
       console.error('Failed to unstage hunk:', err);
-      showToast(`Failed to unstage hunk: ${err instanceof Error ? err.message : 'Unknown error'}`, 'error');
+      showToast(
+        msg(str`Failed to unstage hunk: ${err instanceof Error ? err.message : msg('Unknown error')}`),
+        'error',
+      );
     } finally {
       this.diffMutationInProgress = false;
     }
@@ -2334,7 +2367,7 @@ export class GnDiffView extends CodeRenderMixin(LitElement) {
       await navigator.clipboard.writeText(line.content);
     } catch (err) {
       console.error('Failed to copy line:', err);
-      showToast('Failed to copy line to clipboard', 'error');
+      showToast(msg('Failed to copy line to clipboard'), 'error');
     }
   }
 
@@ -2347,7 +2380,7 @@ export class GnDiffView extends CodeRenderMixin(LitElement) {
       }
     } catch (err) {
       console.error('Failed to copy selection:', err);
-      showToast('Failed to copy selection to clipboard', 'error');
+      showToast(msg('Failed to copy selection to clipboard'), 'error');
     }
   }
 
@@ -2559,7 +2592,9 @@ export class GnDiffView extends CodeRenderMixin(LitElement) {
            @scroll=${this.handleDiffScroll}>
         ${this.flatLines.length > 10000 ? html`
           <div class="large-diff-info">
-            Large diff (${this.flatLines.length.toLocaleString()} lines) -- virtualized for performance
+            ${msg(
+              str`Large diff (${this.flatLines.length.toLocaleString()} lines) -- virtualized for performance`
+            )}
           </div>
         ` : nothing}
         <div style="height: ${contentHeight}px; position: relative;">
@@ -2790,9 +2825,9 @@ export class GnDiffView extends CodeRenderMixin(LitElement) {
         <button
           class="stage-btn"
           @click=${() => this.selectAllInHunk(hunkIndex)}
-          title="Select all lines in this hunk"
+          title=${msg('Select all lines in this hunk')}
         >
-          Select All
+          ${msg('Select All')}
         </button>
       ` : nothing}
       ${isStaged ? html`
@@ -2800,25 +2835,25 @@ export class GnDiffView extends CodeRenderMixin(LitElement) {
           class="stage-btn unstage"
           @click=${(e: Event) => this.handleUnstageHunk(hunk, e)}
           ?disabled=${this.diffMutationInProgress}
-          title="Unstage this hunk"
+          title=${msg('Unstage this hunk')}
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="5" y1="12" x2="19" y2="12"></line>
           </svg>
-          Unstage
+          ${msg('Unstage')}
         </button>
       ` : html`
         <button
           class="stage-btn stage"
           @click=${(e: Event) => this.handleStageHunk(hunk, e)}
           ?disabled=${this.diffMutationInProgress}
-          title="Stage this hunk"
+          title=${msg('Stage this hunk')}
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="12" y1="5" x2="12" y2="19"></line>
             <line x1="5" y1="12" x2="19" y2="12"></line>
           </svg>
-          Stage
+          ${msg('Stage')}
         </button>
       `}
     `;
@@ -3064,11 +3099,11 @@ export class GnDiffView extends CodeRenderMixin(LitElement) {
     return html`
       <div class="split-container ${this.wordWrap ? 'word-wrap' : ''} ${this.lineSelectionMode ? 'line-selection-mode' : ''}">
         <div class="split-pane">
-          <div class="split-pane-header">Original</div>
+          <div class="split-pane-header">${msg('Original')}</div>
           ${splitLines.map((sl) => this.renderSplitLineCell(sl, 'left'))}
         </div>
         <div class="split-pane">
-          <div class="split-pane-header">Modified</div>
+          <div class="split-pane-header">${msg('Modified')}</div>
           ${splitLines.map((sl) => this.renderSplitLineCell(sl, 'right'))}
         </div>
       </div>
@@ -3086,9 +3121,13 @@ export class GnDiffView extends CodeRenderMixin(LitElement) {
 
     return html`
       <div class="selection-actions">
-        <span class="selection-info">${this.selectedLines.size} line${this.selectedLines.size !== 1 ? 's' : ''} selected</span>
+        <span class="selection-info">
+          ${this.selectedLines.size === 1
+            ? msg(str`${this.selectedLines.size} line selected`)
+            : msg(str`${this.selectedLines.size} lines selected`)}
+        </span>
         <button class="selection-btn" @click=${this.clearLineSelection}>
-          Clear
+          ${msg('Clear')}
         </button>
         ${isStaged ? html`
           <button
@@ -3099,7 +3138,7 @@ export class GnDiffView extends CodeRenderMixin(LitElement) {
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <line x1="5" y1="12" x2="19" y2="12"></line>
             </svg>
-            Unstage Selected
+            ${msg('Unstage Selected')}
           </button>
         ` : html`
           <button
@@ -3111,7 +3150,7 @@ export class GnDiffView extends CodeRenderMixin(LitElement) {
               <line x1="12" y1="5" x2="12" y2="19"></line>
               <line x1="5" y1="12" x2="19" y2="12"></line>
             </svg>
-            Stage Selected
+            ${msg('Stage Selected')}
           </button>
         `}
       </div>
@@ -3150,14 +3189,14 @@ export class GnDiffView extends CodeRenderMixin(LitElement) {
             <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
             <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
           </svg>
-          Copy selection
+          ${msg('Copy selection')}
         </button>
         <button class="context-menu-item" @click=${this.handleContextCopyLine}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
             <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
           </svg>
-          Copy line
+          ${msg('Copy line')}
         </button>
         ${showStageButton && isChangeableLine ? html`
           <div class="context-menu-divider"></div>
@@ -3170,7 +3209,7 @@ export class GnDiffView extends CodeRenderMixin(LitElement) {
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <line x1="5" y1="12" x2="19" y2="12"></line>
               </svg>
-              Unstage line
+              ${msg('Unstage line')}
             </button>
           ` : html`
             <button
@@ -3182,7 +3221,7 @@ export class GnDiffView extends CodeRenderMixin(LitElement) {
                 <line x1="12" y1="5" x2="12" y2="19"></line>
                 <line x1="5" y1="12" x2="19" y2="12"></line>
               </svg>
-              Stage line
+              ${msg('Stage line')}
             </button>
           `}
         ` : nothing}
@@ -3197,7 +3236,7 @@ export class GnDiffView extends CodeRenderMixin(LitElement) {
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <line x1="5" y1="12" x2="19" y2="12"></line>
               </svg>
-              Unstage hunk
+              ${msg('Unstage hunk')}
             </button>
           ` : html`
             <button
@@ -3209,7 +3248,7 @@ export class GnDiffView extends CodeRenderMixin(LitElement) {
                 <line x1="12" y1="5" x2="12" y2="19"></line>
                 <line x1="5" y1="12" x2="19" y2="12"></line>
               </svg>
-              Stage hunk
+              ${msg('Stage hunk')}
             </button>
           `}
         ` : nothing}
@@ -3219,7 +3258,7 @@ export class GnDiffView extends CodeRenderMixin(LitElement) {
 
   render() {
     if (!this.file && !this.commitFile) {
-      return html`<div class="empty">No file selected</div>`;
+      return html`<div class="empty">${msg('No file selected')}</div>`;
     }
 
     // A conflicted file's working-tree content is git's marker text — never
@@ -3229,7 +3268,7 @@ export class GnDiffView extends CodeRenderMixin(LitElement) {
     }
 
     if (this.loading) {
-      return html`<div class="loading">Loading diff...</div>`;
+      return html`<div class="loading">${msg('Loading diff...')}</div>`;
     }
 
     if (this.error) {
@@ -3237,11 +3276,11 @@ export class GnDiffView extends CodeRenderMixin(LitElement) {
     }
 
     if (!this.diff) {
-      return html`<div class="empty">No changes to display</div>`;
+      return html`<div class="empty">${msg('No changes to display')}</div>`;
     }
 
     if (this.diff.isBinary && !this.diff.isImage) {
-      return html`<div class="binary-notice">Binary file - cannot display diff</div>`;
+      return html`<div class="binary-notice">${msg('Binary file - cannot display diff')}</div>`;
     }
 
     // Render image diff component for image files
@@ -3272,17 +3311,17 @@ export class GnDiffView extends CodeRenderMixin(LitElement) {
             class="edit-btn active"
             @click=${() => void this.toggleEditMode()}
             ?disabled=${this.saving}
-            title="Exit edit mode"
+            title=${msg('Exit edit mode')}
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
               <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
             </svg>
-            Editing
+            ${msg('Editing')}
           </button>
         </div>
         ${this.hasChanges
-          ? html`<div class="edit-indicator">Unsaved changes (Ctrl+S to save, Esc to cancel)</div>`
+          ? html`<div class="edit-indicator">${msg('Unsaved changes (Ctrl+S to save, Esc to cancel)')}</div>`
           : nothing}
         <div class="editor-container">
           <div class="editor-toolbar">
@@ -3291,14 +3330,14 @@ export class GnDiffView extends CodeRenderMixin(LitElement) {
               @click=${() => void this.cancelEdit()}
               ?disabled=${this.saving}
             >
-              Cancel
+              ${msg('Cancel')}
             </button>
             <button
               class="save-btn"
               @click=${this.saveEdit}
               ?disabled=${!this.hasChanges || this.saving}
             >
-              ${this.saving ? 'Saving...' : 'Save'}
+              ${this.saving ? msg('Saving...') : msg('Save')}
             </button>
           </div>
           <textarea
@@ -3328,7 +3367,7 @@ export class GnDiffView extends CodeRenderMixin(LitElement) {
               class="view-btn"
               @click=${this.handleOpenDiffTool}
               ?disabled=${this.launchingDiffTool}
-              title="Open in external diff tool"
+              title=${msg('Open in external diff tool')}
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
@@ -3341,7 +3380,7 @@ export class GnDiffView extends CodeRenderMixin(LitElement) {
             <button
               class="view-btn ${this.lineSelectionMode ? 'active' : ''}"
               @click=${this.toggleLineSelectionMode}
-              title="Toggle line selection mode for staging individual lines"
+              title=${msg('Toggle line selection mode for staging individual lines')}
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M9 11l3 3L22 4"></path>
@@ -3354,7 +3393,7 @@ export class GnDiffView extends CodeRenderMixin(LitElement) {
               <button
                 class="view-btn"
                 @click=${this.goToPrevHunk}
-                title="Previous change (Alt+Up)"
+                title=${msg('Previous change (Alt+Up)')}
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <polyline points="18 15 12 9 6 15"></polyline>
@@ -3364,7 +3403,7 @@ export class GnDiffView extends CodeRenderMixin(LitElement) {
               <button
                 class="view-btn"
                 @click=${this.goToNextHunk}
-                title="Next change (Alt+Down)"
+                title=${msg('Next change (Alt+Down)')}
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <polyline points="6 9 12 15 18 9"></polyline>
@@ -3377,13 +3416,13 @@ export class GnDiffView extends CodeRenderMixin(LitElement) {
                 <button
                   class="edit-btn"
                   @click=${this.toggleEditMode}
-                  title="Edit file"
+                  title=${msg('Edit file')}
                 >
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
                     <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
                   </svg>
-                  Edit
+                  ${msg('Edit')}
                 </button>
               `
             : nothing}
@@ -3391,12 +3430,12 @@ export class GnDiffView extends CodeRenderMixin(LitElement) {
             <select
               id="diff-ignore-whitespace"
               class="diff-whitespace-select"
-              aria-label="Whitespace handling"
-              title="How whitespace-only changes are treated in this diff"
+              aria-label=${msg('Whitespace handling')}
+              title=${msg('How whitespace-only changes are treated in this diff')}
               .value=${this.ignoreWhitespace}
               @change=${this.handleIgnoreWhitespaceChange}
             >
-              ${DIFF_WHITESPACE_MODES.map(
+              ${getDiffWhitespaceModes().map(
                 (mode) => html`
                   <option value=${mode.value} ?selected=${mode.value === this.ignoreWhitespace}>
                     ${mode.label}
@@ -3406,7 +3445,7 @@ export class GnDiffView extends CodeRenderMixin(LitElement) {
             </select>
           </div>
           <div class="diff-option">
-            <label class="diff-option-label" for="diff-context-lines">Context</label>
+            <label class="diff-option-label" for="diff-context-lines">${msg('Context')}</label>
             <input
               id="diff-context-lines"
               class="diff-context-input"
@@ -3415,8 +3454,10 @@ export class GnDiffView extends CodeRenderMixin(LitElement) {
               min=${MIN_DIFF_CONTEXT_LINES}
               max=${MAX_DIFF_CONTEXT_LINES}
               step="1"
-              aria-label="Lines of context around each change"
-              title="Lines of unchanged context shown around each change (${MIN_DIFF_CONTEXT_LINES}-${MAX_DIFF_CONTEXT_LINES})"
+              aria-label=${msg('Lines of context around each change')}
+              title=${msg(
+                str`Lines of unchanged context shown around each change (${MIN_DIFF_CONTEXT_LINES}-${MAX_DIFF_CONTEXT_LINES})`
+              )}
               .value=${String(this.contextLines)}
               @change=${this.handleContextLinesChange}
             />
@@ -3424,7 +3465,7 @@ export class GnDiffView extends CodeRenderMixin(LitElement) {
           <button
             class="view-btn ${this.wordWrap ? 'active' : ''}"
             @click=${this.toggleWordWrap}
-            title="Toggle word wrap"
+            title=${msg('Toggle word wrap')}
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <line x1="3" y1="6" x2="21" y2="6"></line>
@@ -3436,7 +3477,7 @@ export class GnDiffView extends CodeRenderMixin(LitElement) {
           <button
             class="view-btn ${this.viewMode === 'unified' ? 'active' : ''}"
             @click=${() => this.setViewMode('unified')}
-            title="Unified view"
+            title=${msg('Unified view')}
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <rect x="3" y="3" width="18" height="18" rx="2"></rect>
@@ -3447,7 +3488,7 @@ export class GnDiffView extends CodeRenderMixin(LitElement) {
           <button
             class="view-btn ${this.viewMode === 'split' ? 'active' : ''}"
             @click=${() => this.setViewMode('split')}
-            title="Split view"
+            title=${msg('Split view')}
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <rect x="3" y="3" width="18" height="18" rx="2"></rect>
@@ -3464,14 +3505,16 @@ export class GnDiffView extends CodeRenderMixin(LitElement) {
                 <line x1="12" y1="8" x2="12" y2="12"></line>
                 <line x1="12" y1="16" x2="12.01" y2="16"></line>
               </svg>
-              This file has staged changes that will be included in the next commit.
+              ${msg('This file has staged changes that will be included in the next commit.')}
             </div>
           `
         : nothing}
       ${this.diff?.truncated ? html`
         <div class="large-diff-info">
-          Showing first ${this.diff.hunks.reduce((sum, h) => sum + h.lines.length, 0).toLocaleString()} of ${this.diff.totalLines?.toLocaleString() ?? 'many'} lines
-          <button class="btn-link" @click=${this.handleLoadFullDiff}>Load full diff</button>
+          ${msg(
+            str`Showing first ${this.diff.hunks.reduce((sum, h) => sum + h.lines.length, 0).toLocaleString()} of ${this.diff.totalLines?.toLocaleString() ?? msg('many')} lines`
+          )}
+          <button class="btn-link" @click=${this.handleLoadFullDiff}>${msg('Load full diff')}</button>
         </div>
       ` : nothing}
       ${this.renderSelectionActions()}

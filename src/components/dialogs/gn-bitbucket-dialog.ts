@@ -5,6 +5,7 @@
 
 import { LitElement, html, css, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
+import { localized, msg, str } from '@lit/localize';
 import { sharedStyles } from '../../styles/shared-styles.ts';
 import * as gitService from '../../services/git.service.ts';
 import { invokeCommand } from '../../services/tauri-api.ts';
@@ -53,6 +54,7 @@ const BITBUCKET_LIST_PAGE_SIZE = 30;
 const BITBUCKET_PIPELINE_PAGE_SIZE = 20;
 
 @customElement('gn-bitbucket-dialog')
+@localized()
 export class GnBitbucketDialog extends LitElement {
   static styles = [
     sharedStyles,
@@ -812,7 +814,7 @@ export class GnBitbucketDialog extends LitElement {
         // A failed/denied sign-in clears the pending spinner — surface the error
         // so the user isn't left with no feedback (matches the other providers).
         if (state.status === 'error') {
-          this.error = state.error ?? 'Bitbucket sign-in failed';
+          this.error = state.error ?? msg('Bitbucket sign-in failed');
           showToast(this.error, 'error');
           // The flow is over and can no longer emit `oauth-complete`, so release
           // the pinned target — otherwise a later completion would be attributed
@@ -985,7 +987,7 @@ export class GnBitbucketDialog extends LitElement {
       await this.checkConnection();
     } catch (err) {
       if (generation !== this.loadGeneration) return;
-      this.error = err instanceof Error ? err.message : 'Failed to load data';
+      this.error = err instanceof Error ? err.message : msg('Failed to load data');
     } finally {
       if (generation === this.loadGeneration) {
         this.isLoading = false;
@@ -1200,7 +1202,7 @@ export class GnBitbucketDialog extends LitElement {
     } else if (!result.success) {
       // A genuine backend failure (not merely "this isn't a Bitbucket repo",
       // which surfaces as success with null data) must not fail silently.
-      this.error = result.error?.message ?? 'Failed to detect Bitbucket repository';
+      this.error = result.error?.message ?? msg('Failed to detect Bitbucket repository');
     }
   }
 
@@ -1231,10 +1233,10 @@ export class GnBitbucketDialog extends LitElement {
       if (result.success && result.data) {
         this.pullRequests = result.data;
       } else {
-        this.error = result.error?.message ?? 'Failed to load pull requests';
+        this.error = result.error?.message ?? msg('Failed to load pull requests');
       }
     } catch (err) {
-      this.error = err instanceof Error ? err.message : 'Failed to load pull requests';
+      this.error = err instanceof Error ? err.message : msg('Failed to load pull requests');
     } finally {
       this.isLoading = false;
     }
@@ -1274,11 +1276,11 @@ export class GnBitbucketDialog extends LitElement {
           [prId]: result.data,
         };
       } else if (!gitService.isNetworkGateRefusal(result.error)) {
-        this.error = result.error?.message ?? 'Failed to load PR comments';
+        this.error = result.error?.message ?? msg('Failed to load PR comments');
         showToast(this.error, 'error');
       }
     } catch (err) {
-      this.error = err instanceof Error ? err.message : 'Failed to load PR comments';
+      this.error = err instanceof Error ? err.message : msg('Failed to load PR comments');
       showToast(this.error, 'error');
     } finally {
       this.loadingCommentsForPr = null;
@@ -1313,14 +1315,14 @@ export class GnBitbucketDialog extends LitElement {
         this.commentBodyInput = '';
         this.commentFilePathInput = '';
         this.commentLineInput = '';
-        showToast('Comment posted', 'success');
+        showToast(msg('Comment posted'), 'success');
         await this.loadPrComments(prId);
       } else if (!gitService.isNetworkGateRefusal(result.error)) {
-        this.error = result.error?.message ?? 'Failed to post PR comment';
+        this.error = result.error?.message ?? msg('Failed to post PR comment');
         showToast(this.error, 'error');
       }
     } catch (err) {
-      this.error = err instanceof Error ? err.message : 'Failed to post PR comment';
+      this.error = err instanceof Error ? err.message : msg('Failed to post PR comment');
       showToast(this.error, 'error');
     } finally {
       this.postingCommentForPr = null;
@@ -1345,10 +1347,10 @@ export class GnBitbucketDialog extends LitElement {
       } else if (!result.success) {
         // The backend returns an empty list when issues are disabled (404); a
         // non-404 error (bad token/server) is surfaced rather than swallowed.
-        this.error = result.error?.message ?? 'Failed to load issues';
+        this.error = result.error?.message ?? msg('Failed to load issues');
       }
     } catch (err) {
-      this.error = err instanceof Error ? err.message : 'Failed to load issues';
+      this.error = err instanceof Error ? err.message : msg('Failed to load issues');
     }
   }
 
@@ -1367,10 +1369,10 @@ export class GnBitbucketDialog extends LitElement {
       if (result.success && result.data) {
         this.pipelines = result.data;
       } else if (!result.success) {
-        this.error = result.error?.message ?? 'Failed to load pipelines';
+        this.error = result.error?.message ?? msg('Failed to load pipelines');
       }
     } catch (err) {
-      this.error = err instanceof Error ? err.message : 'Failed to load pipelines';
+      this.error = err instanceof Error ? err.message : msg('Failed to load pipelines');
     }
   }
 
@@ -1386,7 +1388,7 @@ export class GnBitbucketDialog extends LitElement {
         this.appPasswordInput
       );
       if (!storeResult.success) {
-        this.error = storeResult.error?.message ?? 'Failed to save credentials';
+        this.error = storeResult.error?.message ?? msg('Failed to save credentials');
         return;
       }
 
@@ -1455,10 +1457,10 @@ export class GnBitbucketDialog extends LitElement {
           await this.loadAllData();
         }
       } else {
-        this.error = 'Failed to connect. Please check your credentials.';
+        this.error = msg('Failed to connect. Please check your credentials.');
       }
     } catch (err) {
-      this.error = err instanceof Error ? err.message : 'Failed to connect';
+      this.error = err instanceof Error ? err.message : msg('Failed to connect');
     } finally {
       this.isLoading = false;
     }
@@ -1482,7 +1484,7 @@ export class GnBitbucketDialog extends LitElement {
       this.issues = [];
       this.pipelines = [];
     } catch (err) {
-      this.error = err instanceof Error ? err.message : 'Failed to disconnect';
+      this.error = err instanceof Error ? err.message : msg('Failed to disconnect');
       showToast(this.error, 'error');
     } finally {
       this.isLoading = false;
@@ -1493,10 +1495,10 @@ export class GnBitbucketDialog extends LitElement {
     if (!this.selectedAccountId) return;
 
     const selected = this.accounts.find((a) => a.id === this.selectedAccountId);
-    const accountName = selected?.name ?? 'this account';
+    const accountName = selected?.name ?? msg('this account');
     const confirmed = await showConfirm(
-      'Delete Bitbucket Integration',
-      `Delete ${accountName}? The stored credentials will be removed and any profile that uses this account as its default will lose that reference.`,
+      msg('Delete Bitbucket Integration'),
+      msg(str`Delete ${accountName}? The stored credentials will be removed and any profile that uses this account as its default will lose that reference.`),
       'warning',
     );
     if (!confirmed) return;
@@ -1526,19 +1528,19 @@ export class GnBitbucketDialog extends LitElement {
       try {
         await credentialService.deleteAccountToken('bitbucket', accountId);
       } catch (tokenErr) {
-        const msg =
+        const message =
           tokenErr instanceof Error
-            ? `Account deleted, but its stored token could not be removed: ${tokenErr.message}`
-            : 'Account deleted, but its stored token could not be removed.';
-        this.error = msg;
-        showToast(msg, 'error');
+            ? msg(str`Account deleted, but its stored token could not be removed: ${tokenErr.message}`)
+            : msg('Account deleted, but its stored token could not be removed.');
+        this.error = message;
+        showToast(message, 'error');
       }
 
       if (this.accounts.length > 0) {
         await this.loadInitialData();
       }
     } catch (err) {
-      this.error = err instanceof Error ? err.message : 'Failed to delete integration';
+      this.error = err instanceof Error ? err.message : msg('Failed to delete integration');
       showToast(this.error, 'error');
     } finally {
       this.isLoading = false;
@@ -1551,7 +1553,7 @@ export class GnBitbucketDialog extends LitElement {
   private async handleStartOAuth(): Promise<void> {
     const clientId = getClientId('bitbucket');
     if (!clientId) {
-      this.error = 'Bitbucket OAuth is not configured. Please use an App Password.';
+      this.error = msg('Bitbucket OAuth is not configured. Please use an App Password.');
       this.authMethod = 'app-password';
       return;
     }
@@ -1613,13 +1615,13 @@ export class GnBitbucketDialog extends LitElement {
       const verifyResult = await gitService.checkBitbucketConnectionWithToken(tokens.accessToken);
 
       if (!verifyResult.success || !verifyResult.data?.connected) {
-        this.error = verifyResult.error?.message ?? 'OAuth token verification failed';
+        this.error = verifyResult.error?.message ?? msg('OAuth token verification failed');
         return;
       }
 
       const user = verifyResult.data.user;
       if (!targetAccountExists()) {
-        this.error = 'The Bitbucket account was removed before sign-in completed. Please sign in again.';
+        this.error = msg('The Bitbucket account was removed before sign-in completed. Please sign in again.');
         showToast(this.error, 'error');
         return;
       }
@@ -1653,7 +1655,7 @@ export class GnBitbucketDialog extends LitElement {
           // Deleted between the existence check and the write — don't leave an
           // orphaned credential behind for an account that no longer exists.
           await credentialService.deleteAccountToken('bitbucket', existingAccount.id);
-          this.error = 'The Bitbucket account was removed before sign-in completed. Please sign in again.';
+          this.error = msg('The Bitbucket account was removed before sign-in completed. Please sign in again.');
           showToast(this.error, 'error');
           return;
         }
@@ -1730,7 +1732,9 @@ export class GnBitbucketDialog extends LitElement {
         // they are looking at now.
         this.oauthState = { status: 'idle' };
         showToast(
-          user?.username ? `Connected Bitbucket account @${user.username}` : 'Connected Bitbucket account',
+          user?.username
+            ? msg(str`Connected Bitbucket account @${user.username}`)
+            : msg('Connected Bitbucket account'),
           'success'
         );
         return;
@@ -1748,7 +1752,9 @@ export class GnBitbucketDialog extends LitElement {
       // connection isn't a silent no-op.
       if (!wasOpen) {
         showToast(
-          user?.username ? `Connected Bitbucket account @${user.username}` : 'Connected Bitbucket account',
+          user?.username
+            ? msg(str`Connected Bitbucket account @${user.username}`)
+            : msg('Connected Bitbucket account'),
           'success'
         );
       }
@@ -1761,7 +1767,7 @@ export class GnBitbucketDialog extends LitElement {
       if (targetAccountId && !targetAccountExists()) {
         await credentialService.deleteAccountToken('bitbucket', targetAccountId);
       }
-      this.error = err instanceof Error ? err.message : 'Failed to complete OAuth';
+      this.error = err instanceof Error ? err.message : msg('Failed to complete OAuth');
     } finally {
       this.isLoading = false;
     }
@@ -1786,7 +1792,7 @@ export class GnBitbucketDialog extends LitElement {
     if (result.success && result.data) {
       this.createPrDescription = result.data.body;
     } else {
-      showToast(result.error?.message ?? 'Failed to generate description', 'error');
+      showToast(result.error?.message ?? msg('Failed to generate description'), 'error');
     }
     this.generatingPrDescription = false;
   }
@@ -1822,12 +1828,12 @@ export class GnBitbucketDialog extends LitElement {
         this.createPrCloseSource = false;
         this.activeTab = 'pull-requests';
         await this.loadPullRequests();
-        showToast('Pull request created successfully', 'success');
+        showToast(msg('Pull request created successfully'), 'success');
       } else {
-        this.error = result.error?.message ?? 'Failed to create pull request';
+        this.error = result.error?.message ?? msg('Failed to create pull request');
       }
     } catch (err) {
-      this.error = err instanceof Error ? err.message : 'Failed to create pull request';
+      this.error = err instanceof Error ? err.message : msg('Failed to create pull request');
     } finally {
       this.isLoading = false;
     }
@@ -1858,12 +1864,12 @@ export class GnBitbucketDialog extends LitElement {
         this.createIssueContent = '';
         this.activeTab = 'issues';
         await this.loadIssues();
-        showToast('Issue created successfully', 'success');
+        showToast(msg('Issue created successfully'), 'success');
       } else {
-        this.error = result.error?.message ?? 'Failed to create issue';
+        this.error = result.error?.message ?? msg('Failed to create issue');
       }
     } catch (err) {
-      this.error = err instanceof Error ? err.message : 'Failed to create issue';
+      this.error = err instanceof Error ? err.message : msg('Failed to create issue');
     } finally {
       this.isLoading = false;
     }
@@ -1883,10 +1889,10 @@ export class GnBitbucketDialog extends LitElement {
     const diff = now.getTime() - date.getTime();
     const days = Math.floor(diff / (1000 * 60 * 60 * 24));
 
-    if (days === 0) return 'today';
-    if (days === 1) return 'yesterday';
-    if (days < 7) return `${days} days ago`;
-    if (days < 30) return `${Math.floor(days / 7)} weeks ago`;
+    if (days === 0) return msg('today');
+    if (days === 1) return msg('yesterday');
+    if (days < 7) return msg(str`${days} days ago`);
+    if (days < 30) return msg(str`${Math.floor(days / 7)} weeks ago`);
     return date.toLocaleDateString();
   }
 
@@ -1913,8 +1919,8 @@ export class GnBitbucketDialog extends LitElement {
             <div class="user-login">@${user.username}</div>
           </div>
           <div class="connection-actions">
-            <button class="btn btn-danger" @click=${this.handleDisconnect} ?disabled=${this.isLoading}>Disconnect</button>
-            <button class="btn btn-danger-outline" @click=${this.handleDeleteIntegration} ?disabled=${this.isLoading}>Delete</button>
+            <button class="btn btn-danger" @click=${this.handleDisconnect} ?disabled=${this.isLoading}>${msg('Disconnect')}</button>
+            <button class="btn btn-danger-outline" @click=${this.handleDeleteIntegration} ?disabled=${this.isLoading}>${msg('Delete')}</button>
           </div>
         </div>
       `;
@@ -1932,14 +1938,14 @@ export class GnBitbucketDialog extends LitElement {
               @click=${() => this.authMethod = 'oauth'}
               ?disabled=${isOAuthPending}
             >
-              Sign in with Bitbucket
+              ${msg('Sign in with Bitbucket')}
             </button>
             <button
               class="btn ${this.authMethod === 'app-password' ? 'active' : ''}"
               @click=${() => this.authMethod = 'app-password'}
               ?disabled=${isOAuthPending}
             >
-              App Password
+              ${msg('App Password')}
             </button>
           </div>
         ` : ''}
@@ -1952,28 +1958,28 @@ export class GnBitbucketDialog extends LitElement {
           >
             ${isOAuthPending ? html`
               <div class="oauth-spinner"></div>
-              <span>${this.oauthState.status === 'exchanging' ? 'Completing sign in...' : 'Waiting for browser...'}</span>
+              <span>${this.oauthState.status === 'exchanging' ? msg('Completing sign in...') : msg('Waiting for browser...')}</span>
             ` : html`
               <svg viewBox="0 0 24 24" fill="currentColor">
                 <path d="M.778 1.213a.768.768 0 00-.768.892l3.263 19.81c.084.5.515.868 1.022.873H19.95a.772.772 0 00.77-.646l3.27-20.03a.768.768 0 00-.768-.891zM14.52 15.53H9.522L8.17 8.466h7.561z"/>
               </svg>
-              <span>Sign in with Bitbucket</span>
+              <span>${msg('Sign in with Bitbucket')}</span>
             `}
           </button>
 
           ${isOAuthPending ? html`
-            <button class="btn oauth-cancel" @click=${this.handleCancelOAuth}>Cancel</button>
+            <button class="btn oauth-cancel" @click=${this.handleCancelOAuth}>${msg('Cancel')}</button>
           ` : ''}
 
           ${this.oauthState.status === 'error' ? html`
             <div class="oauth-status error">${this.oauthState.error}</div>
           ` : ''}
 
-          <div class="oauth-divider">or</div>
+          <div class="oauth-divider">${msg('or')}</div>
         ` : ''}
 
         <div class="form-group">
-          <label>Bitbucket Username</label>
+          <label>${msg('Bitbucket Username')}</label>
           <input
             type="text"
             placeholder="your-username"
@@ -1983,7 +1989,7 @@ export class GnBitbucketDialog extends LitElement {
           />
         </div>
         <div class="form-group">
-          <label>App Password</label>
+          <label>${msg('App Password')}</label>
           <input
             type="password"
             placeholder="xxxx-xxxx-xxxx-xxxx"
@@ -1992,13 +1998,13 @@ export class GnBitbucketDialog extends LitElement {
             ?disabled=${isOAuthPending}
           />
           <span class="help-text">
-            Create an app password at
+            ${msg('Create an app password at')}
             <a
               class="help-link"
               href="https://bitbucket.org/account/settings/app-passwords/"
               @click=${handleExternalLink}
-            >Bitbucket Settings</a>
-            with <code>Repositories: Read/Write</code> and <code>Pull requests: Read/Write</code> permissions.
+            >${msg('Bitbucket Settings')}</a>
+            ${msg('with')} <code>Repositories: Read/Write</code> ${msg('and')} <code>Pull requests: Read/Write</code> ${msg('permissions.')}
           </span>
         </div>
         <div class="btn-row">
@@ -2008,7 +2014,7 @@ export class GnBitbucketDialog extends LitElement {
               @click=${this.handleDeleteIntegration}
               ?disabled=${this.isLoading}
             >
-              Delete Integration
+              ${msg('Delete Integration')}
             </button>
           ` : nothing}
           <button
@@ -2016,16 +2022,27 @@ export class GnBitbucketDialog extends LitElement {
             @click=${this.handleSaveCredentials}
             ?disabled=${this.isLoading || isOAuthPending || !this.usernameInput.trim() || !this.appPasswordInput.trim()}
           >
-            Connect with App Password
+            ${msg('Connect with App Password')}
           </button>
         </div>
       </div>
     `;
   }
 
+  /**
+   * The filter is a machine enum (`OPEN`/`MERGED`/`DECLINED`), so each empty
+   * state is its own message instead of one sentence that would leave the
+   * filter word in English.
+   */
+  private noPullRequestsMessage(): string {
+    if (this.prFilter === 'OPEN') return msg('No open pull requests');
+    if (this.prFilter === 'MERGED') return msg('No merged pull requests');
+    return msg('No declined pull requests');
+  }
+
   private renderPullRequestsTab() {
     if (!this.connectionStatus?.connected) {
-      return this.renderNotConnected('pull requests');
+      return this.renderNotConnected(msg('Connect to Bitbucket to view pull requests'));
     }
 
     if (!this.detectedRepo) {
@@ -2035,16 +2052,16 @@ export class GnBitbucketDialog extends LitElement {
     return html`
       <div class="filter-row">
         <select class="filter-select" @change=${this.handlePrFilterChange}>
-          <option value="OPEN" ?selected=${this.prFilter === 'OPEN'}>Open</option>
-          <option value="MERGED" ?selected=${this.prFilter === 'MERGED'}>Merged</option>
-          <option value="DECLINED" ?selected=${this.prFilter === 'DECLINED'}>Declined</option>
+          <option value="OPEN" ?selected=${this.prFilter === 'OPEN'}>${msg('Open')}</option>
+          <option value="MERGED" ?selected=${this.prFilter === 'MERGED'}>${msg('Merged')}</option>
+          <option value="DECLINED" ?selected=${this.prFilter === 'DECLINED'}>${msg('Declined')}</option>
         </select>
         <button class="btn" @click=${() => this.activeTab = 'create-pr'}>
-          + New PR
+          ${msg('+ New PR')}
         </button>
       </div>
 
-      ${this.isLoading ? html`<div class="loading">Loading pull requests...</div>` : ''}
+      ${this.isLoading ? html`<div class="loading">${msg('Loading pull requests...')}</div>` : ''}
 
       ${!this.isLoading && this.pullRequests.length === 0 ? html`
         <div class="empty-state">
@@ -2053,7 +2070,7 @@ export class GnBitbucketDialog extends LitElement {
             <circle cx="6" cy="6" r="3"></circle>
             <path d="M6 21V9a9 9 0 0 0 9 9"></path>
           </svg>
-          <p>No ${this.prFilter.toLowerCase()} pull requests</p>
+          <p>${this.noPullRequestsMessage()}</p>
         </div>
       ` : ''}
 
@@ -2067,7 +2084,7 @@ export class GnBitbucketDialog extends LitElement {
                 <div class="pr-meta">
                   <span class="pr-state ${pr.state}">${pr.state}</span>
                   <span class="pr-branch">${pr.sourceBranch} → ${pr.destinationBranch}</span>
-                  <span>by ${pr.author.displayName}</span>
+                  <span>${msg(str`by ${pr.author.displayName}`)}</span>
                   <span>${this.formatDate(pr.createdOn)}</span>
                 </div>
               </div>
@@ -2075,10 +2092,10 @@ export class GnBitbucketDialog extends LitElement {
                 <button
                   class="btn pr-comments-toggle"
                   data-testid="pr-comments-toggle-${pr.id}"
-                  title="Review comments"
+                  title=${msg('Review comments')}
                   @click=${() => this.togglePrComments(pr.id)}
                 >
-                  Comments${this.prComments[pr.id] ? ` (${this.prComments[pr.id].length})` : ''}
+                  ${msg('Comments')}${this.prComments[pr.id] ? ` (${this.prComments[pr.id].length})` : ''}
                 </button>
               </div>
             </div>
@@ -2089,7 +2106,7 @@ export class GnBitbucketDialog extends LitElement {
       ${this.renderCappedListHint(
         this.pullRequests.length,
         BITBUCKET_LIST_PAGE_SIZE,
-        'pull requests',
+        msg('pull requests'),
         'pull-requests',
         this.prFilter,
       )}
@@ -2104,9 +2121,9 @@ export class GnBitbucketDialog extends LitElement {
     return html`
       <div class="pr-comments-drawer" data-testid="pr-comments-drawer-${prId}" @click=${(e: Event) => e.stopPropagation()}>
         ${isLoadingComments ? html`
-          <div class="pr-comments-empty">Loading comments...</div>
+          <div class="pr-comments-empty">${msg('Loading comments...')}</div>
         ` : comments.length === 0 ? html`
-          <div class="pr-comments-empty">No comments yet</div>
+          <div class="pr-comments-empty">${msg('No comments yet')}</div>
         ` : html`
           <div class="pr-comments-list">
             ${comments.map(c => html`
@@ -2128,7 +2145,7 @@ export class GnBitbucketDialog extends LitElement {
             <input
               type="text"
               class="pr-comment-file-input"
-              placeholder="File path (optional, for inline comment)"
+              placeholder=${msg('File path (optional, for inline comment)')}
               .value=${this.commentFilePathInput}
               @input=${(e: Event) => {
                 this.commentFilePathInput = (e.target as HTMLInputElement).value;
@@ -2138,7 +2155,7 @@ export class GnBitbucketDialog extends LitElement {
               type="number"
               min="1"
               class="pr-comment-line-input"
-              placeholder="Line #"
+              placeholder=${msg('Line #')}
               .value=${this.commentLineInput}
               @input=${(e: Event) => {
                 this.commentLineInput = (e.target as HTMLInputElement).value;
@@ -2149,7 +2166,7 @@ export class GnBitbucketDialog extends LitElement {
             <textarea
               class="pr-comment-body-input"
               rows="2"
-              placeholder="Write a review comment..."
+              placeholder=${msg('Write a review comment...')}
               .value=${this.commentBodyInput}
               @input=${(e: Event) => {
                 this.commentBodyInput = (e.target as HTMLTextAreaElement).value;
@@ -2161,7 +2178,7 @@ export class GnBitbucketDialog extends LitElement {
               ?disabled=${!this.commentBodyInput.trim() || isPosting}
               @click=${() => this.handleAddPrComment(prId)}
             >
-              ${isPosting ? 'Posting...' : 'Post Comment'}
+              ${isPosting ? msg('Posting...') : msg('Post Comment')}
             </button>
           </div>
         </div>
@@ -2171,7 +2188,7 @@ export class GnBitbucketDialog extends LitElement {
 
   private renderIssuesTab() {
     if (!this.connectionStatus?.connected) {
-      return this.renderNotConnected('issues');
+      return this.renderNotConnected(msg('Connect to Bitbucket to view issues'));
     }
 
     if (!this.detectedRepo) {
@@ -2182,7 +2199,7 @@ export class GnBitbucketDialog extends LitElement {
       return html`
         <div class="filter-row">
           <button class="btn" @click=${() => this.activeTab = 'create-issue'}>
-            + New Issue
+            ${msg('+ New Issue')}
           </button>
         </div>
         <div class="empty-state">
@@ -2191,7 +2208,7 @@ export class GnBitbucketDialog extends LitElement {
             <line x1="12" y1="8" x2="12" y2="12"></line>
             <line x1="12" y1="16" x2="12.01" y2="16"></line>
           </svg>
-          <p>No issues found (or issue tracker not enabled)</p>
+          <p>${msg('No issues found (or issue tracker not enabled)')}</p>
         </div>
       `;
     }
@@ -2199,7 +2216,7 @@ export class GnBitbucketDialog extends LitElement {
     return html`
       <div class="filter-row">
         <button class="btn" @click=${() => this.activeTab = 'create-issue'}>
-          + New Issue
+          ${msg('+ New Issue')}
         </button>
       </div>
       <div class="issue-list">
@@ -2212,7 +2229,7 @@ export class GnBitbucketDialog extends LitElement {
                 <span class="issue-state ${issue.state}">${issue.state}</span>
                 <span class="issue-kind">${issue.kind}</span>
                 <span>${issue.priority}</span>
-                ${issue.reporter ? html`<span>by ${issue.reporter.displayName}</span>` : ''}
+                ${issue.reporter ? html`<span>${msg(str`by ${issue.reporter.displayName}`)}</span>` : ''}
                 <span>${this.formatDate(issue.createdOn)}</span>
               </div>
             </div>
@@ -2222,7 +2239,7 @@ export class GnBitbucketDialog extends LitElement {
       ${this.renderCappedListHint(
         this.issues.length,
         BITBUCKET_LIST_PAGE_SIZE,
-        'issues',
+        msg('issues'),
         'issues',
       )}
     `;
@@ -2230,7 +2247,7 @@ export class GnBitbucketDialog extends LitElement {
 
   private renderPipelinesTab() {
     if (!this.connectionStatus?.connected) {
-      return this.renderNotConnected('pipelines');
+      return this.renderNotConnected(msg('Connect to Bitbucket to view pipelines'));
     }
 
     if (!this.detectedRepo) {
@@ -2243,7 +2260,7 @@ export class GnBitbucketDialog extends LitElement {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M22 12h-4l-3 9L9 3l-3 9H2"></path>
           </svg>
-          <p>No pipelines found (or Pipelines not enabled)</p>
+          <p>${msg('No pipelines found (or Pipelines not enabled)')}</p>
         </div>
       `;
     }
@@ -2267,7 +2284,7 @@ export class GnBitbucketDialog extends LitElement {
       ${this.renderCappedListHint(
         this.pipelines.length,
         BITBUCKET_PIPELINE_PAGE_SIZE,
-        'pipelines',
+        msg('pipelines'),
         'pipelines',
       )}
     `;
@@ -2284,12 +2301,12 @@ export class GnBitbucketDialog extends LitElement {
     const query = state ? `?state=${encodeURIComponent(state)}` : '';
     return html`
       <p class="help-text capped-list-hint" style="text-align:center;padding-top:8px">
-        Showing the first ${limit} ${label}; more may exist.
+        ${msg(str`Showing the first ${limit} ${label}; more may exist.`)}
         <a
           class="help-link"
           href="https://bitbucket.org/${this.detectedRepo.workspace}/${this.detectedRepo.repoSlug}/${route}${query}"
           @click=${handleExternalLink}
-        >Open in Bitbucket</a> for the full list.
+        >${msg('Open in Bitbucket')}</a> ${msg('for the full list.')}
       </p>
     `;
   }
@@ -2298,35 +2315,35 @@ export class GnBitbucketDialog extends LitElement {
     return html`
       <div class="token-form">
         <div class="form-group">
-          <label>Title</label>
+          <label>${msg('Title')}</label>
           <input
             type="text"
-            placeholder="Pull request title"
+            placeholder=${msg('Pull request title')}
             .value=${this.createPrTitle}
             @input=${(e: Event) => this.createPrTitle = (e.target as HTMLInputElement).value}
           />
         </div>
         <div class="form-group">
           <div style="display:flex;align-items:center;justify-content:space-between">
-            <label>Description</label>
+            <label>${msg('Description')}</label>
             <button
               class="btn btn-sm"
               style="font-size:12px;padding:2px 8px;display:flex;align-items:center;gap:4px"
               @click=${this.handleGeneratePrDescription}
               ?disabled=${this.generatingPrDescription || !this.createPrSource || !this.createPrDestination}
-              title="Generate description using AI"
+              title=${msg('Generate description using AI')}
             >
-              ${this.generatingPrDescription ? 'Generating...' : html`<svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a3.5 3.5 0 0 0-3.5 3.5c0 1.193.603 2.26 1.5 2.898V9.5a1 1 0 0 0 .293.707l1 1a1 1 0 0 0 1.414 0l1-1A1 1 0 0 0 10 9.5V7.398A3.496 3.496 0 0 0 11.5 4.5 3.5 3.5 0 0 0 8 1z"/></svg> AI Generate`}
+              ${this.generatingPrDescription ? msg('Generating...') : html`<svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a3.5 3.5 0 0 0-3.5 3.5c0 1.193.603 2.26 1.5 2.898V9.5a1 1 0 0 0 .293.707l1 1a1 1 0 0 0 1.414 0l1-1A1 1 0 0 0 10 9.5V7.398A3.496 3.496 0 0 0 11.5 4.5 3.5 3.5 0 0 0 8 1z"/></svg> ${msg('AI Generate')}`}
             </button>
           </div>
           <textarea
-            placeholder="Describe your changes..."
+            placeholder=${msg('Describe your changes...')}
             .value=${this.createPrDescription}
             @input=${(e: Event) => this.createPrDescription = (e.target as HTMLTextAreaElement).value}
           ></textarea>
         </div>
         <div class="form-group">
-          <label>Source Branch</label>
+          <label>${msg('Source Branch')}</label>
           <input
             type="text"
             placeholder="feature/my-branch"
@@ -2335,7 +2352,7 @@ export class GnBitbucketDialog extends LitElement {
           />
         </div>
         <div class="form-group">
-          <label>Destination Branch</label>
+          <label>${msg('Destination Branch')}</label>
           <input
             type="text"
             placeholder="main"
@@ -2351,19 +2368,19 @@ export class GnBitbucketDialog extends LitElement {
               .checked=${this.createPrCloseSource}
               @change=${(e: Event) => this.createPrCloseSource = (e.target as HTMLInputElement).checked}
             />
-            <label for="pr-close-source">Close source branch after merge</label>
+            <label for="pr-close-source">${msg('Close source branch after merge')}</label>
           </div>
         </div>
         <div class="btn-row">
           <button class="btn" @click=${() => this.activeTab = 'pull-requests'}>
-            Cancel
+            ${msg('Cancel')}
           </button>
           <button
             class="btn btn-primary"
             @click=${this.handleCreatePr}
             ?disabled=${this.isLoading || !this.createPrTitle.trim() || !this.createPrSource.trim() || !this.createPrDestination.trim()}
           >
-            Create Pull Request
+            ${msg('Create Pull Request')}
           </button>
         </div>
       </div>
@@ -2374,45 +2391,45 @@ export class GnBitbucketDialog extends LitElement {
     return html`
       <div class="token-form">
         <div class="form-group">
-          <label>Title</label>
+          <label>${msg('Title')}</label>
           <input
             type="text"
-            placeholder="Issue title"
+            placeholder=${msg('Issue title')}
             .value=${this.createIssueTitle}
             @input=${(e: Event) => this.createIssueTitle = (e.target as HTMLInputElement).value}
           />
         </div>
         <div class="form-group">
-          <label>Description</label>
+          <label>${msg('Description')}</label>
           <textarea
-            placeholder="Describe the issue..."
+            placeholder=${msg('Describe the issue...')}
             .value=${this.createIssueContent}
             @input=${(e: Event) => this.createIssueContent = (e.target as HTMLTextAreaElement).value}
           ></textarea>
         </div>
         <div class="btn-row">
           <button class="btn" @click=${() => this.activeTab = 'issues'}>
-            Cancel
+            ${msg('Cancel')}
           </button>
           <button
             class="btn btn-primary"
             @click=${this.handleCreateIssue}
             ?disabled=${this.isLoading || !this.createIssueTitle.trim()}
           >
-            Create Issue
+            ${msg('Create Issue')}
           </button>
         </div>
       </div>
     `;
   }
 
-  private renderNotConnected(feature: string) {
+  private renderNotConnected(message: string) {
     return html`
       <div class="empty-state">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"></path>
         </svg>
-        <p>Connect to Bitbucket to view ${feature}</p>
+        <p>${message}</p>
       </div>
     `;
   }
@@ -2425,7 +2442,7 @@ export class GnBitbucketDialog extends LitElement {
           <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
           <line x1="12" y1="17" x2="12.01" y2="17"></line>
         </svg>
-        <p>No Bitbucket repository detected</p>
+        <p>${msg('No Bitbucket repository detected')}</p>
       </div>
     `;
   }
@@ -2440,7 +2457,7 @@ export class GnBitbucketDialog extends LitElement {
         </svg>
         <div>
           <div class="repo-name">${this.detectedRepo.workspace}/${this.detectedRepo.repoSlug}</div>
-          <div class="repo-remote">via ${this.detectedRepo.remoteName}</div>
+          <div class="repo-remote">${msg(str`via ${this.detectedRepo.remoteName}`)}</div>
         </div>
       </div>
     `;
@@ -2474,7 +2491,7 @@ export class GnBitbucketDialog extends LitElement {
       >
         <div class="content">
           ${this.attachToProfileName
-            ? html`<div class="attach-breadcrumb" data-testid="attach-breadcrumb">Adding to <strong>${this.attachToProfileName}</strong></div>`
+            ? html`<div class="attach-breadcrumb" data-testid="attach-breadcrumb">${msg('Adding to')} <strong>${this.attachToProfileName}</strong></div>`
             : nothing}
           ${this.renderDetectedRepo()}
 
@@ -2493,25 +2510,25 @@ export class GnBitbucketDialog extends LitElement {
               class="tab ${this.activeTab === 'connection' ? 'active' : ''}"
               @click=${() => this.activeTab = 'connection'}
             >
-              Connection
+              ${msg('Connection')}
             </button>
             <button
               class="tab ${this.activeTab === 'pull-requests' ? 'active' : ''}"
               @click=${() => { this.activeTab = 'pull-requests'; this.loadPullRequests(); }}
             >
-              Pull Requests
+              ${msg('Pull Requests')}
             </button>
             <button
               class="tab ${this.activeTab === 'issues' ? 'active' : ''}"
               @click=${() => { this.activeTab = 'issues'; this.loadIssues(); }}
             >
-              Issues
+              ${msg('Issues')}
             </button>
             <button
               class="tab ${this.activeTab === 'pipelines' ? 'active' : ''}"
               @click=${() => { this.activeTab = 'pipelines'; this.loadPipelines(); }}
             >
-              Pipelines
+              ${msg('Pipelines')}
             </button>
           </div>
 

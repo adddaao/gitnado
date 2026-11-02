@@ -1,3 +1,4 @@
+import { msg } from '@lit/localize';
 import type { ReactiveController, ReactiveControllerHost } from 'lit';
 import { showToast } from '../services/notification.service.ts';
 
@@ -39,7 +40,7 @@ function notify(): void {
  * of the other operation.
  */
 export function warnRepositoryBusy(): void {
-  void showToast('Another operation is already running in this repository.', 'warning');
+  void showToast(msg('Another operation is already running in this repository.'), 'warning');
 }
 
 /** Claim the slot and report the refusal, for callers with no disabled state. */

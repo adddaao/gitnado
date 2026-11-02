@@ -5,6 +5,7 @@
 
 import { LitElement, html, css, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
+import { localized, msg, str } from '@lit/localize';
 import { sharedStyles, buttonStyles } from '../../styles/shared-styles.ts';
 import * as gitService from '../../services/git.service.ts';
 import { showPrompt, showConfirm } from '../../services/dialog.service.ts';
@@ -27,6 +28,7 @@ interface ActiveItem {
 }
 
 @customElement('gn-gitflow-panel')
+@localized()
 export class GnGitflowPanel extends LitElement {
   static styles = [
     sharedStyles,
@@ -423,13 +425,13 @@ export class GnGitflowPanel extends LitElement {
         // custom branch names and prefixes with the defaults.
         this.markConfigLoadFailed(
           loadedPath,
-          result.error?.message || 'Failed to load Git Flow configuration',
+          result.error?.message || msg('Failed to load Git Flow configuration'),
         );
       }
     } catch (err) {
       console.error('Failed to load git flow config:', err);
       if (isLatest()) {
-        this.markConfigLoadFailed(loadedPath, 'Failed to load Git Flow configuration');
+        this.markConfigLoadFailed(loadedPath, msg('Failed to load Git Flow configuration'));
       }
     } finally {
       if (isLatest()) this.loading = false;
@@ -487,7 +489,7 @@ export class GnGitflowPanel extends LitElement {
         // branch here carries that name. Show nothing rather than something
         // wrong — and say why.
         this.clearActiveItems();
-        this.error = branchResult.error?.message || 'Failed to load Git Flow branches';
+        this.error = branchResult.error?.message || msg('Failed to load Git Flow branches');
         return;
       }
 
@@ -503,7 +505,7 @@ export class GnGitflowPanel extends LitElement {
       // is no longer shown.
       if (!latest()) return;
       this.clearActiveItems();
-      this.error = 'Failed to load Git Flow branches';
+      this.error = msg('Failed to load Git Flow branches');
     }
   }
 
@@ -544,11 +546,11 @@ export class GnGitflowPanel extends LitElement {
           composed: true,
         }));
       } else {
-        this.error = result.error?.message || 'Failed to initialize Git Flow';
+        this.error = result.error?.message || msg('Failed to initialize Git Flow');
       }
     } catch (err) {
       console.error('Failed to initialize git flow:', err);
-      this.error = 'Failed to initialize Git Flow';
+      this.error = msg('Failed to initialize Git Flow');
     } finally {
       this.releaseOperation(repoPath);
     }
@@ -559,7 +561,7 @@ export class GnGitflowPanel extends LitElement {
     // switch the active repo (rebinding this prop) while it is open — the
     // branch must be created in the repo the panel showed at click time.
     const repoPath = this.repositoryPath;
-    const name = await showPrompt('Start Feature', 'Enter feature name:');
+    const name = await showPrompt(msg('Start Feature'), msg('Enter feature name:'));
     if (!name || !name.trim()) return;
 
     if (!this.claimOperation(repoPath)) {
@@ -580,11 +582,11 @@ export class GnGitflowPanel extends LitElement {
           composed: true,
         }));
       } else {
-        this.error = result.error?.message || 'Failed to start feature';
+        this.error = result.error?.message || msg('Failed to start feature');
       }
     } catch (err) {
       console.error('Failed to start feature:', err);
-      this.error = 'Failed to start feature';
+      this.error = msg('Failed to start feature');
     } finally {
       this.releaseOperation(repoPath);
     }
@@ -620,11 +622,11 @@ export class GnGitflowPanel extends LitElement {
       let confirmed = false;
       try {
         confirmed = await showConfirm(
-        'Squash and Finish',
-        `"${item.name}" will be squashed into a single commit on develop and then ` +
-          `deleted. Its individual commits will no longer be reachable from any ` +
-          `branch.\n\nThis cannot be undone.`,
-        'warning',
+          msg('Squash and Finish'),
+          msg(
+            str`"${item.name}" will be squashed into a single commit on develop and then deleted. Its individual commits will no longer be reachable from any branch.\n\nThis cannot be undone.`
+          ),
+          'warning',
         );
       } catch {
         confirmed = false;
@@ -668,11 +670,11 @@ export class GnGitflowPanel extends LitElement {
           repoPath,
         );
       } else {
-        this.error = result.error?.message || 'Failed to finish feature';
+        this.error = result.error?.message || msg('Failed to finish feature');
       }
     } catch (err) {
       console.error('Failed to finish feature:', err);
-      this.error = 'Failed to finish feature';
+      this.error = msg('Failed to finish feature');
     } finally {
       this.releaseOperation(repoPath);
     }
@@ -680,7 +682,7 @@ export class GnGitflowPanel extends LitElement {
 
   private async handleStartRelease(): Promise<void> {
     const repoPath = this.repositoryPath;
-    const version = await showPrompt('Start Release', 'Enter release version:');
+    const version = await showPrompt(msg('Start Release'), msg('Enter release version:'));
     if (!version || !version.trim()) return;
 
     if (!this.claimOperation(repoPath)) {
@@ -701,11 +703,11 @@ export class GnGitflowPanel extends LitElement {
           composed: true,
         }));
       } else {
-        this.error = result.error?.message || 'Failed to start release';
+        this.error = result.error?.message || msg('Failed to start release');
       }
     } catch (err) {
       console.error('Failed to start release:', err);
-      this.error = 'Failed to start release';
+      this.error = msg('Failed to start release');
     } finally {
       this.releaseOperation(repoPath);
     }
@@ -731,7 +733,11 @@ export class GnGitflowPanel extends LitElement {
     // for the session. Same wrapping as handleFinishFeature's confirm.
     let tagMessage: string | null = null;
     try {
-      tagMessage = await showPrompt('Finish Release', `Enter tag message for release ${item.name}:`, `Release ${item.name}`);
+      tagMessage = await showPrompt(
+        msg('Finish Release'),
+        msg(str`Enter tag message for release ${item.name}:`),
+        msg(str`Release ${item.name}`),
+      );
     } catch {
       this.releaseOperation(repoPath);
       return;
@@ -780,11 +786,11 @@ export class GnGitflowPanel extends LitElement {
           repoPath,
         );
       } else {
-        this.error = result.error?.message || 'Failed to finish release';
+        this.error = result.error?.message || msg('Failed to finish release');
       }
     } catch (err) {
       console.error('Failed to finish release:', err);
-      this.error = 'Failed to finish release';
+      this.error = msg('Failed to finish release');
     } finally {
       this.releaseOperation(repoPath);
     }
@@ -792,7 +798,7 @@ export class GnGitflowPanel extends LitElement {
 
   private async handleStartHotfix(): Promise<void> {
     const repoPath = this.repositoryPath;
-    const version = await showPrompt('Start Hotfix', 'Enter hotfix version:');
+    const version = await showPrompt(msg('Start Hotfix'), msg('Enter hotfix version:'));
     if (!version || !version.trim()) return;
 
     if (!this.claimOperation(repoPath)) {
@@ -813,11 +819,11 @@ export class GnGitflowPanel extends LitElement {
           composed: true,
         }));
       } else {
-        this.error = result.error?.message || 'Failed to start hotfix';
+        this.error = result.error?.message || msg('Failed to start hotfix');
       }
     } catch (err) {
       console.error('Failed to start hotfix:', err);
-      this.error = 'Failed to start hotfix';
+      this.error = msg('Failed to start hotfix');
     } finally {
       this.releaseOperation(repoPath);
     }
@@ -838,7 +844,11 @@ export class GnGitflowPanel extends LitElement {
     // for the session. Same wrapping as handleFinishFeature's confirm.
     let tagMessage: string | null = null;
     try {
-      tagMessage = await showPrompt('Finish Hotfix', `Enter tag message for hotfix ${item.name}:`, `Hotfix ${item.name}`);
+      tagMessage = await showPrompt(
+        msg('Finish Hotfix'),
+        msg(str`Enter tag message for hotfix ${item.name}:`),
+        msg(str`Hotfix ${item.name}`),
+      );
     } catch {
       this.releaseOperation(repoPath);
       return;
@@ -887,11 +897,11 @@ export class GnGitflowPanel extends LitElement {
           repoPath,
         );
       } else {
-        this.error = result.error?.message || 'Failed to finish hotfix';
+        this.error = result.error?.message || msg('Failed to finish hotfix');
       }
     } catch (err) {
       console.error('Failed to finish hotfix:', err);
-      this.error = 'Failed to finish hotfix';
+      this.error = msg('Failed to finish hotfix');
     } finally {
       this.releaseOperation(repoPath);
     }
@@ -957,14 +967,14 @@ export class GnGitflowPanel extends LitElement {
     return html`
       <div class="init-section">
         <div class="init-description">
-          Git Flow is not initialized for this repository.
+          ${msg('Git Flow is not initialized for this repository.')}
         </div>
         <button
           class="btn btn-primary"
           @click=${this.handleInitialize}
           ?disabled=${this.operationInProgress}
         >
-          ${this.operationInProgress ? 'Initializing...' : 'Initialize Git Flow'}
+          ${this.operationInProgress ? msg('Initializing...') : msg('Initialize Git Flow')}
         </button>
       </div>
     `;
@@ -997,7 +1007,7 @@ export class GnGitflowPanel extends LitElement {
           <div class="section-actions">
             <button
               class="action-btn"
-              title="Start ${label}"
+              title=${msg(str`Start ${label}`)}
               @click=${(e: Event) => { e.stopPropagation(); onStart(); }}
               ?disabled=${this.operationInProgress}
             >
@@ -1020,7 +1030,7 @@ export class GnGitflowPanel extends LitElement {
     onSquash?: (item: ActiveItem) => void,
   ) {
     if (items.length === 0) {
-      return html`<div class="empty-section">No active items</div>`;
+      return html`<div class="empty-section">${msg('No active items')}</div>`;
     }
 
     return html`
@@ -1038,7 +1048,7 @@ export class GnGitflowPanel extends LitElement {
               ? html`
                   <button
                     class="item-finish-btn item-squash-btn"
-                    title="Squash and finish ${item.name}"
+                    title=${msg(str`Squash and finish ${item.name}`)}
                     @click=${() => onSquash(item)}
                     ?disabled=${this.operationInProgress}
                   >
@@ -1052,7 +1062,7 @@ export class GnGitflowPanel extends LitElement {
               : nothing}
             <button
               class="item-finish-btn"
-              title="Finish ${item.name}"
+              title=${msg(str`Finish ${item.name}`)}
               @click=${() => onFinish(item)}
               ?disabled=${this.operationInProgress}
             >
@@ -1072,23 +1082,23 @@ export class GnGitflowPanel extends LitElement {
     return html`
       <div class="config-summary">
         <div class="config-row">
-          <span class="config-label">Master:</span>
+          <span class="config-label">${msg('Master:')}</span>
           <span class="config-value">${this.config.masterBranch}</span>
         </div>
         <div class="config-row">
-          <span class="config-label">Develop:</span>
+          <span class="config-label">${msg('Develop:')}</span>
           <span class="config-value">${this.config.developBranch}</span>
         </div>
         <div class="config-row">
-          <span class="config-label">Feature:</span>
+          <span class="config-label">${msg('Feature:')}</span>
           <span class="config-value">${this.config.featurePrefix}*</span>
         </div>
         <div class="config-row">
-          <span class="config-label">Release:</span>
+          <span class="config-label">${msg('Release:')}</span>
           <span class="config-value">${this.config.releasePrefix}*</span>
         </div>
         <div class="config-row">
-          <span class="config-label">Hotfix:</span>
+          <span class="config-label">${msg('Hotfix:')}</span>
           <span class="config-value">${this.config.hotfixPrefix}*</span>
         </div>
       </div>
@@ -1102,8 +1112,8 @@ export class GnGitflowPanel extends LitElement {
         <span class="error-banner-message">${this.error}</span>
         <button
           class="error-banner-dismiss"
-          title="Dismiss"
-          aria-label="Dismiss error"
+          title=${msg('Dismiss')}
+          aria-label=${msg('Dismiss error')}
           @click=${this.dismissError}
         >✕</button>
       </div>
@@ -1112,7 +1122,7 @@ export class GnGitflowPanel extends LitElement {
 
   render() {
     if (this.loading) {
-      return html`<div class="loading">Loading Git Flow...</div>`;
+      return html`<div class="loading">${msg('Loading Git Flow...')}</div>`;
     }
 
     // A load that FAILED is not the same as "not initialized": the Initialize
@@ -1123,10 +1133,10 @@ export class GnGitflowPanel extends LitElement {
       return html`
         <div class="load-error">
           <div class="load-error-message">
-            ${this.error ?? 'Failed to load Git Flow configuration'}
+            ${this.error ?? msg('Failed to load Git Flow configuration')}
           </div>
           <button class="btn btn-secondary" @click=${() => void this.loadConfig()}>
-            Retry
+            ${msg('Retry')}
           </button>
         </div>
       `;
@@ -1144,7 +1154,7 @@ export class GnGitflowPanel extends LitElement {
       <div class="panel">
         ${this.renderCategorySection(
           'feature',
-          'Feature',
+          msg('Feature'),
           this.activeFeatures,
           () => this.handleStartFeature(),
           (item) => this.handleFinishFeature(item),
@@ -1153,7 +1163,7 @@ export class GnGitflowPanel extends LitElement {
         )}
         ${this.renderCategorySection(
           'release',
-          'Release',
+          msg('Release'),
           this.activeReleases,
           () => this.handleStartRelease(),
           (item) => this.handleFinishRelease(item),
@@ -1161,7 +1171,7 @@ export class GnGitflowPanel extends LitElement {
         )}
         ${this.renderCategorySection(
           'hotfix',
-          'Hotfix',
+          msg('Hotfix'),
           this.activeHotfixes,
           () => this.handleStartHotfix(),
           (item) => this.handleFinishHotfix(item),

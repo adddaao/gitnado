@@ -67,6 +67,7 @@ import '../gn-settings-dialog.ts';
 import type { GnSettingsDialog } from '../gn-settings-dialog.ts';
 import { settingsStore } from '../../../stores/settings.store.ts';
 
+import { setAppLocale } from '../../../i18n/index.ts';
 describe('gn-settings-dialog Diff section', () => {
   let el: GnSettingsDialog;
 
@@ -182,6 +183,9 @@ describe('gn-settings-dialog Diff section', () => {
     settingsStore.getState().setDiffContextLines(15);
 
     settingsStore.getState().resetToDefaults();
+    // resetToDefaults() re-applies the fresh-install language default (Chinese).
+    await setAppLocale('en');
+    settingsStore.setState({ language: 'en' });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (el as any).loadSettings();
     await el.updateComplete;

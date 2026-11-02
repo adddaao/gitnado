@@ -538,6 +538,7 @@ pub fn run() {
             commands::maintenance::get_pack_info,
             // Application menu bar
             commands::menu::sync_app_menu,
+            commands::menu::set_app_menu_labels,
             commands::gpg::get_gpg_config,
             commands::gpg::get_gpg_keys,
             commands::gpg::set_signing_key,

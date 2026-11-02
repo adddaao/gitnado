@@ -5,6 +5,7 @@
 
 import { LitElement, html, css, nothing } from 'lit';
 import { customElement, property, state, query } from 'lit/decorators.js';
+import { localized, msg, str } from '@lit/localize';
 import { sharedStyles } from '../../styles/shared-styles.ts';
 import { describeCommit } from '../../services/git.service.ts';
 import { showToast } from '../../services/notification.service.ts';
@@ -13,6 +14,7 @@ import './gn-modal.ts';
 import type { GnModal } from './gn-modal.ts';
 
 @customElement('gn-describe-dialog')
+@localized()
 export class GnDescribeDialog extends LitElement {
   static styles = [
     sharedStyles,
@@ -309,7 +311,7 @@ export class GnDescribeDialog extends LitElement {
     } else if (response.error?.code === 'NO_TAGS_REACHABLE') {
       this.noTags = true;
     } else {
-      this.error = response.error?.message ?? 'Failed to describe this commit';
+      this.error = response.error?.message ?? msg('Failed to describe this commit');
     }
 
     this.isLoading = false;
@@ -323,9 +325,9 @@ export class GnDescribeDialog extends LitElement {
   private async copy(text: string, label: string): Promise<void> {
     try {
       await navigator.clipboard.writeText(text);
-      showToast(`${label} copied to clipboard`, 'success');
+      showToast(msg(str`${label} copied to clipboard`), 'success');
     } catch {
-      showToast(`Failed to copy ${label.toLowerCase()} to clipboard`, 'error');
+      showToast(msg(str`Failed to copy ${label.toLowerCase()} to clipboard`), 'error');
     }
   }
 
@@ -368,21 +370,23 @@ export class GnDescribeDialog extends LitElement {
     return html`
       <div class="result-line">
         <span class="description">${result.description}</span>
-        <button class="copy-btn" @click=${() => void this.copy(result.description, 'Description')}>
-          ${this.copyIcon()}
-          Copy
+        <button
+          class="copy-btn"
+          @click=${() => void this.copy(result.description, msg('Description'))}
+        >
+          ${this.copyIcon()} ${msg('Copy')}
         </button>
       </div>
       <div class="fields">
-        <span class="field-label">Tag</span>
+        <span class="field-label">${msg('Tag')}</span>
         <span class="field-value mono">
           ${result.tag ?? '—'}
           ${result.tag
             ? html`
                 <button
                   class="copy-btn icon-only"
-                  title="Copy tag"
-                  @click=${() => void this.copy(result.tag as string, 'Tag')}
+                  title=${msg('Copy tag')}
+                  @click=${() => void this.copy(result.tag as string, msg('Tag'))}
                 >
                   ${this.copyIcon()}
                 </button>
@@ -390,20 +394,24 @@ export class GnDescribeDialog extends LitElement {
             : nothing}
         </span>
 
-        <span class="field-label">Commits since tag</span>
+        <span class="field-label">${msg('Commits since tag')}</span>
         <span class="field-value">
-          ${distance === 0 ? 'On the tag exactly' : `${distance} commit${distance === 1 ? '' : 's'}`}
+          ${distance === 0
+            ? msg('On the tag exactly')
+            : distance === 1
+              ? msg(str`${distance} commit`)
+              : msg(str`${distance} commits`)}
         </span>
 
-        <span class="field-label">Commit</span>
+        <span class="field-label">${msg('Commit')}</span>
         <span class="field-value mono">
           ${result.commitHash ?? '—'}
           ${result.commitHash
             ? html`
                 <button
                   class="copy-btn icon-only"
-                  title="Copy commit hash"
-                  @click=${() => void this.copy(result.commitHash as string, 'Commit hash')}
+                  title=${msg('Copy commit hash')}
+                  @click=${() => void this.copy(result.commitHash as string, msg('Commit hash'))}
                 >
                   ${this.copyIcon()}
                 </button>
@@ -413,8 +421,8 @@ export class GnDescribeDialog extends LitElement {
 
         ${result.isDirty
           ? html`
-              <span class="field-label">Working tree</span>
-              <span class="field-value">Has uncommitted changes</span>
+              <span class="field-label">${msg('Working tree')}</span>
+              <span class="field-value">${msg('Has uncommitted changes')}</span>
             `
           : nothing}
       </div>
@@ -428,19 +436,24 @@ export class GnDescribeDialog extends LitElement {
           <path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"></path>
           <line x1="7" y1="7" x2="7.01" y2="7"></line>
         </svg>
-        <span class="empty-title">No tags reachable from this commit</span>
+        <span class="empty-title">${msg('No tags reachable from this commit')}</span>
         <span class="empty-text">
-          Describe names a commit after the most recent tag below it in history.
-          Nothing on or before this commit is tagged yet.
+          ${msg(
+            'Describe names a commit after the most recent tag below it in history. Nothing on or before this commit is tagged yet.',
+          )}
         </span>
         ${!this.includeLightweight
           ? html`
               <span class="empty-hint">
-                Only annotated tags are matched — turn on “Include lightweight tags” to match those too.
+                ${msg(
+                  'Only annotated tags are matched — turn on “Include lightweight tags” to match those too.',
+                )}
               </span>
             `
           : nothing}
-        <button class="btn btn-secondary" @click=${this.handleCreateTag}>Create a tag here</button>
+        <button class="btn btn-secondary" @click=${this.handleCreateTag}>
+          ${msg('Create a tag here')}
+        </button>
       </div>
     `;
   }
@@ -456,7 +469,7 @@ export class GnDescribeDialog extends LitElement {
 
   render() {
     return html`
-      <gn-modal modalTitle="Describe Commit" @close=${() => { this.markClosed(); }}>
+      <gn-modal modalTitle=${msg('Describe Commit')} @close=${() => { this.markClosed(); }}>
         <div class="body">
           ${this.renderTargetHeader()}
 
@@ -467,14 +480,14 @@ export class GnDescribeDialog extends LitElement {
               ?disabled=${this.isLoading}
               @change=${this.handleLightweightToggle}
             />
-            Include lightweight tags
+            ${msg('Include lightweight tags')}
           </label>
 
           ${this.isLoading
             ? html`
                 <div class="loading">
                   <div class="spinner"></div>
-                  Describing commit…
+                  ${msg('Describing commit…')}
                 </div>
               `
             : nothing}
@@ -482,7 +495,9 @@ export class GnDescribeDialog extends LitElement {
           ${!this.isLoading && this.error
             ? html`
                 <div class="error-message">${this.error}</div>
-                <button class="btn btn-secondary" @click=${() => void this.runDescribe()}>Try again</button>
+                <button class="btn btn-secondary" @click=${() => void this.runDescribe()}>
+                  ${msg('Try again')}
+                </button>
               `
             : nothing}
 
@@ -492,7 +507,7 @@ export class GnDescribeDialog extends LitElement {
         </div>
 
         <div slot="footer" class="footer-actions">
-          <button class="btn btn-secondary" @click=${this.close}>Close</button>
+          <button class="btn btn-secondary" @click=${this.close}>${msg('Close')}</button>
         </div>
       </gn-modal>
     `;

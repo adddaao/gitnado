@@ -8,6 +8,7 @@
  * here means both surfaces cannot drift apart again.
  */
 
+import { msg, str } from '@lit/localize';
 import { showConfirm } from '../services/dialog.service.ts';
 import {
   tryAcquireRefOp,
@@ -26,11 +27,12 @@ import {
  */
 export function confirmGarbageCollection(aggressive: boolean): Promise<boolean> {
   return showConfirm(
-    aggressive ? 'Run Garbage Collection (Aggressive)' : 'Run Garbage Collection',
-    'This repacks the repository and removes unreachable objects that are past ' +
-      "git's grace period (2 weeks by default), along with expired reflog " +
-      'entries. Recently dropped stashes and deleted branches are not affected. ' +
-      'Continue?',
+    aggressive
+      ? msg('Run Garbage Collection (Aggressive)')
+      : msg('Run Garbage Collection'),
+    msg(
+      "This repacks the repository and removes unreachable objects that are past git's grace period (2 weeks by default), along with expired reflog entries. Recently dropped stashes and deleted branches are not affected. Continue?",
+    ),
     'warning'
   );
 }
@@ -44,10 +46,10 @@ export function confirmGarbageCollection(aggressive: boolean): Promise<boolean> 
  */
 export function confirmPrune(): Promise<boolean> {
   return showConfirm(
-    'Prune Unreachable Objects',
-    'This permanently deletes unreachable objects with no grace period. Work ' +
-      'recoverable only through the reflog — dropped stashes, deleted ' +
-      'branches, amended commits — will become unrecoverable. Continue?',
+    msg('Prune Unreachable Objects'),
+    msg(
+      'This permanently deletes unreachable objects with no grace period. Work recoverable only through the reflog — dropped stashes, deleted branches, amended commits — will become unrecoverable. Continue?',
+    ),
     'warning'
   );
 }
@@ -65,12 +67,14 @@ export function confirmPrune(): Promise<boolean> {
  */
 export function summariseFsck(message: string | undefined): string {
   const text = (message ?? '').trim();
-  if (!text) return 'Repository integrity check completed';
+  if (!text) return msg('Repository integrity check completed');
 
   const lines = text.split('\n').filter((l) => l.trim().length > 0);
   if (lines.length <= 2 && text.length <= 200) return text;
 
-  return `Repository integrity check completed — ${lines.length} notes reported (${lines[0].trim()}, …)`;
+  return msg(
+    str`Repository integrity check completed — ${lines.length} notes reported (${lines[0].trim()}, …)`,
+  );
 }
 
 /**

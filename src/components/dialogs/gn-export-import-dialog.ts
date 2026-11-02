@@ -14,6 +14,7 @@
 
 import { LitElement, html, css, nothing, type PropertyValues } from 'lit';
 import { customElement, property, state, query } from 'lit/decorators.js';
+import { localized, msg, str } from '@lit/localize';
 import { sharedStyles, buttonStyles } from '../../styles/shared-styles.ts';
 import * as gitService from '../../services/git.service.ts';
 import type { BundleRef, BundleVerifyResult } from '../../services/git.service.ts';
@@ -65,6 +66,7 @@ function sanitizeForFilename(ref: string): string {
 }
 
 @customElement('gn-export-import-dialog')
+@localized()
 export class GnExportImportDialog extends LitElement {
   static styles = [
     sharedStyles,
@@ -466,12 +468,12 @@ export class GnExportImportDialog extends LitElement {
         this.previewFiles = result.data ?? [];
       } else {
         this.previewFiles = [];
-        this.error = result.error?.message ?? 'Failed to list archive contents';
+        this.error = result.error?.message ?? msg('Failed to list archive contents');
       }
     } catch (err) {
       if (this.archiveRef !== ref) return;
       this.previewFiles = [];
-      this.error = err instanceof Error ? err.message : 'Failed to list archive contents';
+      this.error = err instanceof Error ? err.message : msg('Failed to list archive contents');
     } finally {
       if (this.archiveRef === ref) this.previewLoading = false;
     }
@@ -492,7 +494,7 @@ export class GnExportImportDialog extends LitElement {
     const suggested = `${basename(repoPath)}-${sanitizeForFilename(this.archiveRef)}.${ext}`;
 
     const chosen = await saveDialog({
-      title: 'Export Archive',
+      title: msg('Export Archive'),
       defaultPath: suggested,
       filters: [{ name: this.archiveFormat, extensions: [ext] }],
     });
@@ -510,13 +512,13 @@ export class GnExportImportDialog extends LitElement {
         this.archivePrefix.trim() || undefined,
       );
       if (result.success) {
-        showToast(`Archive written to ${chosen}`, 'success');
+        showToast(msg(str`Archive written to ${chosen}`), 'success');
         this.close();
       } else {
-        this.error = result.error?.message ?? 'Failed to create archive';
+        this.error = result.error?.message ?? msg('Failed to create archive');
       }
     } catch (err) {
-      this.error = err instanceof Error ? err.message : 'Failed to create archive';
+      this.error = err instanceof Error ? err.message : msg('Failed to create archive');
     } finally {
       this.operationRunning = false;
     }
@@ -556,7 +558,7 @@ export class GnExportImportDialog extends LitElement {
     const repoPath = this.pinnedRepoPath;
 
     const chosen = await openDialog({
-      title: 'Choose a folder for the patch files',
+      title: msg('Choose a folder for the patch files'),
       directory: true,
     });
     const dir = Array.isArray(chosen) ? (chosen[0] ?? null) : chosen;
@@ -590,16 +592,20 @@ export class GnExportImportDialog extends LitElement {
       const result = await gitService.createPatch(repoPath, oids, dir);
       if (result.success) {
         const files = result.data ?? [];
+        // Two full messages instead of `file${n === 1 ? '' : 's'}`: a suffix
+        // built in code cannot be translated.
         showToast(
-          `Wrote ${files.length} patch file${files.length === 1 ? '' : 's'} to ${dir}`,
+          files.length === 1
+            ? msg(str`Wrote ${files.length} patch file to ${dir}`)
+            : msg(str`Wrote ${files.length} patch files to ${dir}`),
           'success',
         );
         this.close();
       } else {
-        this.error = result.error?.message ?? 'Failed to create patch files';
+        this.error = result.error?.message ?? msg('Failed to create patch files');
       }
     } catch (err) {
-      this.error = err instanceof Error ? err.message : 'Failed to create patch files';
+      this.error = err instanceof Error ? err.message : msg('Failed to create patch files');
     } finally {
       this.operationRunning = false;
     }
@@ -607,8 +613,8 @@ export class GnExportImportDialog extends LitElement {
 
   private async handleChoosePatchFile(): Promise<void> {
     const chosen = await openDialog({
-      title: 'Choose a patch file',
-      filters: [{ name: 'Patch', extensions: ['patch', 'diff'] }],
+      title: msg('Choose a patch file'),
+      filters: [{ name: msg('Patch'), extensions: ['patch', 'diff'] }],
     });
     const file = Array.isArray(chosen) ? (chosen[0] ?? null) : chosen;
     if (!file) return;
@@ -626,12 +632,12 @@ export class GnExportImportDialog extends LitElement {
       // whether it would work, not for it to happen.
       const result = await gitService.applyPatch(repoPath, this.patchFile, true);
       if (result.success) {
-        showToast('Patch applies cleanly', 'success');
+        showToast(msg('Patch applies cleanly'), 'success');
       } else {
-        this.error = result.error?.message ?? 'Patch would not apply cleanly';
+        this.error = result.error?.message ?? msg('Patch would not apply cleanly');
       }
     } catch (err) {
-      this.error = err instanceof Error ? err.message : 'Patch would not apply cleanly';
+      this.error = err instanceof Error ? err.message : msg('Patch would not apply cleanly');
     } finally {
       this.operationRunning = false;
     }
@@ -657,7 +663,9 @@ export class GnExportImportDialog extends LitElement {
           : await gitService.applyPatch(repoPath, this.patchFile);
       if (result.success) {
         showToast(
-          target === 'index' ? 'Patch applied to the index' : 'Patch applied to the working tree',
+          target === 'index'
+            ? msg('Patch applied to the index')
+            : msg('Patch applied to the working tree'),
           'success',
         );
         this.dispatchEvent(
@@ -669,10 +677,10 @@ export class GnExportImportDialog extends LitElement {
         );
         this.close();
       } else {
-        this.error = result.error?.message ?? 'Failed to apply patch';
+        this.error = result.error?.message ?? msg('Failed to apply patch');
       }
     } catch (err) {
-      this.error = err instanceof Error ? err.message : 'Failed to apply patch';
+      this.error = err instanceof Error ? err.message : msg('Failed to apply patch');
     } finally {
       this.operationRunning = false;
       releaseRefOp(repoPath);
@@ -702,9 +710,9 @@ export class GnExportImportDialog extends LitElement {
     const repoPath = this.pinnedRepoPath;
 
     const chosen = await saveDialog({
-      title: 'Create Bundle',
+      title: msg('Create Bundle'),
       defaultPath: `${basename(repoPath)}.bundle`,
-      filters: [{ name: 'Git bundle', extensions: ['bundle'] }],
+      filters: [{ name: msg('Git bundle'), extensions: ['bundle'] }],
     });
     if (!chosen) return;
 
@@ -720,15 +728,15 @@ export class GnExportImportDialog extends LitElement {
       if (result.success) {
         const data = result.data;
         showToast(
-          `Bundle written — ${data?.refsCount ?? 0} refs, ${data?.objectsCount ?? 0} objects`,
+          msg(str`Bundle written — ${data?.refsCount ?? 0} refs, ${data?.objectsCount ?? 0} objects`),
           'success',
         );
         this.close();
       } else {
-        this.error = result.error?.message ?? 'Failed to create bundle';
+        this.error = result.error?.message ?? msg('Failed to create bundle');
       }
     } catch (err) {
-      this.error = err instanceof Error ? err.message : 'Failed to create bundle';
+      this.error = err instanceof Error ? err.message : msg('Failed to create bundle');
     } finally {
       this.operationRunning = false;
     }
@@ -736,8 +744,8 @@ export class GnExportImportDialog extends LitElement {
 
   private async handleChooseBundleFile(): Promise<void> {
     const chosen = await openDialog({
-      title: 'Choose a bundle file',
-      filters: [{ name: 'Git bundle', extensions: ['bundle'] }],
+      title: msg('Choose a bundle file'),
+      filters: [{ name: msg('Git bundle'), extensions: ['bundle'] }],
     });
     const file = Array.isArray(chosen) ? (chosen[0] ?? null) : chosen;
     if (!file) return;
@@ -762,16 +770,16 @@ export class GnExportImportDialog extends LitElement {
       if (heads.success) {
         this.bundleHeads = heads.data ?? [];
       } else {
-        this.error = heads.error?.message ?? 'Failed to read the bundle';
+        this.error = heads.error?.message ?? msg('Failed to read the bundle');
       }
       if (verify.success) {
         this.bundleVerifyResult = verify.data ?? null;
       } else if (!this.error) {
-        this.error = verify.error?.message ?? 'Failed to verify the bundle';
+        this.error = verify.error?.message ?? msg('Failed to verify the bundle');
       }
     } catch (err) {
       if (seq !== this.bundleInspectSeq) return;
-      this.error = err instanceof Error ? err.message : 'Failed to read the bundle';
+      this.error = err instanceof Error ? err.message : msg('Failed to read the bundle');
     } finally {
       // A superseded request must leave the spinner alone — the newer one owns
       // it and is still running.
@@ -794,7 +802,13 @@ export class GnExportImportDialog extends LitElement {
       const result = await gitService.bundleUnbundle(repoPath, this.bundleFile);
       if (result.success) {
         const refs = result.data ?? [];
-        showToast(`Imported ${refs.length} ref${refs.length === 1 ? '' : 's'}`, 'success');
+        // Two full messages instead of `ref${n === 1 ? '' : 's'}`.
+        showToast(
+          refs.length === 1
+            ? msg(str`Imported ${refs.length} ref`)
+            : msg(str`Imported ${refs.length} refs`),
+          'success',
+        );
         this.dispatchEvent(
           new CustomEvent('bundle-imported', {
             detail: { repositoryPath: repoPath, refs },
@@ -804,10 +818,10 @@ export class GnExportImportDialog extends LitElement {
         );
         this.close();
       } else {
-        this.error = result.error?.message ?? 'Failed to import the bundle';
+        this.error = result.error?.message ?? msg('Failed to import the bundle');
       }
     } catch (err) {
-      this.error = err instanceof Error ? err.message : 'Failed to import the bundle';
+      this.error = err instanceof Error ? err.message : msg('Failed to import the bundle');
     } finally {
       this.operationRunning = false;
       releaseRefOp(repoPath);
@@ -821,7 +835,7 @@ export class GnExportImportDialog extends LitElement {
     return html`
       <div class="row">
         <div class="field">
-          <label for="archive-ref">Source ref</label>
+          <label for="archive-ref">${msg('Source ref')}</label>
           <!-- .selected on each option, not .value on the select: Lit commits
                the select's own bindings BEFORE its children exist, so a .value
                naming a deep-linked ref silently fell back to the first entry. -->
@@ -836,7 +850,7 @@ export class GnExportImportDialog extends LitElement {
           </select>
         </div>
         <div class="field">
-          <label for="archive-format">Format</label>
+          <label for="archive-format">${msg('Format')}</label>
           <select
             id="archive-format"
             @change=${(e: Event) => {
@@ -852,7 +866,7 @@ export class GnExportImportDialog extends LitElement {
       </div>
 
       <div class="field">
-        <label for="archive-prefix">Prefix folder (optional)</label>
+        <label for="archive-prefix">${msg('Prefix folder (optional)')}</label>
         <input
           id="archive-prefix"
           type="text"
@@ -863,25 +877,27 @@ export class GnExportImportDialog extends LitElement {
           }}
           ?disabled=${this.operationRunning}
         />
-        <span class="hint">Nests every entry under this directory inside the archive.</span>
+        <span class="hint">${msg('Nests every entry under this directory inside the archive.')}</span>
       </div>
 
       <div class="field">
-        <label>Contents</label>
+        <label>${msg('Contents')}</label>
         ${this.previewLoading
-          ? html`<div class="empty">Reading the tree…</div>`
+          ? html`<div class="empty">${msg('Reading the tree…')}</div>`
           : html`
               <div class="hint" data-testid="archive-file-count">
-                ${this.previewFiles.length} file${this.previewFiles.length === 1 ? '' : 's'}
+                ${this.previewFiles.length === 1
+                  ? msg('1 file')
+                  : msg(str`${this.previewFiles.length} files`)}
               </div>
               <div class="list">
                 ${shown.length === 0
-                  ? html`<div class="empty">No files in this tree</div>`
+                  ? html`<div class="empty">${msg('No files in this tree')}</div>`
                   : shown.map((f) => html`<div class="list-row mono truncate">${f}</div>`)}
               </div>
               ${this.previewFiles.length > MAX_ROWS
                 ? html`<span class="hint"
-                    >Showing first ${MAX_ROWS} of ${this.previewFiles.length}</span
+                    >${msg(str`Showing first ${MAX_ROWS} of ${this.previewFiles.length}`)}</span
                   >`
                 : nothing}
             `}
@@ -906,11 +922,11 @@ export class GnExportImportDialog extends LitElement {
     `;
     return html`
       <div class="field">
-        <label for="commit-filter">Commits</label>
+        <label for="commit-filter">${msg('Commits')}</label>
         <input
           id="commit-filter"
           type="text"
-          placeholder="Filter by summary or id"
+          placeholder=${msg('Filter by summary or id')}
           .value=${this.commitFilter}
           @input=${(e: Event) => {
             this.commitFilter = (e.target as HTMLInputElement).value;
@@ -920,14 +936,14 @@ export class GnExportImportDialog extends LitElement {
         <div class="list">
           ${pinned.map((c) => row(c, true))}
           ${rows.length === 0 && pinned.length === 0
-            ? html`<div class="empty">No commits match</div>`
+            ? html`<div class="empty">${msg('No commits match')}</div>`
             : rows.map((c) => row(c, false))}
         </div>
         ${total > MAX_ROWS
-          ? html`<span class="hint">Showing first ${MAX_ROWS} of ${total}</span>`
+          ? html`<span class="hint">${msg(str`Showing first ${MAX_ROWS} of ${total}`)}</span>`
           : nothing}
         <span class="hint" data-testid="patch-selected-count"
-          >${this.selectedCommits.size} selected — files are numbered oldest first</span
+          >${msg(str`${this.selectedCommits.size} selected — files are numbered oldest first`)}</span
         >
       </div>
     `;
@@ -936,7 +952,7 @@ export class GnExportImportDialog extends LitElement {
   private renderPatchApply() {
     return html`
       <div class="field">
-        <label>Patch file</label>
+        <label>${msg('Patch file')}</label>
         <div class="check-row">
           <button
             class="btn btn-secondary"
@@ -944,16 +960,16 @@ export class GnExportImportDialog extends LitElement {
             @click=${this.handleChoosePatchFile}
             ?disabled=${this.operationRunning}
           >
-            Choose patch file…
+            ${msg('Choose patch file…')}
           </button>
           <span class="chosen-file" data-testid="chosen-patch-file"
-            >${this.patchFile || 'No file chosen'}</span
+            >${this.patchFile || msg('No file chosen')}</span
           >
         </div>
       </div>
 
       <div class="field">
-        <label>Apply to</label>
+        <label>${msg('Apply to')}</label>
         <div class="radio-row">
           <label>
             <input
@@ -966,7 +982,7 @@ export class GnExportImportDialog extends LitElement {
               }}
               ?disabled=${this.operationRunning}
             />
-            Working tree
+            ${msg('Working tree')}
           </label>
           <label>
             <input
@@ -979,7 +995,7 @@ export class GnExportImportDialog extends LitElement {
               }}
               ?disabled=${this.operationRunning}
             />
-            Index (staged)
+            ${msg('Index (staged)')}
           </label>
         </div>
       </div>
@@ -1000,7 +1016,7 @@ export class GnExportImportDialog extends LitElement {
             }}
             ?disabled=${this.operationRunning}
           />
-          Create patch files
+          ${msg('Create patch files')}
         </label>
         <label>
           <input
@@ -1013,7 +1029,7 @@ export class GnExportImportDialog extends LitElement {
             }}
             ?disabled=${this.operationRunning}
           />
-          Apply a patch file
+          ${msg('Apply a patch file')}
         </label>
       </div>
       ${this.patchMode === 'create' ? this.renderPatchCreate() : this.renderPatchApply()}
@@ -1032,16 +1048,16 @@ export class GnExportImportDialog extends LitElement {
           }}
           ?disabled=${this.operationRunning}
         />
-        <label for="bundle-all">Include all refs (--all)</label>
+        <label for="bundle-all">${msg('Include all refs (--all)')}</label>
       </div>
       ${this.bundleAllRefs
         ? nothing
         : html`
             <div class="field">
-              <label>Refs to include</label>
+              <label>${msg('Refs to include')}</label>
               <div class="list">
                 ${this.bundleRefOptions().length === 0
-                  ? html`<div class="empty">No local refs to bundle</div>`
+                  ? html`<div class="empty">${msg('No local refs to bundle')}</div>`
                   : this.bundleRefOptions().map(
                       (r) => html`
                         <label class="list-row">
@@ -1066,7 +1082,7 @@ export class GnExportImportDialog extends LitElement {
     const verify = this.bundleVerifyResult;
     return html`
       <div class="field">
-        <label>Bundle file</label>
+        <label>${msg('Bundle file')}</label>
         <div class="check-row">
           <button
             class="btn btn-secondary"
@@ -1074,22 +1090,22 @@ export class GnExportImportDialog extends LitElement {
             @click=${this.handleChooseBundleFile}
             ?disabled=${this.operationRunning}
           >
-            Choose bundle…
+            ${msg('Choose bundle…')}
           </button>
           <span class="chosen-file" data-testid="chosen-bundle-file"
-            >${this.bundleFile || 'No file chosen'}</span
+            >${this.bundleFile || msg('No file chosen')}</span
           >
         </div>
       </div>
 
-      ${this.bundleInspecting ? html`<div class="empty">Reading the bundle…</div>` : nothing}
+      ${this.bundleInspecting ? html`<div class="empty">${msg('Reading the bundle…')}</div>` : nothing}
       ${this.bundleFile && !this.bundleInspecting
         ? html`
             <div class="field">
-              <label>This bundle contains</label>
+              <label>${msg('This bundle contains')}</label>
               <div class="list">
                 ${this.bundleHeads.length === 0
-                  ? html`<div class="empty">This bundle contains no refs</div>`
+                  ? html`<div class="empty">${msg('This bundle contains no refs')}</div>`
                   : this.bundleHeads.map(
                       (r) => html`
                         <div class="list-row">
@@ -1105,10 +1121,10 @@ export class GnExportImportDialog extends LitElement {
       ${verify && !verify.isValid
         ? html`
             <div class="warning" data-testid="bundle-unimportable">
-              <div>${verify.message ?? 'This bundle cannot be imported into this repository.'}</div>
+              <div>${verify.message ?? msg('This bundle cannot be imported into this repository.')}</div>
               ${verify.requires.length > 0
                 ? html`
-                    <div class="hint">Missing prerequisite commits</div>
+                    <div class="hint">${msg('Missing prerequisite commits')}</div>
                     ${verify.requires.map((oid) => html`<div class="mono">${oid}</div>`)}
                   `
                 : nothing}
@@ -1132,7 +1148,7 @@ export class GnExportImportDialog extends LitElement {
             }}
             ?disabled=${this.operationRunning}
           />
-          Create a bundle
+          ${msg('Create a bundle')}
         </label>
         <label>
           <input
@@ -1145,7 +1161,7 @@ export class GnExportImportDialog extends LitElement {
             }}
             ?disabled=${this.operationRunning}
           />
-          Import a bundle
+          ${msg('Import a bundle')}
         </label>
       </div>
       ${this.bundleMode === 'create' ? this.renderBundleCreate() : this.renderBundleImport()}
@@ -1161,7 +1177,7 @@ export class GnExportImportDialog extends LitElement {
           @click=${this.handleExportArchive}
           ?disabled=${this.operationRunning}
         >
-          ${this.operationRunning ? 'Exporting…' : 'Export archive'}
+          ${this.operationRunning ? msg('Exporting…') : msg('Export archive')}
         </button>
       `;
     }
@@ -1175,7 +1191,7 @@ export class GnExportImportDialog extends LitElement {
             @click=${this.handleCreatePatch}
             ?disabled=${this.operationRunning || this.selectedCommits.size === 0}
           >
-            ${this.operationRunning ? 'Writing…' : 'Create patch files…'}
+            ${this.operationRunning ? msg('Writing…') : msg('Create patch files…')}
           </button>
         `;
       }
@@ -1186,7 +1202,7 @@ export class GnExportImportDialog extends LitElement {
           @click=${this.handleCheckPatch}
           ?disabled=${this.operationRunning || !this.patchFile}
         >
-          Check
+          ${msg('Check')}
         </button>
         <button
           class="btn btn-primary"
@@ -1194,7 +1210,7 @@ export class GnExportImportDialog extends LitElement {
           @click=${this.handleApplyPatch}
           ?disabled=${this.operationRunning || !this.patchFile || this.lock.busy}
         >
-          ${this.operationRunning ? 'Applying…' : 'Apply'}
+          ${this.operationRunning ? msg('Applying…') : msg('Apply')}
         </button>
       `;
     }
@@ -1208,7 +1224,7 @@ export class GnExportImportDialog extends LitElement {
           ?disabled=${this.operationRunning ||
           (!this.bundleAllRefs && this.selectedRefs.size === 0)}
         >
-          ${this.operationRunning ? 'Writing…' : 'Create bundle…'}
+          ${this.operationRunning ? msg('Writing…') : msg('Create bundle…')}
         </button>
       `;
     }
@@ -1221,14 +1237,14 @@ export class GnExportImportDialog extends LitElement {
         !this.bundleVerifyResult?.isValid ||
         this.lock.busy}
       >
-        ${this.operationRunning ? 'Importing…' : 'Import refs'}
+        ${this.operationRunning ? msg('Importing…') : msg('Import refs')}
       </button>
     `;
   }
 
   render() {
     return html`
-      <gn-modal modalTitle="Export / Import" @close=${this.handleModalClose}>
+      <gn-modal modalTitle=${msg('Export / Import')} @close=${this.handleModalClose}>
         <div class="body">
           <div class="tabs" role="tablist">
             ${(['archive', 'patch', 'bundle'] as ExportImportTab[]).map(
@@ -1241,7 +1257,7 @@ export class GnExportImportDialog extends LitElement {
                   @click=${() => this.handleTabChange(t)}
                   ?disabled=${this.operationRunning}
                 >
-                  ${t === 'archive' ? 'Archive' : t === 'patch' ? 'Patch' : 'Bundle'}
+                  ${t === 'archive' ? msg('Archive') : t === 'patch' ? msg('Patch') : msg('Bundle')}
                 </button>
               `,
             )}
@@ -1258,7 +1274,7 @@ export class GnExportImportDialog extends LitElement {
 
         <div slot="footer">
           <button class="btn btn-secondary" @click=${this.dismiss} ?disabled=${this.operationRunning}>
-            Cancel
+            ${msg('Cancel')}
           </button>
           ${this.renderFooterAction()}
         </div>

@@ -1590,3 +1590,49 @@ test.describe('Graph with more lanes than fit', () => {
     expect(JSON.parse(saved!).graph).toBe(before.width + 60);
   });
 });
+
+/**
+ * The graph toolbar floats over the canvas-painted column-header row. In the
+ * Chinese build its labels got close enough to the header text that fragments
+ * of a header glyph ("更改") peeked through the two-pixel gaps between the
+ * buttons, which looked like a clipped label. This pins both halves of the
+ * fix: no label wraps or overflows, and the toolbar owns a solid backdrop.
+ */
+test.describe('Graph toolbar layout', () => {
+  test('keeps translated labels on one line over an opaque backdrop', async ({ page }) => {
+    await setupOpenRepository(page, undefined, { seedLanguage: false });
+
+    const toolbar = page.locator('gn-graph-canvas .graph-toolbar');
+    await expect(toolbar).toBeVisible();
+
+    const buttons = toolbar.locator('.toolbar-btn');
+    await expect(buttons).toHaveCount(5);
+    await expect(buttons.nth(1)).toContainText('缩略图');
+    await expect(buttons.nth(3)).toContainText('分支');
+    await expect(buttons.nth(4)).toContainText('导出');
+
+    const layout = await toolbar.evaluate((el) => ({
+      background: getComputedStyle(el).backgroundColor,
+      buttons: Array.from(el.querySelectorAll('.toolbar-btn')).map((button) => {
+        const rect = button.getBoundingClientRect();
+        return {
+          text: button.textContent?.trim(),
+          height: rect.height,
+          whiteSpace: getComputedStyle(button).whiteSpace,
+          overflow: button.scrollWidth - button.clientWidth,
+        };
+      }),
+    }));
+
+    // Fully opaque backdrop: header text behind the toolbar cannot bleed
+    // through. A semi-transparent colour (rgba) would pass a merely
+    // "not transparent" check while leaking the header glyphs again.
+    expect(layout.background).toMatch(/^rgb\(/);
+
+    for (const button of layout.buttons) {
+      expect(button.whiteSpace, button.text).toBe('nowrap');
+      expect(button.height, button.text).toBeLessThanOrEqual(22);
+      expect(button.overflow, `${button.text} is clipped`).toBeLessThanOrEqual(1);
+    }
+  });
+});

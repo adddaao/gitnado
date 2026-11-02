@@ -119,7 +119,7 @@ describe('gn-branch-list rebase skip reporting', () => {
 
     expect(invokeCalls.some((c) => c.command === 'rebase'), 'rebase ran').to.be.true;
     expect(successToast()).to.equal(
-      'Rebased onto main, skipped 2 commit(s) already applied upstream'
+      'Rebased onto main, skipped 2 commits already applied upstream'
     );
   });
 
@@ -142,7 +142,7 @@ describe('gn-branch-list rebase skip reporting', () => {
     await rebaseFromContextMenu(el, makeBranch('origin/main'));
 
     expect(successToast()).to.equal(
-      'Rebased onto origin/main, skipped 3 commit(s) already applied upstream'
+      'Rebased onto origin/main, skipped 3 commits already applied upstream'
     );
   });
 
@@ -159,7 +159,7 @@ describe('gn-branch-list rebase skip reporting', () => {
 
     expect(invokeCalls.some((c) => c.command === 'rebase'), 'rebase ran').to.be.true;
     expect(successToast()).to.equal(
-      'Rebased onto feature/source, skipped 1 commit(s) already applied upstream'
+      'Rebased onto feature/source, skipped 1 commit already applied upstream'
     );
   });
 
@@ -183,7 +183,7 @@ describe('gn-branch-list rebase skip reporting', () => {
     ).to.be.true;
     expect(invokeCalls.some((c) => c.command === 'rebase'), 'rebase ran').to.be.true;
     expect(successToast()).to.equal(
-      'Rebased onto feature/source, skipped 2 commit(s) already applied upstream'
+      'Rebased onto feature/source, skipped 2 commits already applied upstream'
     );
   });
 });

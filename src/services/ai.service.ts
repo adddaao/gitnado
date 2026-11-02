@@ -20,6 +20,28 @@ import type { CommandResult } from '../types/api.types.ts';
 export type AiProviderType = 'ollama' | 'lm_studio' | 'open_ai' | 'anthropic' | 'github_copilot' | 'google_gemini' | 'local_inference';
 
 /**
+ * Language AI prompts are written in, and therefore the language the model
+ * writes every human-visible value in.
+ *
+ * These literals are the serde wire format of the Rust `PromptLanguage` enum
+ * (`#[serde(rename_all = "snake_case")]`) and the values persisted by the
+ * settings store (`AiPromptLanguage`). The backend defaults to English when
+ * the field is absent, so an older build keeps its behaviour.
+ */
+export type PromptLanguage = 'zh' | 'en';
+
+/**
+ * The AI prompt/output language currently chosen in Settings.
+ *
+ * The backend needs it on every request rather than only on model load: the
+ * setting can change while a model stays loaded, and the very next generation
+ * must honour the new choice.
+ */
+function aiPromptLanguage(): PromptLanguage {
+  return settingsStore.getState().aiPromptLanguage;
+}
+
+/**
  * AI provider information
  */
 export interface AiProviderInfo {
@@ -477,6 +499,7 @@ export async function generateCommitMessage(
   if (blocked) return blocked;
   return invokeCommand<GeneratedCommitMessage>('generate_commit_message', {
     repoPath,
+    promptLanguage: aiPromptLanguage(),
   });
 }
 
@@ -494,6 +517,7 @@ export async function suggestConflictResolution(
   const blocked = await checkAiNetworkAllowed<ConflictResolutionSuggestion>();
   if (blocked) return blocked;
   return invokeCommand<ConflictResolutionSuggestion>('suggest_conflict_resolution', {
+    promptLanguage: aiPromptLanguage(),
     filePath,
     oursContent,
     theirsContent,
@@ -522,6 +546,7 @@ export async function generateChangelog(
   const blocked = await checkAiNetworkAllowed<GeneratedChangelog>();
   if (blocked) return blocked;
   return invokeCommand<GeneratedChangelog>('generate_changelog', {
+    promptLanguage: aiPromptLanguage(),
     repoPath,
     baseRef,
     compareRef,
@@ -579,7 +604,10 @@ export async function analyzeStagedChanges(
 ): Promise<CommandResult<StagedAnalysis>> {
   const blocked = await checkAiNetworkAllowed<StagedAnalysis>();
   if (blocked) return blocked;
-  return invokeCommand<StagedAnalysis>('analyze_staged_changes', { repoPath });
+  return invokeCommand<StagedAnalysis>('analyze_staged_changes', {
+    repoPath,
+    promptLanguage: aiPromptLanguage(),
+  });
 }
 
 /**
@@ -594,6 +622,7 @@ export async function generatePrDescription(
   const blocked = await checkAiNetworkAllowed<GeneratedPrDescription>();
   if (blocked) return blocked;
   return invokeCommand<GeneratedPrDescription>('generate_pr_description', {
+    promptLanguage: aiPromptLanguage(),
     repoPath,
     baseRef,
     headRef,
@@ -609,7 +638,10 @@ export async function suggestCommitSplits(
 ): Promise<CommandResult<CommitSplitSuggestion>> {
   const blocked = await checkAiNetworkAllowed<CommitSplitSuggestion>();
   if (blocked) return blocked;
-  return invokeCommand<CommitSplitSuggestion>('suggest_commit_splits', { repoPath });
+  return invokeCommand<CommitSplitSuggestion>('suggest_commit_splits', {
+    repoPath,
+    promptLanguage: aiPromptLanguage(),
+  });
 }
 
 // ========================================================================
@@ -641,6 +673,7 @@ export async function explainConflict(
   const blocked = await checkAiNetworkAllowed<ConflictExplanation>();
   if (blocked) return blocked;
   return invokeCommand<ConflictExplanation>('explain_conflict', {
+    promptLanguage: aiPromptLanguage(),
     filePath,
     oursContent,
     theirsContent,
@@ -659,7 +692,11 @@ export async function findReflogEntry(
 ): Promise<CommandResult<ReflogMatch>> {
   const blocked = await checkAiNetworkAllowed<ReflogMatch>();
   if (blocked) return blocked;
-  return invokeCommand<ReflogMatch>('find_reflog_entry', { repoPath, query });
+  return invokeCommand<ReflogMatch>('find_reflog_entry', {
+    repoPath,
+    query,
+    promptLanguage: aiPromptLanguage(),
+  });
 }
 
 /**

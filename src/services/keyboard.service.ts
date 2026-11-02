@@ -4,6 +4,7 @@
  */
 
 import { isOverlayOpen } from '../utils/overlay-stack.ts';
+import { msg, str } from '@lit/localize';
 
 export interface Shortcut {
   key: string;
@@ -44,6 +45,19 @@ export interface KeyboardSettings {
  * act on the difference.
  */
 const STORAGE_KEY = 'gitnado-keyboard-settings';
+
+/**
+ * Lazy, locale-aware text for the shortcuts `registerDefaultShortcuts` installs.
+ *
+ * That function runs ONCE at startup, but localization is in runtime mode: the
+ * user can switch language without a reload. Resolving the copy at registration
+ * time would therefore freeze the shortcuts dialog in the startup language, so
+ * this holds thunks that call `msg()` when the dialog reads the list.
+ */
+const localisedShortcutText = new Map<
+  string,
+  { description: () => string; category: () => string }
+>();
 
 class KeyboardService {
   /**
@@ -217,6 +231,9 @@ class KeyboardService {
     this.defaultBindings.delete(id);
     this.customBindings.delete(id);
     this.shortcutMetadata.delete(id);
+    // Drop the localised thunks too: a later `register()` of the same id must
+    // not keep rendering the removed default's wording.
+    localisedShortcutText.delete(id);
   }
 
   /**
@@ -364,12 +381,13 @@ class KeyboardService {
       const defaultBinding = this.defaultBindings.get(id);
       if (defaultBinding) {
         const customBinding = this.customBindings.get(id);
+        const localised = localisedShortcutText.get(id);
         result.push({
           id,
           binding: customBinding ?? defaultBinding,
           defaultBinding,
-          description: metadata.description,
-          category: metadata.category,
+          description: localised ? localised.description() : metadata.description,
+          category: localised ? localised.category() : metadata.category,
           isCustomized: !!customBinding,
         });
       }
@@ -692,6 +710,28 @@ class KeyboardService {
 // Singleton instance
 export const keyboardService = new KeyboardService();
 
+/**
+ * Register a default shortcut whose description and category follow the ACTIVE
+ * locale.
+ *
+ * The eager values passed to `register()` are the source-locale fallback for
+ * any reader that looks at the raw `Shortcut`; `getAllBindings()` prefers the
+ * thunks, which is what the shortcuts dialog renders.
+ */
+function registerDefault(
+  id: string,
+  shortcut: Omit<Shortcut, 'description' | 'category'>,
+  description: () => string,
+  category: () => string,
+): void {
+  localisedShortcutText.set(id, { description, category });
+  keyboardService.register(id, {
+    ...shortcut,
+    description: description(),
+    category: category(),
+  });
+}
+
 // Default shortcuts
 export function registerDefaultShortcuts(actions: {
   navigateUp: () => void;
@@ -735,241 +775,218 @@ export function registerDefaultShortcuts(actions: {
   });
 
   // Navigation
-  keyboardService.register('nav-up', {
-    key: 'ArrowUp',
-    action: actions.navigateUp,
-    description: 'Previous commit',
-    category: 'Navigation',
-  });
+  registerDefault(
+    'nav-up',
+    { key: 'ArrowUp', action: actions.navigateUp },
+    () => msg('Previous commit'),
+    () => msg('Navigation'),
+  );
 
-  keyboardService.register('nav-down', {
-    key: 'ArrowDown',
-    action: actions.navigateDown,
-    description: 'Next commit',
-    category: 'Navigation',
-  });
+  registerDefault(
+    'nav-down',
+    { key: 'ArrowDown', action: actions.navigateDown },
+    () => msg('Next commit'),
+    () => msg('Navigation'),
+  );
 
-  keyboardService.register('select', {
-    key: 'Enter',
-    action: actions.selectCommit,
-    description: 'Select commit',
-    category: 'Navigation',
-  });
+  registerDefault(
+    'select',
+    { key: 'Enter', action: actions.selectCommit },
+    () => msg('Select commit'),
+    () => msg('Navigation'),
+  );
 
   if (actions.navigateFirst) {
-    keyboardService.register('nav-first', {
-      key: 'Home',
-      action: actions.navigateFirst,
-      description: 'First commit',
-      category: 'Navigation',
-    });
+    registerDefault(
+      'nav-first',
+      { key: 'Home', action: actions.navigateFirst },
+      () => msg('First commit'),
+      () => msg('Navigation'),
+    );
   }
 
   if (actions.navigateLast) {
-    keyboardService.register('nav-last', {
-      key: 'End',
-      action: actions.navigateLast,
-      description: 'Last commit',
-      category: 'Navigation',
-    });
+    registerDefault(
+      'nav-last',
+      { key: 'End', action: actions.navigateLast },
+      () => msg('Last commit'),
+      () => msg('Navigation'),
+    );
   }
 
   // Staging.
   // These act on the files the Changes list is SHOWING, which is the whole
   // list unless a path filter is typed; gn-file-status toasts the narrowed
   // scope in that case, so the unqualified description here cannot mislead.
-  keyboardService.register('stage-all', {
-    key: 's',
-    action: actions.stageAll,
-    description: 'Stage all changes',
-    category: 'Staging',
-  });
+  registerDefault(
+    'stage-all',
+    { key: 's', action: actions.stageAll },
+    () => msg('Stage all changes'),
+    () => msg('Staging'),
+  );
 
-  keyboardService.register('unstage-all', {
-    key: 'u',
-    action: actions.unstageAll,
-    description: 'Unstage all changes',
-    category: 'Staging',
-  });
+  registerDefault(
+    'unstage-all',
+    { key: 'u', action: actions.unstageAll },
+    () => msg('Unstage all changes'),
+    () => msg('Staging'),
+  );
 
   // Commit
-  keyboardService.register('commit', {
-    key: 'Enter',
-    ctrl: true,
-    action: actions.commit,
-    description: 'Commit staged changes',
-    category: 'Commit',
-  });
+  registerDefault(
+    'commit',
+    { key: 'Enter', ctrl: true, action: actions.commit },
+    () => msg('Commit staged changes'),
+    () => msg('Commit'),
+  );
 
   // General
-  keyboardService.register('refresh', {
-    key: 'r',
-    ctrl: true,
-    action: actions.refresh,
-    description: 'Refresh repository',
-    category: 'General',
-  });
+  registerDefault(
+    'refresh',
+    { key: 'r', ctrl: true, action: actions.refresh },
+    () => msg('Refresh repository'),
+    () => msg('General'),
+  );
 
-  keyboardService.register('search', {
-    key: 'f',
-    ctrl: true,
-    action: actions.search,
-    description: 'Search commits',
-    category: 'General',
-  });
+  registerDefault(
+    'search',
+    { key: 'f', ctrl: true, action: actions.search },
+    () => msg('Search commits'),
+    () => msg('General'),
+  );
 
-  keyboardService.register('settings', {
-    key: ',',
-    ctrl: true,
-    action: actions.openSettings,
-    description: 'Open settings',
-    category: 'General',
-  });
+  registerDefault(
+    'settings',
+    { key: ',', ctrl: true, action: actions.openSettings },
+    () => msg('Open settings'),
+    () => msg('General'),
+  );
 
   if (actions.openShortcuts) {
-    keyboardService.register('shortcuts', {
-      key: '?',
-      shift: true,
-      action: actions.openShortcuts,
-      description: 'Show keyboard shortcuts',
-      category: 'General',
-    });
+    registerDefault(
+      'shortcuts',
+      { key: '?', shift: true, action: actions.openShortcuts },
+      () => msg('Show keyboard shortcuts'),
+      () => msg('General'),
+    );
   }
 
   if (actions.openCommandPalette) {
-    keyboardService.register('command-palette', {
-      key: 'p',
-      ctrl: true,
-      action: actions.openCommandPalette,
-      description: 'Open command palette',
-      category: 'General',
-    });
+    registerDefault(
+      'command-palette',
+      { key: 'p', ctrl: true, action: actions.openCommandPalette },
+      () => msg('Open command palette'),
+      () => msg('General'),
+    );
   }
 
   if (actions.openReflog) {
-    keyboardService.register('reflog', {
-      key: 'z',
-      ctrl: true,
-      action: actions.openReflog,
-      description: 'Open undo history',
-      category: 'General',
-    });
+    registerDefault(
+      'reflog',
+      { key: 'z', ctrl: true, action: actions.openReflog },
+      () => msg('Open undo history'),
+      () => msg('General'),
+    );
   }
 
   // Git operations
   if (actions.fetch) {
-    keyboardService.register('fetch', {
-      key: 'f',
-      ctrl: true,
-      shift: true,
-      action: actions.fetch,
-      description: 'Fetch from remote',
-      category: 'Git',
-    });
+    registerDefault(
+      'fetch',
+      { key: 'f', ctrl: true, shift: true, action: actions.fetch },
+      () => msg('Fetch from remote'),
+      () => msg('Git'),
+    );
   }
 
   if (actions.pull) {
-    keyboardService.register('pull', {
-      key: 'p',
-      ctrl: true,
-      shift: true,
-      action: actions.pull,
-      description: 'Pull from remote',
-      category: 'Git',
-    });
+    registerDefault(
+      'pull',
+      { key: 'p', ctrl: true, shift: true, action: actions.pull },
+      () => msg('Pull from remote'),
+      () => msg('Git'),
+    );
   }
 
   if (actions.push) {
-    keyboardService.register('push', {
-      key: 'u',
-      ctrl: true,
-      shift: true,
-      action: actions.push,
-      description: 'Push to remote',
-      category: 'Git',
-    });
+    registerDefault(
+      'push',
+      { key: 'u', ctrl: true, shift: true, action: actions.push },
+      () => msg('Push to remote'),
+      () => msg('Git'),
+    );
   }
 
   if (actions.createBranch) {
-    keyboardService.register('new-branch', {
-      key: 'n',
-      ctrl: true,
-      shift: true,
-      action: actions.createBranch,
-      description: 'Create new branch',
-      category: 'Git',
-    });
+    registerDefault(
+      'new-branch',
+      { key: 'n', ctrl: true, shift: true, action: actions.createBranch },
+      () => msg('Create new branch'),
+      () => msg('Git'),
+    );
   }
 
   if (actions.createStash) {
-    keyboardService.register('stash', {
-      key: 's',
-      ctrl: true,
-      shift: true,
-      action: actions.createStash,
-      description: 'Create stash',
-      category: 'Git',
-    });
+    registerDefault(
+      'stash',
+      { key: 's', ctrl: true, shift: true, action: actions.createStash },
+      () => msg('Create stash'),
+      () => msg('Git'),
+    );
   }
 
   // Panels
-  keyboardService.register('toggle-left', {
-    key: 'b',
-    ctrl: true,
-    action: actions.toggleLeftPanel,
-    description: 'Toggle left panel',
-    category: 'View',
-  });
+  registerDefault(
+    'toggle-left',
+    { key: 'b', ctrl: true, action: actions.toggleLeftPanel },
+    () => msg('Toggle left panel'),
+    () => msg('View'),
+  );
 
-  keyboardService.register('toggle-right', {
-    key: 'j',
-    ctrl: true,
-    action: actions.toggleRightPanel,
-    description: 'Toggle right panel',
-    category: 'View',
-  });
+  registerDefault(
+    'toggle-right',
+    { key: 'j', ctrl: true, action: actions.toggleRightPanel },
+    () => msg('Toggle right panel'),
+    () => msg('View'),
+  );
 
   if (actions.closeDiff) {
-    keyboardService.register('close-diff', {
-      key: 'Escape',
-      action: actions.closeDiff,
-      description: 'Close diff/panel',
-      category: 'View',
-    });
+    registerDefault(
+      'close-diff',
+      { key: 'Escape', action: actions.closeDiff },
+      () => msg('Close diff/panel'),
+      () => msg('View'),
+    );
   }
 
   // Repository tabs
   if (actions.nextTab) {
-    keyboardService.register('next-tab', {
-      key: 'Tab',
-      ctrl: true,
-      action: actions.nextTab,
-      description: 'Next repository tab',
-      category: 'View',
-    });
+    registerDefault(
+      'next-tab',
+      { key: 'Tab', ctrl: true, action: actions.nextTab },
+      () => msg('Next repository tab'),
+      () => msg('View'),
+    );
   }
 
   if (actions.previousTab) {
-    keyboardService.register('previous-tab', {
-      key: 'Tab',
-      ctrl: true,
-      shift: true,
-      action: actions.previousTab,
-      description: 'Previous repository tab',
-      category: 'View',
-    });
+    registerDefault(
+      'previous-tab',
+      { key: 'Tab', ctrl: true, shift: true, action: actions.previousTab },
+      () => msg('Previous repository tab'),
+      () => msg('View'),
+    );
   }
 
   if (actions.selectTab) {
     const selectTab = actions.selectTab;
     for (let n = 1; n <= 9; n++) {
-      keyboardService.register(`select-tab-${n}`, {
-        key: String(n),
-        ctrl: true,
-        action: () => selectTab(n - 1),
-        description: `Go to repository tab ${n}`,
-        category: 'View',
-      });
+      registerDefault(
+        `select-tab-${n}`,
+        { key: String(n), ctrl: true, action: () => selectTab(n - 1) },
+        () => msg(str`Go to repository tab ${n}`),
+        () => msg('View'),
+      );
     }
   }
 }

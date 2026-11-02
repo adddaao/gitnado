@@ -9,6 +9,7 @@
  * follow-up here means the two surfaces cannot drift apart again.
  */
 
+import { msg, str } from '@lit/localize';
 import * as gitService from '../services/git.service.ts';
 import { showConfirm } from '../services/dialog.service.ts';
 import { showToast } from '../services/notification.service.ts';
@@ -17,10 +18,10 @@ import { pushTagKey, tryAcquirePush, releasePush, warnRepositoryBusy } from './r
 /** The local-delete confirm. Honest about what it does and does not remove. */
 export function confirmDeleteTag(tagName: string): Promise<boolean> {
   return showConfirm(
-    'Delete Tag',
-    `Are you sure you want to delete tag "${tagName}"?\n\n` +
-      'This removes it from this repository only and cannot be undone. If the ' +
-      'tag was pushed, it stays on the remote and the next fetch restores it.',
+    msg('Delete Tag'),
+    msg(
+      str`Are you sure you want to delete tag "${tagName}"?\n\nThis removes it from this repository only and cannot be undone. If the tag was pushed, it stays on the remote and the next fetch restores it.`
+    ),
     'warning'
   );
 }
@@ -41,7 +42,9 @@ export async function offerRemoteTagDelete(repoPath: string, tagName: string): P
   const remotesResult = await gitService.getRemotes(repoPath);
   if (!remotesResult.success) {
     showToast(
-      `Deleted tag ${tagName} locally, but the remote list could not be read — it may still exist on the remote`,
+      msg(
+        str`Deleted tag ${tagName} locally, but the remote list could not be read — it may still exist on the remote`
+      ),
       'warning'
     );
     return;
@@ -75,19 +78,21 @@ export async function offerRemoteTagDelete(repoPath: string, tagName: string): P
 
   try {
     const confirmed = await showConfirm(
-      'Delete Tag on Remote',
-      `Also delete tag "${tagName}" on "${remote}"?\n\n` +
-        'Leaving it there means the next fetch copies it back into this repository.',
+      msg('Delete Tag on Remote'),
+      msg(
+        str`Also delete tag "${tagName}" on "${remote}"?\n\nLeaving it there means the next fetch copies it back into this repository.`
+      ),
       'warning'
     );
     if (!confirmed) return;
 
     const result = await gitService.deleteRemoteTag({ path: repoPath, name: tagName, remote });
     if (result.success) {
-      showToast(`Deleted tag ${tagName} on ${remote}`, 'success');
+      showToast(msg(str`Deleted tag ${tagName} on ${remote}`), 'success');
     } else if (!gitService.isNetworkGateRefusal(result.error)) {
+      const reason = result.error?.message ?? msg('Unknown error');
       showToast(
-        `Failed to delete tag ${tagName} on ${remote}: ${result.error?.message ?? 'Unknown error'}`,
+        msg(str`Failed to delete tag ${tagName} on ${remote}: ${reason}`),
         'error'
       );
     }

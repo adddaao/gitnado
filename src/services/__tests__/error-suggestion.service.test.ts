@@ -9,7 +9,8 @@ const mockInvoke = (_command: string): Promise<unknown> => {
   invoke: mockInvoke,
 };
 
-import { getErrorSuggestion } from '../error-suggestion.service.ts';
+import { getErrorSuggestion, showErrorWithSuggestion } from '../error-suggestion.service.ts';
+import { uiStore } from '../../stores/ui.store.ts';
 
 describe('error-suggestion.service', () => {
   describe('getErrorSuggestion', () => {
@@ -458,5 +459,41 @@ describe('error-suggestion.service', () => {
       });
       expect(result!.action!.label).to.equal('Pull Now');
     });
+  });
+});
+describe('showErrorWithSuggestion with a localised backend error', () => {
+  beforeEach(() => {
+    uiStore.setState({ toasts: [] });
+  });
+
+  it('matches on the backend wording, not the localised text', () => {
+    // `invokeCommand` replaced `message` with the Chinese frame; the rule has to
+    // read `originalMessage` or a push rejection gets no recovery action.
+    showErrorWithSuggestion(
+      {
+        code: 'OPERATION_FAILED',
+        message: '操作失败：Updates were rejected because the remote contains work',
+        originalMessage:
+          'Operation failed: Updates were rejected because the remote contains work that is not present locally',
+      },
+      'Push failed'
+    );
+
+    const toasts = uiStore.getState().toasts;
+    expect(toasts).to.have.lengthOf(1);
+    expect(toasts[0].message).to.include('Pull');
+  });
+
+  it('shows the localised message when no rule matches', () => {
+    showErrorWithSuggestion(
+      {
+        code: 'OPERATION_FAILED',
+        message: '操作失败：完全无法识别的情况',
+        originalMessage: 'Operation failed: something no rule recognises',
+      },
+      'Push failed'
+    );
+
+    expect(uiStore.getState().toasts[0].message).to.equal('操作失败：完全无法识别的情况');
   });
 });

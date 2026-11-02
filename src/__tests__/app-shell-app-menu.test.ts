@@ -32,6 +32,7 @@ import {
   resetAcceleratorGuard,
 } from '../services/app-menu.service.ts';
 import { keyboardService, registerDefaultShortcuts } from '../services/keyboard.service.ts';
+import { setAppLocale } from '../i18n/index.ts';
 import type { Repository } from '../types/git.types.ts';
 
 function mockRepo(path: string, name: string): Repository {
@@ -243,6 +244,54 @@ describe('app-shell application menu routing', () => {
     expect(second).to.have.lengthOf(2);
     const enabled = second[1].args.items as Array<{ id: string; enabled: boolean }>;
     expect(enabled.every((i) => i.enabled)).to.be.true;
+  });
+
+  it('relabels the native menu when the language changes', async () => {
+    // Constructed under the current locale: its own tracked locale is English.
+    const el = shell('/repo/active');
+
+    await setAppLocale('zh');
+    try {
+      // `settings.setLanguage()` dispatches this once the locale really applied.
+      (el as any).handleAppLanguageChanged();
+
+      await waitUntil(
+        () => invokeCalls.some((c) => c.command === 'set_app_menu_labels'),
+        'the localised labels to reach the backend'
+      );
+      const call = invokeCalls.find((c) => c.command === 'set_app_menu_labels');
+      const labels = call!.args.labels as Record<string, string>;
+      expect(labels.file, 'the File menu is localised').to.equal('文件');
+      expect(labels.fetch, 'the Fetch item is localised').to.equal('获取');
+
+      // The label sync rebuilds the native menu, so the per-item state has to
+      // be pushed again or every repository action would come back disabled.
+      await waitUntil(
+        () => invokeCalls.some((c) => c.command === 'sync_app_menu'),
+        'the enabled state to be re-pushed after the rebuild'
+      );
+    } finally {
+      await setAppLocale('en');
+    }
+  });
+
+  it('does not relabel the native menu for unrelated settings changes', () => {
+    const el = shell('/repo/active');
+
+    (el as any).handleSettingsChanged();
+
+    expect(invokeCalls.some((c) => c.command === 'set_app_menu_labels')).to.be.false;
+  });
+
+  it('does not relabel the native menu when the locale did not change', () => {
+    // The event fires on every language application, including re-applying the
+    // current one (a persisted locale at startup, a reset to defaults); only a
+    // real change is worth rebuilding the native menu for.
+    const el = shell('/repo/active');
+
+    (el as any).handleAppLanguageChanged();
+
+    expect(invokeCalls.some((c) => c.command === 'set_app_menu_labels')).to.be.false;
   });
 
   it('does not run an action twice when the webview also saw the accelerator', () => {

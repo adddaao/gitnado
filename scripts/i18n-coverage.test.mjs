@@ -10,8 +10,9 @@
  * The previous guard was a hand-maintained list of ~20 source strings, so any
  * string it did not name could drift green. This one derives both sides:
  * every `msg()` call site in `src/**` against every entry in the generated
- * French bundle, and asserts set equality in both directions — a source string
- * with no translation AND a translation with no source string both fail.
+ * bundle of every locale `lit-localize.json` declares, and asserts set equality
+ * in both directions — a source string with no translation AND a translation
+ * with no source string both fail, for each locale.
  */
 
 import assert from 'node:assert/strict';
@@ -23,14 +24,17 @@ import {
   EXPECTED_INPUT_FILES,
   collectLocalisedFiles,
   collectSourceMessages,
-  collectTemplateIds,
-  collectXliffIds,
+  collectTemplateIdsFor,
+  collectXliffIdsFor,
   collectXliffSources,
   configuredInputFiles,
   difference,
   documentedLocalisedFiles,
   extractMessages,
+  hasLocaleArtifacts,
   listSourceFiles,
+  targetLocales,
+  xliffFile,
 } from './i18n-coverage.mjs';
 
 // ---------------------------------------------------------------------------
@@ -104,18 +108,29 @@ test('scans exactly the files lit-localize is configured to extract from', () =>
 // ---------------------------------------------------------------------------
 // The contract
 // ---------------------------------------------------------------------------
+//
+// Every assertion here runs once per locale `lit-localize.json` declares, so a
+// newly added language is gated the moment it is configured — it cannot ride
+// along half-translated while only the oldest locale is checked.
 
+const LOCALES = targetLocales();
 const { byId: sourceMessages, unanalysable } = collectSourceMessages();
 const sourceIds = new Set(sourceMessages.keys());
-const xliffSources = collectXliffSources();
-const describe = (id) => {
+
+/**
+ * A human-readable identity for an id that a failure report names. Reads that
+ * locale's own XLIFF so a stale translation quotes the source text it was
+ * written against, which is what tells a maintainer whether to re-point it or
+ * delete it.
+ */
+function describe(id, locale) {
   const message = sourceMessages.get(id);
   if (message) return `  ${id}  ${JSON.stringify(message.source)}\n    ${message.file}:${message.line}`;
-  const stale = xliffSources.get(id);
+  const stale = collectXliffSources(xliffFile(locale)).get(id);
   return stale === undefined
     ? `  ${id}  (no msg() call site, and no source recorded in the XLIFF)`
     : `  ${id}  translated against ${JSON.stringify(stale)}\n    no msg() call site produces that text any more`;
-};
+}
 
 test('every msg() call site is statically extractable', () => {
   assert.deepEqual(
@@ -125,30 +140,59 @@ test('every msg() call site is statically extractable', () => {
   );
 });
 
-test('every msg() source string has a French translation', () => {
-  const missing = difference(sourceIds, collectTemplateIds());
+test('every locale the app ships has both halves of its pipeline on disk', () => {
+  assert.ok(LOCALES.length > 0, 'lit-localize.json declares at least one target locale');
+  const missing = LOCALES.filter((locale) => !hasLocaleArtifacts(locale));
   assert.deepEqual(
     missing,
     [],
-    `${missing.length} string(s) render English under "fr" because nothing in ` +
-      `src/i18n/generated/locales/fr.ts answers their id. Add a trans-unit to ` +
-      `src/i18n/xliff/fr.xlf and the matching entry to the bundle:\n` +
-      missing.map(describe).join('\n')
+    `lit-localize.json declares ${missing.map((locale) => `"${locale}"`).join(', ')} but ` +
+      `src/i18n/xliff/<locale>.xlf and/or src/i18n/generated/locales/<locale>.ts is missing. ` +
+      `Run \`npm run localize:extract\`, translate the new XLIFF, then \`npm run localize:build\`.`
   );
 });
 
-test('every French translation still has a msg() source string', () => {
-  const orphaned = difference(collectTemplateIds(), sourceIds);
-  assert.deepEqual(
-    orphaned,
-    [],
-    `${orphaned.length} translation(s) in src/i18n/generated/locales/fr.ts are ` +
-      `dead — no msg() call site hashes to their id, so the source text was ` +
-      `re-worded or removed. Re-point or delete them (and their trans-unit in ` +
-      `src/i18n/xliff/fr.xlf):\n` +
-      orphaned.map(describe).join('\n')
-  );
-});
+for (const locale of LOCALES) {
+  test(`every msg() source string has a "${locale}" translation`, () => {
+    const missing = difference(sourceIds, collectTemplateIdsFor(locale));
+    assert.deepEqual(
+      missing,
+      [],
+      `${missing.length} string(s) render English under "${locale}" because nothing in ` +
+        `src/i18n/generated/locales/${locale}.ts answers their id. Add a trans-unit to ` +
+        `src/i18n/xliff/${locale}.xlf and the matching entry to the bundle:\n` +
+        missing.map((id) => describe(id, locale)).join('\n')
+    );
+  });
+
+  test(`every "${locale}" translation still has a msg() source string`, () => {
+    const orphaned = difference(collectTemplateIdsFor(locale), sourceIds);
+    assert.deepEqual(
+      orphaned,
+      [],
+      `${orphaned.length} translation(s) in src/i18n/generated/locales/${locale}.ts are ` +
+        `dead — no msg() call site hashes to their id, so the source text was ` +
+        `re-worded or removed. Re-point or delete them (and their trans-unit in ` +
+        `src/i18n/xliff/${locale}.xlf):\n` +
+        orphaned.map((id) => describe(id, locale)).join('\n')
+    );
+  });
+
+  test(`the "${locale}" XLIFF and generated bundle carry the same ids`, () => {
+    const templates = collectTemplateIdsFor(locale);
+    const xliff = collectXliffIdsFor(locale);
+    assert.deepEqual(
+      difference(xliff, templates),
+      [],
+      `translated in src/i18n/xliff/${locale}.xlf but missing from the generated bundle — re-run lit-localize build`
+    );
+    assert.deepEqual(
+      difference(templates, xliff),
+      [],
+      `in the generated bundle but not in src/i18n/xliff/${locale}.xlf — the bundle was hand-edited`
+    );
+  });
+}
 
 test('docs/localisation.md names exactly the files that are localised', () => {
   // The doc is what a maintainer reads before re-wording a label, and it went
@@ -161,20 +205,5 @@ test('docs/localisation.md names exactly the files that are localised', () => {
     'the "What is localised today" list in docs/localisation.md no longer matches the ' +
       'files that contain msg() calls — add (or remove) a bullet whose first backticked ' +
       'value is the repo-relative path'
-  );
-});
-
-test('the XLIFF and the generated bundle carry the same ids', () => {
-  const templates = collectTemplateIds();
-  const xliff = collectXliffIds();
-  assert.deepEqual(
-    difference(xliff, templates),
-    [],
-    'translated in src/i18n/xliff/fr.xlf but missing from the generated bundle — re-run lit-localize build'
-  );
-  assert.deepEqual(
-    difference(templates, xliff),
-    [],
-    'in the generated bundle but not in src/i18n/xliff/fr.xlf — the bundle was hand-edited'
   );
 });

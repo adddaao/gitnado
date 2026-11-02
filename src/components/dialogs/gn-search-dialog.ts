@@ -27,6 +27,7 @@ import type {
 } from '../../services/git.service.ts';
 import { pushOverlay, removeOverlay, isTopOverlay } from '../../utils/overlay-stack.ts';
 import { containsDeepActiveElement } from '../../utils/focus.ts';
+import { localized, msg, str } from '@lit/localize';
 
 export type SearchDialogMode = 'files' | 'diff' | 'commits';
 
@@ -39,6 +40,7 @@ const UTF8_ENCODER = new TextEncoder();
 const UTF8_DECODER = new TextDecoder();
 
 @customElement('gn-search-dialog')
+@localized()
 export class GnSearchDialog extends LitElement {
   static styles = [
     sharedStyles,
@@ -616,7 +618,7 @@ export class GnSearchDialog extends LitElement {
    * still looking at.
    */
   private fail(message?: string): void {
-    this.error = message ?? 'Search failed';
+    this.error = message ?? msg('Search failed');
     this.fileResults = [];
     this.diffResults = [];
     this.commitResults = [];
@@ -679,11 +681,13 @@ export class GnSearchDialog extends LitElement {
               <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
             </svg>
             <div>
-              <div class="title">Search</div>
-              <div class="subtitle">Find text in files, in the current diff, or in history</div>
+              <div class="title">${msg('Search')}</div>
+              <div class="subtitle">
+                ${msg('Find text in files, in the current diff, or in history')}
+              </div>
             </div>
           </div>
-          <button class="close-btn" @click=${this.close} aria-label="Close search">
+          <button class="close-btn" @click=${this.close} aria-label=${msg('Close search')}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <line x1="18" y1="6" x2="6" y2="18"></line>
               <line x1="6" y1="6" x2="18" y2="18"></line>
@@ -695,9 +699,9 @@ export class GnSearchDialog extends LitElement {
           <div class="modes">
             ${(
               [
-                ['files', 'Files'],
-                ['diff', 'Diff'],
-                ['commits', 'Commits'],
+                ['files', msg('Files')],
+                ['diff', msg('Diff')],
+                ['commits', msg('Commits')],
               ] as Array<[SearchDialogMode, string]>
             ).map(
               ([value, label]) => html`
@@ -718,11 +722,11 @@ export class GnSearchDialog extends LitElement {
               class="query-input"
               type="text"
               placeholder=${this.mode === 'files'
-                ? 'Search tracked files…'
+                ? msg('Search tracked files…')
                 : this.mode === 'diff'
-                  ? 'Search the current diff…'
-                  : 'Find commits that added or removed…'}
-              aria-label="Search query"
+                  ? msg('Search the current diff…')
+                  : msg('Find commits that added or removed…')}
+              aria-label=${msg('Search query')}
               .value=${this.query}
               @input=${(e: InputEvent) => {
                 this.query = (e.target as HTMLInputElement).value;
@@ -734,7 +738,7 @@ export class GnSearchDialog extends LitElement {
               ?disabled=${!this.canSearch}
               @click=${() => void this.runSearch()}
             >
-              ${this.searching ? 'Searching…' : 'Search'}
+              ${this.searching ? msg('Searching…') : msg('Search')}
             </button>
           </div>
 
@@ -758,7 +762,7 @@ export class GnSearchDialog extends LitElement {
               this.caseSensitive = (e.target as HTMLInputElement).checked;
             }}
           />
-          Case sensitive
+          ${msg('Case sensitive')}
         </label>
         <label>
           <input
@@ -769,13 +773,13 @@ export class GnSearchDialog extends LitElement {
               this.useRegex = (e.target as HTMLInputElement).checked;
             }}
           />
-          Regex
+          ${msg('Regex')}
         </label>
         <input
           class="pattern-input"
           type="text"
-          placeholder="File pattern (e.g. *.ts)"
-          aria-label="File pattern"
+          placeholder=${msg('File pattern (e.g. *.ts)')}
+          aria-label=${msg('File pattern')}
           .value=${this.filePattern}
           @input=${(e: InputEvent) => {
             this.filePattern = (e.target as HTMLInputElement).value;
@@ -797,7 +801,7 @@ export class GnSearchDialog extends LitElement {
               this.staged = false;
             }}
           />
-          Unstaged
+          ${msg('Unstaged')}
         </label>
         <label>
           <input
@@ -809,7 +813,7 @@ export class GnSearchDialog extends LitElement {
               this.staged = true;
             }}
           />
-          Staged
+          ${msg('Staged')}
         </label>
       `;
     }
@@ -824,7 +828,7 @@ export class GnSearchDialog extends LitElement {
             this.useRegex = (e.target as HTMLInputElement).checked;
           }}
         />
-        Regex
+        ${msg('Regex')}
       </label>
       <label>
         <input
@@ -835,25 +839,25 @@ export class GnSearchDialog extends LitElement {
             this.ignoreCase = (e.target as HTMLInputElement).checked;
           }}
         />
-        Ignore case
+        ${msg('Ignore case')}
       </label>
     `;
   }
 
   private renderResults() {
-    if (this.searching) return html`<div class="status">Searching…</div>`;
+    if (this.searching) return html`<div class="status">${msg('Searching…')}</div>`;
     if (this.error) return html`<div class="error">${this.error}</div>`;
 
     const notice = this.repoChanged
-      ? html`<div class="notice">Repository changed — run the search again</div>`
+      ? html`<div class="notice">${msg('Repository changed — run the search again')}</div>`
       : nothing;
 
     if (!this.searched) {
       return html`${notice}
-        <div class="status">Enter a search and press Enter.</div>`;
+        <div class="status">${msg('Enter a search and press Enter.')}</div>`;
     }
     if (!this.hasResults) {
-      return html`${notice}<div class="empty">No matches found</div>`;
+      return html`${notice}<div class="empty">${msg('No matches found')}</div>`;
     }
 
     return html`
@@ -871,18 +875,28 @@ export class GnSearchDialog extends LitElement {
     if (this.mode === 'files') {
       const files = this.fileResults.length;
       const matches = this.totalFileMatches;
-      const base = `${matches} ${matches === 1 ? 'match' : 'matches'} in ${files} ${
-        files === 1 ? 'file' : 'files'
-      }`;
-      return this.capped ? `${base} — showing the first ${FILE_MATCH_CAP}, narrow your search` : base;
+      const base =
+        matches === 1
+          ? files === 1
+            ? msg(str`${matches} match in ${files} file`)
+            : msg(str`${matches} match in ${files} files`)
+          : files === 1
+            ? msg(str`${matches} matches in ${files} file`)
+            : msg(str`${matches} matches in ${files} files`);
+      return this.capped ? base + this.cappedSuffix(FILE_MATCH_CAP) : base;
     }
     if (this.mode === 'diff') {
       const n = this.diffResults.length;
-      return `${n} ${n === 1 ? 'match' : 'matches'}`;
+      return n === 1 ? msg(str`${n} match`) : msg(str`${n} matches`);
     }
     const n = this.commitResults.length;
-    const base = `${n} ${n === 1 ? 'commit' : 'commits'}`;
-    return this.capped ? `${base} — showing the first ${COMMIT_CAP}, narrow your search` : base;
+    const base = n === 1 ? msg(str`${n} commit`) : msg(str`${n} commits`);
+    return this.capped ? base + this.cappedSuffix(COMMIT_CAP) : base;
+  }
+
+  /** The clause appended to a capped result count; carries no inflection. */
+  private cappedSuffix(cap: number): string {
+    return msg(str` — showing the first ${cap}, narrow your search`);
   }
 
   private renderRowButton(onActivate: () => void, extraClass: string, body: unknown) {

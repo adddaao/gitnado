@@ -5,6 +5,7 @@
 
 import { LitElement, html, css, nothing } from 'lit';
 import { customElement, property, state, query } from 'lit/decorators.js';
+import { localized, msg } from '@lit/localize';
 import { sharedStyles } from '../../styles/shared-styles.ts';
 import * as aiService from '../../services/ai.service.ts';
 import * as gitService from '../../services/git.service.ts';
@@ -13,6 +14,7 @@ import { showToast } from '../../services/notification.service.ts';
 import './gn-modal.ts';
 
 @customElement('gn-changelog-dialog')
+@localized()
 export class GnChangelogDialog extends LitElement {
   static styles = [
     sharedStyles,
@@ -260,7 +262,7 @@ export class GnChangelogDialog extends LitElement {
         this.baseRef = '';
         this.compareRef = 'HEAD';
         if (!result.success) {
-          this.error = result.error?.message || 'Failed to load tags';
+          this.error = result.error?.message || msg('Failed to load tags');
         }
       }
     } catch (e) {
@@ -268,14 +270,14 @@ export class GnChangelogDialog extends LitElement {
         this.tags = [];
         this.baseRef = '';
         this.compareRef = 'HEAD';
-        this.error = e instanceof Error ? e.message : 'Failed to load tags';
+        this.error = e instanceof Error ? e.message : msg('Failed to load tags');
       }
     }
   }
 
   private async handleGenerate(): Promise<void> {
     if (!this.baseRef) {
-      this.error = 'Please select a base ref (e.g., a previous tag)';
+      this.error = msg('Please select a base ref (e.g., a previous tag)');
       return;
     }
 
@@ -292,7 +294,7 @@ export class GnChangelogDialog extends LitElement {
     if (changelogResult.success && changelogResult.data) {
       this.result = changelogResult.data.content;
     } else {
-      this.error = changelogResult.error?.message ?? 'Failed to generate changelog';
+      this.error = changelogResult.error?.message ?? msg('Failed to generate changelog');
       showToast(this.error, 'error');
     }
 
@@ -302,9 +304,9 @@ export class GnChangelogDialog extends LitElement {
   private async handleCopy(): Promise<void> {
     try {
       await navigator.clipboard.writeText(this.result);
-      showToast('Changelog copied to clipboard', 'success');
+      showToast(msg('Changelog copied to clipboard'), 'success');
     } catch {
-      showToast('Failed to copy to clipboard', 'error');
+      showToast(msg('Failed to copy to clipboard'), 'error');
     }
   }
 
@@ -323,20 +325,20 @@ export class GnChangelogDialog extends LitElement {
   render() {
     return html`
       <gn-modal
-        modalTitle="Generate Changelog"
+        modalTitle=${msg('Generate Changelog')}
         @close=${this.handleModalClose}
       >
         <div class="form">
           <div class="ref-row">
             <div class="field">
-              <label>From (base ref)</label>
+              <label>${msg('From (base ref)')}</label>
               ${this.tags.length > 0 ? html`
                 <select
                   .value=${this.baseRef}
                   @change=${(e: Event) => { this.baseRef = (e.target as HTMLSelectElement).value; }}
                   ?disabled=${this.isGenerating}
                 >
-                  <option value="">Select a tag...</option>
+                  <option value="">${msg('Select a tag...')}</option>
                   ${this.tags.map(tag => html`
                     <option value=${tag.name} ?selected=${tag.name === this.baseRef}>${tag.name}</option>
                   `)}
@@ -344,7 +346,7 @@ export class GnChangelogDialog extends LitElement {
               ` : html`
                 <input
                   type="text"
-                  placeholder="v0.2.71 or commit SHA"
+                  placeholder=${msg('v0.2.71 or commit SHA')}
                   .value=${this.baseRef}
                   @input=${(e: Event) => { this.baseRef = (e.target as HTMLInputElement).value; }}
                   ?disabled=${this.isGenerating}
@@ -352,7 +354,7 @@ export class GnChangelogDialog extends LitElement {
               `}
             </div>
             <div class="field">
-              <label>To (compare ref)</label>
+              <label>${msg('To (compare ref)')}</label>
               <input
                 type="text"
                 placeholder="HEAD"
@@ -366,7 +368,7 @@ export class GnChangelogDialog extends LitElement {
           ${!this.aiAvailable ? html`
             <div class="ai-warning">
               ${this.aiUnavailableReason ||
-                'No AI provider available. Configure one in Settings > AI Providers.'}
+                msg('No AI provider available. Configure one in Settings > AI Providers.')}
             </div>
           ` : nothing}
 
@@ -377,20 +379,20 @@ export class GnChangelogDialog extends LitElement {
           ${this.isGenerating ? html`
             <div class="generating">
               <div class="spinner"></div>
-              Generating changelog...
+              ${msg('Generating changelog...')}
             </div>
           ` : nothing}
 
           ${this.result ? html`
             <div class="result-area">
               <div class="result-header">
-                <span class="result-label">Generated Changelog</span>
+                <span class="result-label">${msg('Generated Changelog')}</span>
                 <button class="copy-btn" @click=${this.handleCopy}>
                   <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
                     <path d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 010 1.5h-1.5a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-1.5a.75.75 0 011.5 0v1.5A1.75 1.75 0 019.25 16h-7.5A1.75 1.75 0 010 14.25v-7.5z"/>
                     <path d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0114.25 11h-7.5A1.75 1.75 0 015 9.25v-7.5zm1.75-.25a.25.25 0 00-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 00.25-.25v-7.5a.25.25 0 00-.25-.25h-7.5z"/>
                   </svg>
-                  Copy
+                  ${msg('Copy')}
                 </button>
               </div>
               <textarea class="result" .value=${this.result} readonly></textarea>
@@ -404,7 +406,7 @@ export class GnChangelogDialog extends LitElement {
             @click=${this.handleGenerate}
             ?disabled=${this.isGenerating || !this.aiAvailable || !this.baseRef}
           >
-            ${this.isGenerating ? 'Generating...' : 'Generate'}
+            ${this.isGenerating ? msg('Generating...') : msg('Generate')}
           </button>
         </div>
       </gn-modal>

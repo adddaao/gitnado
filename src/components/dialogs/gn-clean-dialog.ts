@@ -11,6 +11,7 @@ import type { CleanEntry } from '../../services/git.service.ts';
 import { showToast } from '../../services/notification.service.ts';
 import { showConfirm } from '../../services/dialog.service.ts';
 import { pushOverlay, removeOverlay, isTopOverlay } from '../../utils/overlay-stack.ts';
+import { localized, msg, str } from '@lit/localize';
 import { containsDeepActiveElement } from '../../utils/focus.ts';
 import {
   tryAcquireRefOp,
@@ -20,6 +21,7 @@ import {
 } from '../../utils/ref-lock.ts';
 
 @customElement('gn-clean-dialog')
+@localized()
 export class GnCleanDialog extends LitElement {
   static styles = [
     sharedStyles,
@@ -437,11 +439,11 @@ export class GnCleanDialog extends LitElement {
           this.entries.filter(e => !e.isNestedRepo).map(e => e.path)
         );
       } else if (!result.success) {
-        showToast(result.error?.message || 'Failed to load cleanable files', 'error');
+        showToast(result.error?.message || msg('Failed to load cleanable files'), 'error');
       }
     } catch (err) {
       console.error('Failed to load cleanable files:', err);
-      showToast('Failed to load cleanable files', 'error');
+      showToast(msg('Failed to load cleanable files'), 'error');
     } finally {
       this.loading = false;
     }
@@ -536,7 +538,7 @@ export class GnCleanDialog extends LitElement {
     // rebase mutate, and the backend takes no per-repo lock — so this joins the
     // shared one rather than guarding only itself.
     if (!tryAcquireRefOp(repoPath)) {
-      showToast('Another operation is already running in this repository.', 'warning');
+      showToast(msg('Another operation is already running in this repository.'), 'warning');
       return;
     }
     this.cleaning = true;
@@ -559,9 +561,14 @@ export class GnCleanDialog extends LitElement {
     // not be the ungated route. The dialog's checkboxes are a selection UI,
     // not a confirmation.
     const confirmedDelete = await showConfirm(
-      'Delete Untracked Files',
-      `Permanently delete ${paths.length} item${paths.length === 1 ? '' : 's'}? ` +
-        `They are not in Git and cannot be recovered.`,
+      msg('Delete Untracked Files'),
+      paths.length === 1
+        ? msg(
+            str`Permanently delete ${paths.length} item? They are not in Git and cannot be recovered.`
+          )
+        : msg(
+            str`Permanently delete ${paths.length} items? They are not in Git and cannot be recovered.`
+          ),
       'warning'
     );
     if (!confirmedDelete) {
@@ -577,11 +584,15 @@ export class GnCleanDialog extends LitElement {
       const names = nestedRepos.map(e => e.path).join(', ');
       const confirmed = await showConfirm(
         nestedRepos.length === 1
-          ? 'Delete Nested Repository'
-          : 'Delete Nested Repositories',
-        `${nestedRepos.length === 1 ? 'A nested git repository' : 'Nested git repositories'} ` +
-          `(${names}) will be permanently deleted, including all its history. ` +
-          `This cannot be undone. Continue?`,
+          ? msg('Delete Nested Repository')
+          : msg('Delete Nested Repositories'),
+        nestedRepos.length === 1
+          ? msg(
+              str`A nested git repository (${names}) will be permanently deleted, including all its history. This cannot be undone. Continue?`
+            )
+          : msg(
+              str`Nested git repositories (${names}) will be permanently deleted, including all its history. This cannot be undone. Continue?`
+            ),
         'warning'
       );
       if (!confirmed) {
@@ -605,8 +616,12 @@ export class GnCleanDialog extends LitElement {
         const shortfall = paths.length - removed;
         showToast(
           shortfall > 0
-            ? `Deleted ${removed} of ${paths.length} items — ${shortfall} could not be removed`
-            : `Deleted ${removed} item${removed === 1 ? '' : 's'}`,
+            ? msg(
+                str`Deleted ${removed} of ${paths.length} items — ${shortfall} could not be removed`
+              )
+            : removed === 1
+              ? msg(str`Deleted ${removed} item`)
+              : msg(str`Deleted ${removed} items`),
           shortfall > 0 ? 'warning' : 'success'
         );
 
@@ -619,11 +634,11 @@ export class GnCleanDialog extends LitElement {
         }));
         this.close();
       } else {
-        showToast(result.error?.message ?? 'Clean operation failed', 'error');
+        showToast(result.error?.message ?? msg('Clean operation failed'), 'error');
       }
     } catch (err) {
       console.error('Clean failed:', err);
-      showToast('Clean operation failed', 'error');
+      showToast(msg('Clean operation failed'), 'error');
     } finally {
       this.cleaning = false;
       releaseRefOp(repoPath);
@@ -670,11 +685,11 @@ export class GnCleanDialog extends LitElement {
         `}
         <div class="file-info">
           <span class="file-path" title="${entry.path}">${entry.path}</span>
-          ${entry.isIgnored ? html`<span class="file-badge ignored">ignored</span>` : nothing}
+          ${entry.isIgnored ? html`<span class="file-badge ignored">${msg('ignored')}</span>` : nothing}
           ${entry.isNestedRepo
-            ? html`<span class="file-badge nested-repo">nested repo</span>`
+            ? html`<span class="file-badge nested-repo">${msg('nested repo')}</span>`
             : entry.isDirectory
-              ? html`<span class="file-badge directory">dir</span>`
+              ? html`<span class="file-badge directory">${msg('dir')}</span>`
               : nothing}
         </div>
         ${entry.size !== null ? html`
@@ -697,7 +712,7 @@ export class GnCleanDialog extends LitElement {
               <polyline points="3 6 5 6 21 6"></polyline>
               <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"></path>
             </svg>
-            <span class="title">Clean Working Directory</span>
+            <span class="title">${msg('Clean Working Directory')}</span>
           </div>
           <button class="close-btn" @click=${this.dismiss}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -713,7 +728,7 @@ export class GnCleanDialog extends LitElement {
             <line x1="12" y1="9" x2="12" y2="13"></line>
             <line x1="12" y1="17" x2="12.01" y2="17"></line>
           </svg>
-          <span>This will permanently delete selected files. This action cannot be undone.</span>
+          <span>${msg('This will permanently delete selected files. This action cannot be undone.')}</span>
         </div>
 
         <div class="options">
@@ -726,7 +741,7 @@ export class GnCleanDialog extends LitElement {
                 this.handleOptionChange();
               }}
             />
-            Include ignored files
+            ${msg('Include ignored files')}
           </label>
           <label class="option">
             <input
@@ -737,7 +752,7 @@ export class GnCleanDialog extends LitElement {
                 this.handleOptionChange();
               }}
             />
-            Include directories
+            ${msg('Include directories')}
           </label>
         </div>
 
@@ -749,13 +764,15 @@ export class GnCleanDialog extends LitElement {
               .indeterminate=${someSelected && !allSelected}
               @change=${() => this.toggleAll()}
             />
-            <span>Select all (${this.entries.length} ${this.entries.length === 1 ? 'item' : 'items'})</span>
+            <span>${this.entries.length === 1
+                ? msg(str`Select all (${this.entries.length} item)`)
+                : msg(str`Select all (${this.entries.length} items)`)}</span>
           </div>
         ` : nothing}
 
         <div class="content">
           ${this.loading
-            ? html`<div class="loading">Scanning for untracked files...</div>`
+            ? html`<div class="loading">${msg('Scanning for untracked files...')}</div>`
             : this.entries.length === 0
               ? html`
                   <div class="empty">
@@ -763,9 +780,9 @@ export class GnCleanDialog extends LitElement {
                       <path d="M22 11.08V12a10 10 0 11-5.93-9.14"></path>
                       <polyline points="22 4 12 14.01 9 11.01"></polyline>
                     </svg>
-                    <div>Working directory is clean</div>
+                    <div>${msg('Working directory is clean')}</div>
                     <div style="font-size: var(--font-size-xs); margin-top: var(--spacing-xs);">
-                      No untracked files to remove
+                      ${msg('No untracked files to remove')}
                     </div>
                   </div>
                 `
@@ -780,9 +797,9 @@ export class GnCleanDialog extends LitElement {
         <div class="footer">
           <div class="footer-left">
             ${someSelected ? html`
-              ${this.selectedPaths.size} selected
+              ${msg(str`${this.selectedPaths.size} selected`)}
               ${this.getTotalSize() > 0 ? html` (${this.formatSize(this.getTotalSize())})` : nothing}
-            ` : html`No files selected`}
+            ` : html`${msg('No files selected')}`}
           </div>
           <div class="footer-right">
             <!-- Cancel destroys nothing, so it is gated on this dialog's own
@@ -791,13 +808,15 @@ export class GnCleanDialog extends LitElement {
                  obvious way to close the dialog whenever anything else touched
                  the repo, which reads as a broken dialog. dismiss() already
                  guards itself on the cleaning flag alone. -->
-            <button class="btn btn-secondary" ?disabled=${this.cleaning} @click=${this.dismiss}>Cancel</button>
+            <button class="btn btn-secondary" ?disabled=${this.cleaning} @click=${this.dismiss}>${msg(
+              'Cancel'
+            )}</button>
             <button
               class="btn btn-danger"
               ?disabled=${!someSelected || this.cleaning || isRefOpRunning(this.pinnedRepoPath)}
               @click=${this.handleClean}
             >
-              ${this.cleaning ? 'Cleaning...' : 'Delete Selected'}
+              ${this.cleaning ? msg('Cleaning...') : msg('Delete Selected')}
             </button>
           </div>
         </div>

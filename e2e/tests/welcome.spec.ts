@@ -763,11 +763,23 @@ test.describe('Session restore', () => {
             })
           );
         }
-        if (!localStorage.getItem('gitnado-settings')) {
+        // This blob is about session restore, but the app's fresh-install
+        // default is Chinese, so pin the language too. Seeded once per test:
+        // several of these tests reload the page, and rewriting the blob on
+        // every navigation would undo the store write they are testing.
+        if (!localStorage.getItem('gitnado-e2e-session-seeded')) {
+          const stored = JSON.parse(localStorage.getItem('gitnado-settings') ?? '{}') as {
+            state?: Record<string, unknown>;
+            version?: number;
+          };
           localStorage.setItem(
             'gitnado-settings',
-            JSON.stringify({ state: { openLastRepository }, version: 7 })
+            JSON.stringify({
+              state: { ...stored.state, language: 'en', openLastRepository },
+              version: stored.version ?? 7,
+            })
           );
+          localStorage.setItem('gitnado-e2e-session-seeded', '1');
         }
       },
       { openLastRepository, path: RESTORED_PATH }
@@ -1338,9 +1350,10 @@ test.describe('Language setting', () => {
   test('offers every locale the app ships', async ({ page }) => {
     await openSettings(page);
     const options = languageSelect(page).locator('option');
-    await expect(options).toHaveCount(2);
+    await expect(options).toHaveCount(3);
     await expect(options.nth(0)).toHaveText('English');
     await expect(options.nth(1)).toHaveText('Français');
+    await expect(options.nth(2)).toHaveText('中文');
     await expect(languageSelect(page)).toHaveValue('en');
   });
 
@@ -1360,6 +1373,27 @@ test.describe('Language setting', () => {
     // The Open/Clone/Init actions, in order — the page object finds them by
     // their English text, which is exactly what has just changed.
     await expect(app.welcomeScreen.locator('.action-btn').first()).toContainText('Ouvrir');
+
+    const survived = await page.evaluate(
+      () => (window as unknown as Record<string, unknown>).__NO_RELOAD__ === true
+    );
+    expect(survived, 'the page was never reloaded').toBe(true);
+  });
+
+  test('switching to Chinese re-renders the app without a reload', async ({ page }) => {
+    // A sentinel that only survives if the document is never reloaded.
+    await page.evaluate(() => {
+      (window as unknown as Record<string, unknown>).__NO_RELOAD__ = true;
+    });
+
+    await openSettings(page);
+    await languageSelect(page).selectOption('zh');
+
+    // The dialog the user is looking at...
+    await expect(page.locator('gn-settings-dialog .section-title').first()).toHaveText('外观');
+    // ...and the welcome screen behind it, both in the new language.
+    await expect(app.welcomeTagline).toHaveText('功能强大的开源 Git 客户端');
+    await expect(app.welcomeScreen.locator('.action-btn').first()).toContainText('打开');
 
     const survived = await page.evaluate(
       () => (window as unknown as Record<string, unknown>).__NO_RELOAD__ === true
@@ -1487,19 +1521,23 @@ test.describe('Initialize a repository here - with a repository already open', (
 });
 
 /**
- * The language a user ends up in on first launch after an UPGRADE. The system
- * locale is what a FRESH install starts from; an install that has been running
- * in English must not be switched to another language by an update.
+ * The language a user ends up in on first launch and after an UPGRADE. Chinese
+ * is the fresh-install default — NOT the system language — while an install
+ * that has been running in English must not be switched by an update.
  */
-test.describe('Language on a French-locale machine', () => {
+test.describe('Language on first launch and after an upgrade', () => {
   test.use({ locale: 'fr-FR' });
 
-  test('a fresh install follows the system language', async ({ page }) => {
-    await setupTauriMocks(page, emptyRepository());
+  test('a fresh install opens in Chinese, whatever the system language is', async ({ page }) => {
+    // No persisted settings at all: this is a first launch. (The e2e fixture
+    // seeds an English choice for the specs that assert English, so opt out.)
+    await setupTauriMocks(page, emptyRepository(), { seedLanguage: false });
     const app = new AppPage(page);
     await app.goto();
 
-    await expect(app.welcomeTagline).toHaveText('Un client Git puissant et open source');
+    await expect(app.welcomeTagline).toHaveText('功能强大的开源 Git 客户端');
+    await page.keyboard.press('Meta+,');
+    await expect(page.locator('gn-settings-dialog #language-select')).toHaveValue('zh');
   });
 
   test('an upgrade keeps the English the user has always had', async ({ page }) => {

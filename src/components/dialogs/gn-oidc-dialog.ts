@@ -11,6 +11,7 @@
 
 import { LitElement, html, css, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
+import { localized, msg, str } from '@lit/localize';
 import { sharedStyles } from '../../styles/shared-styles.ts';
 import { showToast } from '../../services/notification.service.ts';
 import { showConfirm } from '../../services/dialog.service.ts';
@@ -31,6 +32,7 @@ import './gn-modal.ts';
 import './gn-account-selector.ts';
 
 @customElement('gn-oidc-dialog')
+@localized()
 export class GnOidcDialog extends LitElement {
   static styles = [
     sharedStyles,
@@ -297,7 +299,7 @@ export class GnOidcDialog extends LitElement {
         // A failed/denied sign-in clears the pending spinner — surface the error
         // so the user isn't left staring at a silently reset form (dead-end).
         if (state.status === 'error') {
-          this.error = state.error ?? 'Enterprise SSO sign-in failed';
+          this.error = state.error ?? msg('Enterprise SSO sign-in failed');
           showToast(this.error, 'error');
           // The flow is over and can no longer emit `oauth-complete`, so release
           // the pinned target — otherwise a later completion would be attributed
@@ -394,7 +396,7 @@ export class GnOidcDialog extends LitElement {
         );
       }
     } catch (err) {
-      this.error = err instanceof Error ? err.message : 'Failed to load accounts';
+      this.error = err instanceof Error ? err.message : msg('Failed to load accounts');
     } finally {
       this.isLoading = false;
     }
@@ -445,7 +447,7 @@ export class GnOidcDialog extends LitElement {
   private async handleDiscover(): Promise<void> {
     const issuerUrl = this.issuerUrlInput.trim();
     if (!issuerUrl) {
-      this.error = 'Enter an issuer URL to discover.';
+      this.error = msg('Enter an issuer URL to discover.');
       return;
     }
 
@@ -455,7 +457,7 @@ export class GnOidcDialog extends LitElement {
       this.discovery = await oauthService.discoverOidcProvider(issuerUrl);
     } catch (err) {
       this.discovery = null;
-      this.error = err instanceof Error ? err.message : 'Failed to discover OIDC provider';
+      this.error = err instanceof Error ? err.message : msg('Failed to discover OIDC provider');
     } finally {
       this.isLoading = false;
     }
@@ -469,7 +471,7 @@ export class GnOidcDialog extends LitElement {
     const issuerUrl = this.issuerUrlInput.trim();
     const clientId = this.clientIdInput.trim();
     if (!issuerUrl || !clientId) {
-      this.error = 'Issuer URL and Client ID are required to sign in.';
+      this.error = msg('Issuer URL and Client ID are required to sign in.');
       return;
     }
 
@@ -540,8 +542,9 @@ export class GnOidcDialog extends LitElement {
     try {
       await unifiedProfileService.loadUnifiedProfiles();
       if (!targetAccountExists()) {
-        this.error =
-          'The Enterprise SSO account was removed before sign-in completed. Please sign in again.';
+        this.error = msg(
+          'The Enterprise SSO account was removed before sign-in completed. Please sign in again.',
+        );
         showToast(this.error, 'error');
         return;
       }
@@ -611,8 +614,9 @@ export class GnOidcDialog extends LitElement {
           // Deleted while the token was being written — don't leave an orphaned
           // keyring entry behind for an account that no longer exists.
           await credentialService.deleteAccountToken('oidc', existingAccount.id);
-          this.error =
-            'The Enterprise SSO account was removed before sign-in completed. Please sign in again.';
+          this.error = msg(
+            'The Enterprise SSO account was removed before sign-in completed. Please sign in again.',
+          );
           showToast(this.error, 'error');
           return;
         }
@@ -631,8 +635,8 @@ export class GnOidcDialog extends LitElement {
         const displayName =
           this.nameInput.trim() ||
           (user?.preferredUsername
-            ? `Enterprise SSO (${user.preferredUsername})`
-            : 'Enterprise SSO');
+            ? msg(str`Enterprise SSO (${user.preferredUsername})`)
+            : msg('Enterprise SSO'));
         const newAccount: IntegrationAccount = {
           ...createEmptyIntegrationAccount('oidc', issuerUrl),
           id: generateId(),
@@ -675,9 +679,9 @@ export class GnOidcDialog extends LitElement {
         this.oauthState = { status: 'idle' };
         showToast(
           user?.preferredUsername
-            ? `Connected Enterprise SSO (${user.preferredUsername})`
-            : 'Connected Enterprise SSO account',
-          'success'
+            ? msg(str`Connected Enterprise SSO (${user.preferredUsername})`)
+            : msg('Connected Enterprise SSO account'),
+          'success',
         );
         return;
       }
@@ -690,18 +694,18 @@ export class GnOidcDialog extends LitElement {
       if (!wasOpen) {
         showToast(
           user?.preferredUsername
-            ? `Connected Enterprise SSO (${user.preferredUsername})`
-            : 'Connected Enterprise SSO account',
-          'success'
+            ? msg(str`Connected Enterprise SSO (${user.preferredUsername})`)
+            : msg('Connected Enterprise SSO account'),
+          'success',
         );
       } else {
-        showToast('Connected Enterprise SSO account', 'success');
+        showToast(msg('Connected Enterprise SSO account'), 'success');
       }
     } catch (err) {
       if (targetAccountId && !targetAccountExists()) {
         await credentialService.deleteAccountToken('oidc', targetAccountId);
       }
-      this.error = err instanceof Error ? err.message : 'Failed to complete sign in';
+      this.error = err instanceof Error ? err.message : msg('Failed to complete sign in');
     } finally {
       this.isLoading = false;
     }
@@ -735,7 +739,7 @@ export class GnOidcDialog extends LitElement {
       this.connectedUser = null;
       this.accounts = getAccountsByType('oidc');
     } catch (err) {
-      this.error = err instanceof Error ? err.message : 'Failed to disconnect';
+      this.error = err instanceof Error ? err.message : msg('Failed to disconnect');
       showToast(this.error, 'error');
     } finally {
       this.isLoading = false;
@@ -746,10 +750,12 @@ export class GnOidcDialog extends LitElement {
     if (!this.selectedAccountId) return;
 
     const selected = this.accounts.find((a) => a.id === this.selectedAccountId);
-    const accountName = selected?.name ?? 'this account';
+    const accountName = selected?.name ?? msg('this account');
     const confirmed = await showConfirm(
-      'Delete Enterprise SSO Integration',
-      `Delete ${accountName}? The stored token will be removed and any profile that uses this account as its default will lose that reference.`,
+      msg('Delete Enterprise SSO Integration'),
+      msg(
+        str`Delete ${accountName}? The stored token will be removed and any profile that uses this account as its default will lose that reference.`
+      ),
       'warning'
     );
     if (!confirmed) return;
@@ -780,17 +786,19 @@ export class GnOidcDialog extends LitElement {
       try {
         await credentialService.deleteAccountToken('oidc', accountId);
       } catch (tokenErr) {
-        const msg =
+        const message =
           tokenErr instanceof Error
-            ? `Account deleted, but its stored token could not be removed: ${tokenErr.message}`
-            : 'Account deleted, but its stored token could not be removed.';
-        this.error = msg;
-        showToast(msg, 'error');
+            ? msg(
+                str`Account deleted, but its stored token could not be removed: ${tokenErr.message}`,
+              )
+            : msg('Account deleted, but its stored token could not be removed.');
+        this.error = message;
+        showToast(message, 'error');
       }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to delete integration';
-      this.error = msg;
-      showToast(msg, 'error');
+      const message = err instanceof Error ? err.message : msg('Failed to delete integration');
+      this.error = message;
+      showToast(message, 'error');
     } finally {
       this.isLoading = false;
     }
@@ -811,7 +819,8 @@ export class GnOidcDialog extends LitElement {
 
   private renderConnected() {
     const user = this.connectedUser;
-    const label = user?.name ?? user?.preferredUsername ?? (this.nameInput || 'Enterprise SSO');
+    const label =
+      user?.name ?? user?.preferredUsername ?? (this.nameInput || msg('Enterprise SSO'));
     const login = user?.preferredUsername ?? user?.email ?? this.issuerUrlInput;
     return html`
       <div class="connection-status">
@@ -824,14 +833,14 @@ export class GnOidcDialog extends LitElement {
         </div>
         <div class="connection-actions">
           <button class="btn btn-danger" @click=${this.handleDisconnect} ?disabled=${this.isLoading}>
-            Disconnect
+            ${msg('Disconnect')}
           </button>
           <button
             class="btn btn-danger-outline"
             @click=${this.handleDeleteIntegration}
             ?disabled=${this.isLoading}
           >
-            Delete
+            ${msg('Delete')}
           </button>
         </div>
       </div>
@@ -848,11 +857,11 @@ export class GnOidcDialog extends LitElement {
           <div class="oauth-spinner"></div>
           <p>
             ${this.oauthState.status === 'exchanging'
-              ? 'Completing sign in...'
-              : 'Waiting for authorization...'}
+              ? msg('Completing sign in...')
+              : msg('Waiting for authorization...')}
           </p>
-          <p class="help-text">Complete the sign in in your browser</p>
-          <button class="btn" @click=${this.handleCancelOAuth}>Cancel</button>
+          <p class="help-text">${msg('Complete the sign in in your browser')}</p>
+          <button class="btn" @click=${this.handleCancelOAuth}>${msg('Cancel')}</button>
         </div>
       `;
     }
@@ -860,18 +869,18 @@ export class GnOidcDialog extends LitElement {
     return html`
       <div class="token-form">
         <div class="form-group">
-          <label>Display Name</label>
+          <label>${msg('Display Name')}</label>
           <input
             type="text"
-            placeholder="e.g., Acme SSO"
+            placeholder=${msg('e.g., Acme SSO')}
             .value=${this.nameInput}
             @input=${(e: Event) => (this.nameInput = (e.target as HTMLInputElement).value)}
           />
-          <span class="help-text">A label for this Enterprise SSO account.</span>
+          <span class="help-text">${msg('A label for this Enterprise SSO account.')}</span>
         </div>
 
         <div class="form-group">
-          <label>Issuer URL</label>
+          <label>${msg('Issuer URL')}</label>
           <input
             type="url"
             placeholder="https://auth.example.com"
@@ -882,13 +891,13 @@ export class GnOidcDialog extends LitElement {
             }}
           />
           <span class="help-text">
-            The OpenID Connect issuer. Discovery reads
+            ${msg('The OpenID Connect issuer. Discovery reads')}
             <code>/.well-known/openid-configuration</code>.
           </span>
         </div>
 
         <div class="form-group">
-          <label>Client ID</label>
+          <label>${msg('Client ID')}</label>
           <input
             type="text"
             placeholder="your-client-id"
@@ -901,14 +910,14 @@ export class GnOidcDialog extends LitElement {
           ? html`
               <div class="discovery">
                 <div class="discovery-row">
-                  <span class="key">Issuer</span><span>${this.discovery.issuer}</span>
+                  <span class="key">${msg('Issuer')}</span><span>${this.discovery.issuer}</span>
                 </div>
                 <div class="discovery-row">
-                  <span class="key">Authorization</span>
+                  <span class="key">${msg('Authorization')}</span>
                   <span>${this.discovery.authorizationEndpoint}</span>
                 </div>
                 <div class="discovery-row">
-                  <span class="key">Token</span><span>${this.discovery.tokenEndpoint}</span>
+                  <span class="key">${msg('Token')}</span><span>${this.discovery.tokenEndpoint}</span>
                 </div>
               </div>
             `
@@ -920,14 +929,14 @@ export class GnOidcDialog extends LitElement {
             @click=${this.handleDiscover}
             ?disabled=${this.isLoading || !this.issuerUrlInput.trim()}
           >
-            Discover
+            ${msg('Discover')}
           </button>
           <button
             class="btn btn-primary sign-in-btn"
             @click=${this.handleStartOAuth}
             ?disabled=${this.isLoading || !this.issuerUrlInput.trim() || !this.clientIdInput.trim()}
           >
-            Sign in
+            ${msg('Sign in')}
           </button>
           ${this.selectedAccountId
             ? html`
@@ -936,7 +945,7 @@ export class GnOidcDialog extends LitElement {
                   @click=${this.handleDeleteIntegration}
                   ?disabled=${this.isLoading}
                 >
-                  Delete Integration
+                  ${msg('Delete Integration')}
                 </button>
               `
             : nothing}
@@ -950,12 +959,12 @@ export class GnOidcDialog extends LitElement {
       <gn-modal
         .open=${this.open}
         ?backButton=${this.backButton}
-        modalTitle="Enterprise SSO (OIDC)"
+        modalTitle=${msg('Enterprise SSO (OIDC)')}
         @close=${this.handleClose}
       >
         <div class="content">
           ${this.attachToProfileName
-            ? html`<div class="attach-breadcrumb" data-testid="attach-breadcrumb">Adding to <strong>${this.attachToProfileName}</strong></div>`
+            ? html`<div class="attach-breadcrumb" data-testid="attach-breadcrumb">${msg('Adding to')} <strong>${this.attachToProfileName}</strong></div>`
             : nothing}
           ${this.accounts.length > 0 || this.connected
             ? html`

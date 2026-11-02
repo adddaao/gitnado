@@ -12,6 +12,9 @@
  *   - the same ids, in the same order
  *   - the same repository-scoped flags, so an item that needs a repository is
  *     greyed out by both halves
+ *   - a localised label for every row, whose English source equals the label
+ *     the native table builds — that table is what a locale does NOT translate,
+ *     so a re-worded native label would silently leave the menu half-English
  */
 
 import assert from 'node:assert/strict';
@@ -21,7 +24,7 @@ import { test } from 'node:test';
 const RUST_MENU = 'src-tauri/src/menu.rs';
 const TS_MENU = 'src/services/app-menu.service.ts';
 
-/** Items declared by the Rust menu table, in display order. */
+/** Sections and items declared by the Rust menu table, in display order. */
 function parseRustMenu(source) {
   const table = source.slice(
     source.indexOf('pub const APP_MENU'),
@@ -29,13 +32,18 @@ function parseRustMenu(source) {
   );
   assert.ok(table.length > 0, `${RUST_MENU}: APP_MENU table not found`);
 
+  const sections = [];
+  for (const match of table.matchAll(/MenuSection \{\s*id: "([^"]+)",\s*label: "([^"]+)"/g)) {
+    sections.push({ id: match[1], label: match[2] });
+  }
+
   const items = [];
-  const pattern = /\b(repo_item|item)\("([^"]+)",\s*"/g;
+  const pattern = /\b(repo_item|item)\("([^"]+)",\s*"([^"]+)"\)/g;
   let match;
   while ((match = pattern.exec(table)) !== null) {
-    items.push({ id: match[2], repositoryScoped: match[1] === 'repo_item' });
+    items.push({ id: match[2], label: match[3], repositoryScoped: match[1] === 'repo_item' });
   }
-  return items;
+  return { sections, items };
 }
 
 /** Items declared by the frontend action table, in display order. */
@@ -55,8 +63,28 @@ function parseTsMenu(source) {
   return items;
 }
 
-const rustItems = parseRustMenu(readFileSync(RUST_MENU, 'utf8'));
-const tsItems = parseTsMenu(readFileSync(TS_MENU, 'utf8'));
+/** The localised label table: `['id', msg('English source')]` pairs, in order. */
+function parseTsLabels(source) {
+  const start = source.indexOf('export function localizedMenuLabels');
+  assert.notEqual(start, -1, `${TS_MENU}: localizedMenuLabels() not found`);
+  const end = source.indexOf('] satisfies', start);
+  assert.notEqual(end, -1, `${TS_MENU}: localizedMenuLabels() has no satisfies clause`);
+  const body = source.slice(start, end);
+
+  const pairs = [];
+  for (const match of body.matchAll(/\['([^']+)',\s*msg\('([^']*)'\)\]/g)) {
+    pairs.push({ id: match[1], label: match[2] });
+  }
+  assert.ok(pairs.length > 20, `${TS_MENU}: only ${pairs.length} labels parsed`);
+  return pairs;
+}
+
+const { sections: rustSections, items: rustItems } = parseRustMenu(
+  readFileSync(RUST_MENU, 'utf8')
+);
+const tsMenuSource = readFileSync(TS_MENU, 'utf8');
+const tsItems = parseTsMenu(tsMenuSource);
+const tsLabels = parseTsLabels(tsMenuSource);
 
 test('both tables declare at least the documented menu items', () => {
   assert.ok(rustItems.length >= 20, `only ${rustItems.length} items parsed from ${RUST_MENU}`);
@@ -109,6 +137,42 @@ test('repository-scoped flags agree on both sides', () => {
       rustScoped.get(item.id),
       `"${item.id}" is repository-scoped in one table but not the other; ` +
         'the native item would be clickable with no repository open, or greyed out with one'
+    );
+  }
+});
+
+test('every native menu row has a localised label, and nothing else does', () => {
+  // `edit` is the macOS Edit submenu Tauri builds for the clipboard roles; it
+  // is not part of APP_MENU but its title is translatable too.
+  const rustIds = [...rustSections.map((s) => s.id), ...rustItems.map((i) => i.id), 'edit'];
+  const labelIds = tsLabels.map((pair) => pair.id);
+
+  assert.deepEqual(
+    labelIds.filter((id) => !rustIds.includes(id)),
+    [],
+    `${TS_MENU} labels rows the native menu does not build`
+  );
+  assert.deepEqual(
+    rustIds.filter((id) => !labelIds.includes(id)),
+    [],
+    `native menu rows with no localised label in ${TS_MENU}: ` +
+      rustIds.filter((id) => !labelIds.includes(id)).join(', ')
+  );
+});
+
+test('the localised labels’ English source matches the native labels', () => {
+  const expected = new Map([
+    ...rustSections.map((s) => [s.id, s.label]),
+    ...rustItems.map((i) => [i.id, i.label]),
+    ['edit', 'Edit'],
+  ]);
+
+  for (const pair of tsLabels) {
+    assert.equal(
+      pair.label,
+      expected.get(pair.id),
+      `"${pair.id}" is "${pair.label}" in ${TS_MENU} but "${expected.get(pair.id)}" in ${RUST_MENU}; ` +
+        'the source text must match so the translations stay attached to the right row'
     );
   }
 });

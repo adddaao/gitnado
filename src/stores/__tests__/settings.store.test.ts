@@ -8,11 +8,13 @@ import {
   clampDiffContextLines,
   MIN_DIFF_CONTEXT_LINES,
   MAX_DIFF_CONTEXT_LINES,
+  clampCommitPanelHeight,
+  MIN_COMMIT_PANEL_HEIGHT,
+  MAX_COMMIT_PANEL_HEIGHT,
   migrateSettings,
   watchSystemContrast,
 } from '../settings.store.ts';
 import type { SettingsState } from '../settings.store.ts';
-import { detectSystemLocale } from '../../i18n/index.ts';
 
 describe('settings.store', () => {
   beforeEach(() => {
@@ -34,6 +36,28 @@ describe('settings.store', () => {
     it('falls back to git’s default for a non-numeric value', () => {
       expect(clampDiffContextLines(Number.NaN)).to.equal(3);
       expect(clampDiffContextLines(Number.POSITIVE_INFINITY)).to.equal(3);
+    });
+  });
+
+  describe('clampCommitPanelHeight', () => {
+    it('keeps in-range integers untouched', () => {
+      expect(clampCommitPanelHeight(MIN_COMMIT_PANEL_HEIGHT)).to.equal(MIN_COMMIT_PANEL_HEIGHT);
+      expect(clampCommitPanelHeight(320)).to.equal(320);
+      expect(clampCommitPanelHeight(MAX_COMMIT_PANEL_HEIGHT)).to.equal(MAX_COMMIT_PANEL_HEIGHT);
+    });
+
+    it('clamps out-of-range values to the bounds', () => {
+      expect(clampCommitPanelHeight(-1)).to.equal(MIN_COMMIT_PANEL_HEIGHT);
+      expect(clampCommitPanelHeight(10_000)).to.equal(MAX_COMMIT_PANEL_HEIGHT);
+    });
+
+    it('falls back to the default for a non-numeric value', () => {
+      expect(clampCommitPanelHeight(Number.NaN)).to.equal(320);
+      expect(clampCommitPanelHeight(Number.POSITIVE_INFINITY)).to.equal(320);
+    });
+
+    it('truncates fractional pixels', () => {
+      expect(clampCommitPanelHeight(320.9)).to.equal(320);
     });
   });
 
@@ -136,6 +160,18 @@ describe('settings.store', () => {
 
     it('should show native notifications by default', () => {
       expect(settingsStore.getState().showNativeNotifications).to.be.true;
+    });
+
+    it('should write Chinese AI prompts by default, matching the Chinese-first UI', () => {
+      expect(settingsStore.getState().aiPromptLanguage).to.equal('zh');
+    });
+
+    it('should show the prompt-language quick switch by default', () => {
+      expect(settingsStore.getState().showPromptLanguageSwitch).to.be.true;
+    });
+
+    it('should give the commit panel a usable height by default', () => {
+      expect(settingsStore.getState().commitPanelHeight).to.equal(320);
     });
   });
 
@@ -313,6 +349,34 @@ describe('settings.store', () => {
     it('should set show native notifications', () => {
       settingsStore.getState().setShowNativeNotifications(false);
       expect(settingsStore.getState().showNativeNotifications).to.be.false;
+    });
+
+    it('should set the AI prompt language', () => {
+      settingsStore.getState().setAiPromptLanguage('en');
+      expect(settingsStore.getState().aiPromptLanguage).to.equal('en');
+
+      settingsStore.getState().setAiPromptLanguage('zh');
+      expect(settingsStore.getState().aiPromptLanguage).to.equal('zh');
+    });
+
+    it('should set the prompt-language quick-switch visibility', () => {
+      settingsStore.getState().setShowPromptLanguageSwitch(false);
+      expect(settingsStore.getState().showPromptLanguageSwitch).to.be.false;
+    });
+
+    it('should set and clamp the commit panel height', () => {
+      settingsStore.getState().setCommitPanelHeight(400);
+      expect(settingsStore.getState().commitPanelHeight).to.equal(400);
+
+      settingsStore.getState().setCommitPanelHeight(1);
+      expect(settingsStore.getState().commitPanelHeight).to.equal(MIN_COMMIT_PANEL_HEIGHT);
+
+      settingsStore.getState().setCommitPanelHeight(9999);
+      expect(settingsStore.getState().commitPanelHeight).to.equal(MAX_COMMIT_PANEL_HEIGHT);
+
+      // A cleared number input yields NaN; fall back to the default height.
+      settingsStore.getState().setCommitPanelHeight(Number.NaN);
+      expect(settingsStore.getState().commitPanelHeight).to.equal(320);
     });
   });
 
@@ -686,7 +750,7 @@ describe('settings.store', () => {
           fromVersion
         ) as unknown as Record<string, unknown>;
 
-      for (const from of [1, 2, 3, 4, 5, 6, 7, 8]) {
+      for (const from of [1, 2, 3, 4, 5, 6, 7, 8, 9]) {
         it(`fires exactly the rules above v${from}`, () => {
           const migrated = migrateFrom(from);
 
@@ -708,6 +772,9 @@ describe('settings.store', () => {
           // v8: the UI language is pinned to English for installs that predate
           // the key, so an upgrade never switches language on its own.
           expect(migrated.language, 'v8').to.equal(from < 8 ? 'en' : undefined);
+          // v9: same shape for the AI prompt language, plus the shortcut stays on.
+          expect(migrated.aiPromptLanguage, 'v9').to.equal(from < 9 ? 'en' : undefined);
+          expect(migrated.showPromptLanguageSwitch, 'v9').to.equal(from < 9 ? true : undefined);
           // Nothing in the chain touches a genuine preference.
           expect(migrated.theme, 'a real user choice survives every entry point').to.equal(
             'light'
@@ -715,13 +782,14 @@ describe('settings.store', () => {
         });
       }
 
-      it('a fresh install has no persisted blob, so it follows the OS language', () => {
-        // The other half of the v8 rule: `detectSystemLocale()` is what a FIRST
-        // run does. `resetToDefaults()` re-applies exactly the fresh-install
-        // defaults, so it is the closest thing to a fresh install a test has.
+      it('a fresh install defaults to Chinese, whatever the system language is', () => {
+        // The other half of the v8 rule: the fresh-install default is 中文, and
+        // it is not derived from the OS/browser language. `resetToDefaults()`
+        // re-applies exactly the fresh-install defaults, so it is the closest
+        // thing to a fresh install a test has.
         settingsStore.getState().resetToDefaults();
 
-        expect(settingsStore.getState().language).to.equal(detectSystemLocale());
+        expect(settingsStore.getState().language).to.equal('zh');
       });
     });
 
@@ -750,6 +818,45 @@ describe('settings.store', () => {
       const migrated = migrateSettings({ theme: 'light' } as Partial<SettingsState>, 8);
 
       expect(migrated.language, 'left to the store default').to.equal(undefined);
+    });
+
+    it('a pre-v9 state keeps English AI prompts instead of adopting the new default', () => {
+      // Every install that predates v9 has only ever sent English prompts (the
+      // prompts were hardcoded English), so upgrading must not start writing
+      // Chinese commit messages into its history.
+      const migrated = migrateSettings({ language: 'en' } as Partial<SettingsState>, 8);
+
+      expect(migrated.aiPromptLanguage).to.equal('en');
+      expect(migrated.showPromptLanguageSwitch, 'the shortcut ships visible').to.be.true;
+    });
+
+    it('a persisted AI prompt language is a real choice and is never overwritten', () => {
+      const migrated = migrateSettings(
+        { aiPromptLanguage: 'zh' } as unknown as Partial<SettingsState>,
+        1
+      );
+
+      expect(migrated.aiPromptLanguage).to.equal('zh');
+    });
+
+    it('a v9 state leaves the new keys to the store defaults', () => {
+      const migrated = migrateSettings({ theme: 'light' } as Partial<SettingsState>, 9);
+
+      expect(migrated.aiPromptLanguage, 'left to the store default').to.equal(undefined);
+      expect(migrated.showPromptLanguageSwitch, 'left to the store default').to.equal(undefined);
+    });
+
+    it('re-clamps a hand-edited commit panel height on every upgrade', () => {
+      expect(
+        migrateSettings({ commitPanelHeight: 10_000 } as Partial<SettingsState>, 9)
+          .commitPanelHeight
+      ).to.equal(MAX_COMMIT_PANEL_HEIGHT);
+      expect(
+        migrateSettings({ commitPanelHeight: -20 } as Partial<SettingsState>, 8).commitPanelHeight
+      ).to.equal(MIN_COMMIT_PANEL_HEIGHT);
+      expect(
+        migrateSettings({ commitPanelHeight: 400 } as Partial<SettingsState>, 8).commitPanelHeight
+      ).to.equal(400);
     });
 
     it('a v1 install that pinned a non-default scheme keeps it through the chain', () => {

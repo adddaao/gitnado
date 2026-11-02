@@ -11,6 +11,7 @@
  * gc/prune confirms between the command palette and the health dialog.
  */
 
+import { msg, str } from '@lit/localize';
 import { showConfirm } from '../services/dialog.service.ts';
 import { showToast } from '../services/notification.service.ts';
 import * as gitService from '../services/git.service.ts';
@@ -22,10 +23,10 @@ export function restoreFileConfirmCopy(
   shortId: string
 ): { title: string; message: string } {
   return {
-    title: 'Restore File',
-    message:
-      `Restore "${filePath}" to its version in ${shortId}? This overwrites your ` +
-      'working copy of the file and stages it — uncommitted changes to it will be lost.',
+    title: msg('Restore File'),
+    message: msg(
+      str`Restore "${filePath}" to its version in ${shortId}? This overwrites your working copy of the file and stages it — uncommitted changes to it will be lost.`
+    ),
   };
 }
 
@@ -60,11 +61,11 @@ export async function restoreFileFromCommit(
       commit: commitOid,
     });
     if (!result.success) {
-      showToast(result.error?.message ?? 'Failed to restore file', 'error');
+      showToast(result.error?.message ?? msg('Failed to restore file'), 'error');
       return false;
     }
 
-    showToast(`Restored "${filePath}" from ${shortId}`, 'success');
+    showToast(msg(str`Restored "${filePath}" from ${shortId}`), 'success');
     // Pinned refresh: repoPath was captured before the awaits, so a tab switch
     // mid-operation cannot refresh the wrong repo (app-shell
     // handleWindowRefresh -> refreshConflictDialogRepo). `status-refresh` makes

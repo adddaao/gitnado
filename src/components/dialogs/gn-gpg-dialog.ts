@@ -5,6 +5,7 @@
 
 import { LitElement, html, css, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
+import { localized, msg, str } from '@lit/localize';
 import { sharedStyles } from '../../styles/shared-styles.ts';
 import * as gitService from '../../services/git.service.ts';
 import type { GpgConfig, GpgKey, SshKey } from '../../services/git.service.ts';
@@ -16,6 +17,7 @@ import '../common/gn-toggle.ts';
 type SetupStep = 'install-guide' | 'generate-guide' | 'configure' | 'complete';
 
 @customElement('gn-gpg-dialog')
+@localized()
 export class GnGpgDialog extends LitElement {
   static styles = [
     sharedStyles,
@@ -695,7 +697,7 @@ export class GnGpgDialog extends LitElement {
       this.config = configResult.data;
       this.selectedKey = configResult.data.signingKey;
     } else {
-      this.error = configResult.error?.message || 'Failed to load GPG config';
+      this.error = configResult.error?.message || msg('Failed to load GPG config');
     }
 
     if (keysResult.success && keysResult.data) {
@@ -713,7 +715,7 @@ export class GnGpgDialog extends LitElement {
         // Never silent: without a key list this step has nothing to offer.
         // Keeps an earlier config-load error rather than overwriting it.
         if (!this.error) {
-          this.error = sshResult.error?.message || 'Failed to load SSH keys';
+          this.error = sshResult.error?.message || msg('Failed to load SSH keys');
         }
       }
     } else {
@@ -805,12 +807,14 @@ export class GnGpgDialog extends LitElement {
 
     if (result.success) {
       this.config = { ...this.config, signCommits: !this.config.signCommits };
-      this.success = `Commit signing ${this.config.signCommits ? 'enabled' : 'disabled'}`;
+      this.success = this.config.signCommits
+        ? msg('Commit signing enabled')
+        : msg('Commit signing disabled');
       this.dispatchEvent(new CustomEvent('gpg-changed', {
         detail: { repositoryPath: this.pinnedRepoPath || this.repositoryPath },
       }));
     } else {
-      this.error = result.error?.message || 'Failed to update setting';
+      this.error = result.error?.message || msg('Failed to update setting');
     }
 
     this.loading = false;
@@ -831,12 +835,12 @@ export class GnGpgDialog extends LitElement {
 
     if (result.success) {
       this.config = { ...this.config, signTags: !this.config.signTags };
-      this.success = `Tag signing ${this.config.signTags ? 'enabled' : 'disabled'}`;
+      this.success = this.config.signTags ? msg('Tag signing enabled') : msg('Tag signing disabled');
       this.dispatchEvent(new CustomEvent('gpg-changed', {
         detail: { repositoryPath: this.pinnedRepoPath || this.repositoryPath },
       }));
     } else {
-      this.error = result.error?.message || 'Failed to update setting';
+      this.error = result.error?.message || msg('Failed to update setting');
     }
 
     this.loading = false;
@@ -855,12 +859,12 @@ export class GnGpgDialog extends LitElement {
 
     if (result.success) {
       this.selectedKey = keyId;
-      this.success = 'Signing key updated';
+      this.success = msg('Signing key updated');
       this.dispatchEvent(new CustomEvent('gpg-changed', {
         detail: { repositoryPath: this.pinnedRepoPath || this.repositoryPath },
       }));
     } else {
-      this.error = result.error?.message || 'Failed to set signing key';
+      this.error = result.error?.message || msg('Failed to set signing key');
     }
 
     this.loading = false;
@@ -893,7 +897,7 @@ export class GnGpgDialog extends LitElement {
           </div>
 
           <div class="dialog-content">
-            ${this.loading ? html`<div class="loading">Loading...</div>` : ''}
+            ${this.loading ? html`<div class="loading">${msg('Loading...')}</div>` : ''}
 
             ${this.error ? html`<div class="message error">${this.error}</div>` : ''}
 
@@ -910,20 +914,20 @@ export class GnGpgDialog extends LitElement {
 
   private getDialogTitle(): string {
     if (!this.setupMode) {
-      return 'GPG Signing';
+      return msg('GPG Signing');
     }
 
     switch (this.setupStep) {
       case 'install-guide':
-        return 'GPG Setup - Install GPG';
+        return msg('GPG Setup - Install GPG');
       case 'generate-guide':
-        return 'GPG Setup - Generate Key';
+        return msg('GPG Setup - Generate Key');
       case 'configure':
         return this.isSshFormat
-          ? 'SSH Signing Setup - Select Key'
-          : 'GPG Setup - Select Key';
+          ? msg('SSH Signing Setup - Select Key')
+          : msg('GPG Setup - Select Key');
       case 'complete':
-        return 'GPG Setup - Complete';
+        return msg('GPG Setup - Complete');
     }
   }
 
@@ -960,10 +964,11 @@ export class GnGpgDialog extends LitElement {
           <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
           <line x1="12" y1="22.08" x2="12" y2="12"></line>
         </svg>
-        <div class="setup-title">Install GPG</div>
+        <div class="setup-title">${msg('Install GPG')}</div>
         <div class="setup-description">
-          GPG (GNU Privacy Guard) is required for signing commits and tags.
-          Choose an installation method for your platform.
+          ${msg(
+            'GPG (GNU Privacy Guard) is required for signing commits and tags. Choose an installation method for your platform.'
+          )}
         </div>
       </div>
 
@@ -990,7 +995,7 @@ export class GnGpgDialog extends LitElement {
         <div class="install-method">
           <div class="method-info">
             <div class="method-name">Homebrew</div>
-            <div class="method-desc">Recommended for developers</div>
+            <div class="method-desc">${msg('Recommended for developers')}</div>
           </div>
           <div class="method-action">
             ${this.renderCommandBlock('brew install gnupg')}
@@ -999,11 +1004,11 @@ export class GnGpgDialog extends LitElement {
         <div class="install-method">
           <div class="method-info">
             <div class="method-name">GPG Suite</div>
-            <div class="method-desc">Full GUI application with keychain integration</div>
+            <div class="method-desc">${msg('Full GUI application with keychain integration')}</div>
           </div>
           <div class="method-action">
             <button class="link-btn" @click=${() => openExternalUrl('https://gpgtools.org/')}>
-              Download
+              ${msg('Download')}
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
                 <polyline points="15 3 21 3 21 9"></polyline>
@@ -1022,11 +1027,11 @@ export class GnGpgDialog extends LitElement {
         <div class="install-method">
           <div class="method-info">
             <div class="method-name">Gpg4win</div>
-            <div class="method-desc">Official Windows installer with GUI</div>
+            <div class="method-desc">${msg('Official Windows installer with GUI')}</div>
           </div>
           <div class="method-action">
             <button class="link-btn" @click=${() => openExternalUrl('https://www.gpg4win.org/')}>
-              Download
+              ${msg('Download')}
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
                 <polyline points="15 3 21 3 21 9"></polyline>
@@ -1038,7 +1043,7 @@ export class GnGpgDialog extends LitElement {
         <div class="install-method">
           <div class="method-info">
             <div class="method-name">Chocolatey</div>
-            <div class="method-desc">Via package manager</div>
+            <div class="method-desc">${msg('Via package manager')}</div>
           </div>
           <div class="method-action">
             ${this.renderCommandBlock('choco install gpg4win')}
@@ -1047,7 +1052,7 @@ export class GnGpgDialog extends LitElement {
         <div class="install-method">
           <div class="method-info">
             <div class="method-name">winget</div>
-            <div class="method-desc">Via Windows Package Manager</div>
+            <div class="method-desc">${msg('Via Windows Package Manager')}</div>
           </div>
           <div class="method-action">
             ${this.renderCommandBlock('winget install GnuPG.Gpg4win')}
@@ -1063,7 +1068,7 @@ export class GnGpgDialog extends LitElement {
         <div class="install-method">
           <div class="method-info">
             <div class="method-name">Debian / Ubuntu</div>
-            <div class="method-desc">apt package manager</div>
+            <div class="method-desc">${msg('apt package manager')}</div>
           </div>
           <div class="method-action">
             ${this.renderCommandBlock('sudo apt install gnupg')}
@@ -1072,7 +1077,7 @@ export class GnGpgDialog extends LitElement {
         <div class="install-method">
           <div class="method-info">
             <div class="method-name">Fedora / RHEL</div>
-            <div class="method-desc">dnf package manager</div>
+            <div class="method-desc">${msg('dnf package manager')}</div>
           </div>
           <div class="method-action">
             ${this.renderCommandBlock('sudo dnf install gnupg2')}
@@ -1081,7 +1086,7 @@ export class GnGpgDialog extends LitElement {
         <div class="install-method">
           <div class="method-info">
             <div class="method-name">Arch Linux</div>
-            <div class="method-desc">pacman package manager</div>
+            <div class="method-desc">${msg('pacman package manager')}</div>
           </div>
           <div class="method-action">
             ${this.renderCommandBlock('sudo pacman -S gnupg')}
@@ -1097,11 +1102,11 @@ export class GnGpgDialog extends LitElement {
         <div class="install-method">
           <div class="method-info">
             <div class="method-name">GnuPG Website</div>
-            <div class="method-desc">Download for your platform</div>
+            <div class="method-desc">${msg('Download for your platform')}</div>
           </div>
           <div class="method-action">
             <button class="link-btn" @click=${() => openExternalUrl('https://gnupg.org/download/')}>
-              Download
+              ${msg('Download')}
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
                 <polyline points="15 3 21 3 21 9"></polyline>
@@ -1120,37 +1125,44 @@ export class GnGpgDialog extends LitElement {
         <svg class="setup-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"></path>
         </svg>
-        <div class="setup-title">Generate a GPG Key</div>
+        <div class="setup-title">${msg('Generate a GPG Key')}</div>
         <div class="setup-description">
-          Create a new GPG key pair for signing your Git commits and tags.
-          Run this command in your terminal.
+          ${msg(
+            'Create a new GPG key pair for signing your Git commits and tags. Run this command in your terminal.'
+          )}
         </div>
       </div>
 
       ${this.renderCommandBlock('gpg --full-generate-key')}
 
       <div class="guide-section">
-        <div class="guide-section-title">Recommended Settings</div>
+        <div class="guide-section-title">${msg('Recommended Settings')}</div>
         <ul class="guide-list">
-          <li><strong>Key type:</strong> RSA and RSA (default) or ECC (Ed25519) for modern systems</li>
-          <li><strong>Key size:</strong> 4096 bits for RSA</li>
-          <li><strong>Expiration:</strong> 1-2 years recommended for security</li>
-          <li><strong>Name/Email:</strong> Should match your Git identity</li>
+          <li>
+            ${msg(
+              html`<strong>Key type:</strong> RSA and RSA (default) or ECC (Ed25519) for modern systems`
+            )}
+          </li>
+          <li>${msg(html`<strong>Key size:</strong> 4096 bits for RSA`)}</li>
+          <li>
+            ${msg(html`<strong>Expiration:</strong> 1-2 years recommended for security`)}
+          </li>
+          <li>${msg(html`<strong>Name/Email:</strong> Should match your Git identity`)}</li>
         </ul>
       </div>
 
       <div class="guide-section">
-        <div class="guide-section-title">After Generation</div>
+        <div class="guide-section-title">${msg('After Generation')}</div>
         <div class="guide-text">
-          List your keys to verify they were created:
+          ${msg('List your keys to verify they were created:')}
         </div>
         ${this.renderCommandBlock('gpg --list-secret-keys --keyid-format=long')}
       </div>
 
       <div class="guide-section">
-        <div class="guide-section-title">Platform Documentation</div>
+        <div class="guide-section-title">${msg('Platform Documentation')}</div>
         <div class="guide-text">
-          For detailed instructions on adding your key to your platform:
+          ${msg('For detailed instructions on adding your key to your platform:')}
         </div>
         <div class="external-links">
           <a class="external-link" @click=${() => openExternalUrl('https://docs.github.com/en/authentication/managing-commit-signature-verification')}>
@@ -1181,18 +1193,18 @@ export class GnGpgDialog extends LitElement {
           <circle cx="12" cy="12" r="3"></circle>
           <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
         </svg>
-        <div class="setup-title">Select Your Signing Key</div>
+        <div class="setup-title">${msg('Select Your Signing Key')}</div>
         <div class="setup-description">
-          Choose which GPG key to use for signing commits and tags.
+          ${msg('Choose which GPG key to use for signing commits and tags.')}
         </div>
       </div>
 
       <div class="section">
-        <div class="section-title">Available Keys</div>
+        <div class="section-title">${msg('Available Keys')}</div>
         ${this.keys.length === 0
           ? html`
               <div class="empty-text">
-                No GPG keys found. Please generate a key first.
+                ${msg('No GPG keys found. Please generate a key first.')}
               </div>
             `
           : html`
@@ -1225,15 +1237,16 @@ export class GnGpgDialog extends LitElement {
           <circle cx="12" cy="12" r="3"></circle>
           <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
         </svg>
-        <div class="setup-title">Select Your SSH Signing Key</div>
+        <div class="setup-title">${msg('Select Your SSH Signing Key')}</div>
         <div class="setup-description">
-          This repository signs with SSH (gpg.format=ssh), so Git needs an SSH
-          key &mdash; not a GPG key. Choose one of your ~/.ssh keys.
+          ${msg(
+            html`This repository signs with SSH (gpg.format=ssh), so Git needs an SSH key &mdash; not a GPG key. Choose one of your ~/.ssh keys.`
+          )}
         </div>
       </div>
 
       <div class="section">
-        <div class="section-title">Available SSH Keys</div>
+        <div class="section-title">${msg('Available SSH Keys')}</div>
         ${this.renderSshKeyList()}
       </div>
     `;
@@ -1258,7 +1271,7 @@ export class GnGpgDialog extends LitElement {
       ${usable.length === 0
         ? html`
             <div class="empty-text">
-              No usable SSH keys found in ~/.ssh. Generate one, then refresh:
+              ${msg('No usable SSH keys found in ~/.ssh. Generate one, then refresh:')}
             </div>
             ${this.renderCommandBlock('ssh-keygen -t ed25519 -C "your@email.com"')}
           `
@@ -1285,9 +1298,9 @@ export class GnGpgDialog extends LitElement {
         ? nothing
         : html`
             <div class="empty-text unusable-keys">
-              ${unusable.map((key) => key.name).join(', ')} cannot sign: no
-              public key file in ~/.ssh. Recreate it from the private key, then
-              refresh:
+              ${msg(
+                str`${unusable.map((key) => key.name).join(', ')} cannot sign: no public key file in ~/.ssh. Recreate it from the private key, then refresh:`
+              )}
             </div>
             ${this.renderCommandBlock(
               `ssh-keygen -y -f ${unusable[0].path} > ${unusable[0].publicPath}`
@@ -1304,11 +1317,16 @@ export class GnGpgDialog extends LitElement {
           <polyline points="22 4 12 14.01 9 11.01"></polyline>
         </svg>
         <div class="complete-title">
-          ${this.isSshFormat ? 'SSH Signing is Ready!' : 'GPG is Ready!'}
+          ${this.isSshFormat ? msg('SSH Signing is Ready!') : msg('GPG is Ready!')}
         </div>
         <div class="complete-description">
-          Your ${this.isSshFormat ? 'SSH' : 'GPG'} signing is now configured. You
-          can enable automatic commit signing in the settings below.
+          ${this.isSshFormat
+            ? msg(
+                'Your SSH signing is now configured. You can enable automatic commit signing in the settings below.'
+              )
+            : msg(
+                'Your GPG signing is now configured. You can enable automatic commit signing in the settings below.'
+              )}
         </div>
       </div>
     `;
@@ -1322,18 +1340,18 @@ export class GnGpgDialog extends LitElement {
         ${this.isSshFormat
           ? html`
               <div class="status-row">
-                <span class="status-label">Signature Format</span>
+                <span class="status-label">${msg('Signature Format')}</span>
                 <span class="status-value">SSH</span>
               </div>
             `
           : html`
               <div class="status-row">
-                <span class="status-label">GPG Status</span>
-                <span class="status-badge available">Available</span>
+                <span class="status-label">${msg('GPG Status')}</span>
+                <span class="status-badge available">${msg('Available')}</span>
               </div>
               <div class="status-row" style="margin-top: var(--spacing-xs);">
-                <span class="status-label">Version</span>
-                <span class="status-value">${this.config.gpgVersion || 'Unknown'}</span>
+                <span class="status-label">${msg('Version')}</span>
+                <span class="status-value">${this.config.gpgVersion || msg('Unknown')}</span>
               </div>
             `}
       </div>
@@ -1343,29 +1361,32 @@ export class GnGpgDialog extends LitElement {
           class="scope-btn ${!this.globalScope ? 'active' : ''}"
           @click=${() => { this.globalScope = false; }}
         >
-          This Repository
+          ${msg('This Repository')}
         </button>
         <button
           class="scope-btn ${this.globalScope ? 'active' : ''}"
           @click=${() => { this.globalScope = true; }}
         >
-          Global
+          ${msg('Global')}
         </button>
       </div>
 
       <div class="section">
-        <div class="section-title">Signing Options</div>
+        <div class="section-title">${msg('Signing Options')}</div>
         <div class="toggle-row">
           <div>
-            <div class="toggle-label">Sign commits</div>
+            <div class="toggle-label">${msg('Sign commits')}</div>
             <div class="toggle-desc">
-              Automatically sign all commits with
-              ${this.isSshFormat ? 'your SSH key' : 'GPG'}
+              ${this.isSshFormat
+                ? msg('Automatically sign all commits with your SSH key')
+                : msg('Automatically sign all commits with GPG')}
             </div>
           </div>
           <gn-toggle
-            label="Sign commits"
-            description=${`Automatically sign all commits with ${this.isSshFormat ? 'your SSH key' : 'GPG'}`}
+            label=${msg('Sign commits')}
+            description=${this.isSshFormat
+              ? msg('Automatically sign all commits with your SSH key')
+              : msg('Automatically sign all commits with GPG')}
             .checked=${this.config.signCommits}
             ?disabled=${this.loading}
             @change=${this.handleToggleCommitSigning}
@@ -1373,15 +1394,18 @@ export class GnGpgDialog extends LitElement {
         </div>
         <div class="toggle-row">
           <div>
-            <div class="toggle-label">Sign tags</div>
+            <div class="toggle-label">${msg('Sign tags')}</div>
             <div class="toggle-desc">
-              Automatically sign all tags with
-              ${this.isSshFormat ? 'your SSH key' : 'GPG'}
+              ${this.isSshFormat
+                ? msg('Automatically sign all tags with your SSH key')
+                : msg('Automatically sign all tags with GPG')}
             </div>
           </div>
           <gn-toggle
-            label="Sign tags"
-            description=${`Automatically sign all tags with ${this.isSshFormat ? 'your SSH key' : 'GPG'}`}
+            label=${msg('Sign tags')}
+            description=${this.isSshFormat
+              ? msg('Automatically sign all tags with your SSH key')
+              : msg('Automatically sign all tags with GPG')}
             .checked=${this.config.signTags}
             ?disabled=${this.loading}
             @change=${this.handleToggleTagSigning}
@@ -1391,14 +1415,14 @@ export class GnGpgDialog extends LitElement {
 
       <div class="section">
         <div class="section-title">
-          ${this.isSshFormat ? 'Signing Key (SSH)' : 'Signing Key'}
+          ${this.isSshFormat ? msg('Signing Key (SSH)') : msg('Signing Key')}
         </div>
         ${this.isSshFormat
           ? this.renderSshKeyList()
           : this.keys.length === 0
           ? html`
               <div class="empty-text">
-                No GPG keys found. Generate a key with:<br>
+                ${msg('No GPG keys found. Generate a key with:')}<br>
                 <code style="font-size: var(--font-size-xs);">gpg --full-generate-key</code>
               </div>
             `
@@ -1434,7 +1458,7 @@ export class GnGpgDialog extends LitElement {
           class="copy-btn ${isCopied ? 'copied' : ''}"
           @click=${() => this.copyToClipboard(command)}
         >
-          ${isCopied ? 'Copied!' : 'Copy'}
+          ${isCopied ? msg('Copied!') : msg('Copy')}
         </button>
       </div>
     `;
@@ -1448,7 +1472,7 @@ export class GnGpgDialog extends LitElement {
     return html`
       <div class="dialog-footer">
         <button class="btn btn-secondary" @click=${this.handleClose}>
-          Close
+          ${msg('Close')}
         </button>
       </div>
     `;
@@ -1461,12 +1485,12 @@ export class GnGpgDialog extends LitElement {
           <div class="dialog-footer wizard">
             <div class="footer-left">
               <button class="btn-text" @click=${this.handleSkipSetup}>
-                Skip Setup
+                ${msg('Skip Setup')}
               </button>
             </div>
             <div class="footer-right">
               <button class="btn btn-primary" @click=${this.handleRefreshAndCheck}>
-                I've Installed GPG
+                ${msg("I've Installed GPG")}
               </button>
             </div>
           </div>
@@ -1476,12 +1500,12 @@ export class GnGpgDialog extends LitElement {
           <div class="dialog-footer wizard">
             <div class="footer-left">
               <button class="btn btn-secondary" @click=${this.handleSetupBack}>
-                Back
+                ${msg('Back')}
               </button>
             </div>
             <div class="footer-right">
               <button class="btn btn-primary" @click=${this.handleRefreshAndCheck}>
-                I've Generated a Key
+                ${msg("I've Generated a Key")}
               </button>
             </div>
           </div>
@@ -1498,12 +1522,12 @@ export class GnGpgDialog extends LitElement {
                 this.isSshFormat
                 ? html`
                     <button class="btn btn-secondary" @click=${this.handleRefreshAndCheck}>
-                      Refresh
+                      ${msg('Refresh')}
                     </button>
                   `
                 : html`
                     <button class="btn btn-secondary" @click=${this.handleSetupBack}>
-                      Back
+                      ${msg('Back')}
                     </button>
                   `}
             </div>
@@ -1513,7 +1537,7 @@ export class GnGpgDialog extends LitElement {
                 @click=${this.handleCompleteSetup}
                 ?disabled=${!this.selectedKey}
               >
-                Complete Setup
+                ${msg('Complete Setup')}
               </button>
             </div>
           </div>
@@ -1524,7 +1548,7 @@ export class GnGpgDialog extends LitElement {
             <div class="footer-left"></div>
             <div class="footer-right">
               <button class="btn btn-primary" @click=${this.handleFinishSetup}>
-                Done
+                ${msg('Done')}
               </button>
             </div>
           </div>
@@ -1541,7 +1565,7 @@ export class GnGpgDialog extends LitElement {
       }, 2000);
     } catch {
       console.error('Failed to copy to clipboard');
-      this.error = 'Failed to copy to clipboard';
+      this.error = msg('Failed to copy to clipboard');
     }
   }
 

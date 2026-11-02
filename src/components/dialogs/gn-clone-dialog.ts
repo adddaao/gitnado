@@ -5,7 +5,7 @@
 
 import { LitElement, html, css, nothing } from 'lit';
 import { customElement, state, query } from 'lit/decorators.js';
-import { msg } from '@lit/localize';
+import { localized, msg, str } from '@lit/localize';
 import { sharedStyles } from '../../styles/shared-styles.ts';
 import {
   isNetworkGateRefusal,
@@ -39,6 +39,7 @@ interface CloneProgress {
 }
 
 @customElement('gn-clone-dialog')
+@localized()
 export class GnCloneDialog extends LitElement {
   static styles = [
     sharedStyles,
@@ -524,12 +525,12 @@ export class GnCloneDialog extends LitElement {
 
   private async handleClone(): Promise<void> {
     if (!this.url.trim()) {
-      this.error = 'Please enter a repository URL';
+      this.error = msg('Please enter a repository URL');
       return;
     }
 
     if (!this.destination.trim()) {
-      this.error = 'Please select a destination folder';
+      this.error = msg('Please select a destination folder');
       return;
     }
 
@@ -538,13 +539,13 @@ export class GnCloneDialog extends LitElement {
     // these regardless of what the dialog sends.
     const branch = this.branch.trim();
     if (branch && (branch.startsWith('-') || /[\r\n]/.test(branch))) {
-      this.error = "Branch name must not start with '-' or contain line breaks";
+      this.error = msg("Branch name must not start with '-' or contain line breaks");
       return;
     }
 
     this.isCloning = true;
     this.progress = 0;
-    this.progressText = 'Starting clone...';
+    this.progressText = msg('Starting clone...');
     this.error = '';
 
     try {
@@ -554,7 +555,7 @@ export class GnCloneDialog extends LitElement {
         this.progress = percent;
 
         if (stage === 'Complete') {
-          this.progressText = 'Clone complete!';
+          this.progressText = msg('Clone complete!');
         } else if (totalObjects > 0) {
           this.progressText = `${stage}: ${receivedObjects}/${totalObjects} (${this.formatBytes(receivedBytes)})`;
         } else {
@@ -591,7 +592,7 @@ export class GnCloneDialog extends LitElement {
 
       if (result.success && result.data) {
         this.progress = 100;
-        this.progressText = 'Clone complete!';
+        this.progressText = msg('Clone complete!');
         this.isComplete = true;
         // A cancel that reached the backend after the clone had already
         // finished (it reaps a child that has succeeded) still returns success
@@ -622,7 +623,7 @@ export class GnCloneDialog extends LitElement {
         // click back to them as a failure. `isOperationCancelled` is the code
         // fetch, pull and push already return for the same click.
         if (!isNetworkGateRefusal(result.error) && !isOperationCancelled(result.error)) {
-          this.error = result.error?.message ?? 'Failed to clone repository';
+          this.error = result.error?.message ?? msg('Failed to clone repository');
         } else {
           this.progressText = '';
           // The progress section vanishes when `isCloning` clears below, so
@@ -630,7 +631,7 @@ export class GnCloneDialog extends LitElement {
           // leaves no trace — the same toast fetch, pull and push show for
           // theirs. A gate refusal is not toasted: it announced itself already.
           if (isOperationCancelled(result.error)) {
-            showToast('Clone cancelled', 'info');
+            showToast(msg('Clone cancelled'), 'info');
           }
         }
         this.isCloning = false;
@@ -640,7 +641,7 @@ export class GnCloneDialog extends LitElement {
         this.cleanupListener();
       }
     } catch (err) {
-      this.error = err instanceof Error ? err.message : 'Unknown error occurred';
+      this.error = err instanceof Error ? err.message : msg('Unknown error occurred');
       this.isCloning = false;
       this.isCancelling = false;
       this.cleanupListener();
@@ -663,7 +664,7 @@ export class GnCloneDialog extends LitElement {
     this.submoduleDetached = false;
     this.submodulePhase = true;
     this.progress = 100;
-    this.progressText = 'Checking for submodules...';
+    this.progressText = msg('Checking for submodules...');
 
     const name = this.repoName || repoPath;
 
@@ -674,23 +675,24 @@ export class GnCloneDialog extends LitElement {
     if (!listed.success) {
       return this.reportSubmoduleFailure(
         runId,
-        listed.error?.message ?? 'the submodule list could not be read',
+        listed.error?.message ?? msg('the submodule list could not be read'),
       );
     }
 
     const count = listed.data?.length ?? 0;
     if (count === 0) {
       if (!this.isDetached(runId)) {
-        this.progressText = 'No submodules to clone.';
+        this.progressText = msg('No submodules to clone.');
         this.submodulePhase = false;
         return 'close';
       }
       return 'detached';
     }
 
-    const label = count === 1 ? '1 submodule' : `${count} submodules`;
+    const label =
+      count === 1 ? msg('1 submodule') : msg(str`${count} submodules`);
     if (!this.isDetached(runId)) {
-      this.progressText = `Cloning ${label}...`;
+      this.progressText = msg(str`Cloning ${label}...`);
     }
 
     const updated = await updateSubmodules(repoPath, { init: true, recursive: true });
@@ -698,10 +700,10 @@ export class GnCloneDialog extends LitElement {
     if (updated.success) {
       if (this.isDetached(runId)) {
         // The dialog is gone, so the only place left to say this is a toast.
-        showToast(`Cloned ${label} into ${name}.`, 'success');
+        showToast(msg(str`Cloned ${label} into ${name}.`), 'success');
         return 'detached';
       }
-      this.progressText = `Cloned ${label}.`;
+      this.progressText = msg(str`Cloned ${label}.`);
       this.submodulePhase = false;
       return 'close';
     }
@@ -711,14 +713,14 @@ export class GnCloneDialog extends LitElement {
       // user's own decision, so neither is reported again. The clone itself
       // stands either way.
       if (this.isDetached(runId)) return 'detached';
-      this.progressText = 'Submodules were not cloned.';
+      this.progressText = msg('Submodules were not cloned.');
       this.submodulePhase = false;
       return 'close';
     }
 
     return this.reportSubmoduleFailure(
       runId,
-      updated.error?.message ?? 'the submodules could not be cloned',
+      updated.error?.message ?? msg('the submodules could not be cloned'),
     );
   }
 
@@ -743,7 +745,9 @@ export class GnCloneDialog extends LitElement {
    */
   private reportSubmoduleFailure(runId: number, message: string): 'close' | 'detached' {
     showToast(
-      `The repository was cloned, but its submodules were not: ${message}. Use Submodules to retry.`,
+      msg(
+        str`The repository was cloned, but its submodules were not: ${message}. Use Submodules to retry.`,
+      ),
       'warning',
       10000,
     );
@@ -766,7 +770,7 @@ export class GnCloneDialog extends LitElement {
   private handleDetachSubmodules(): void {
     this.submoduleDetached = true;
     showToast(
-      'Repository opened. Its submodules are still being cloned in the background.',
+      msg('Repository opened. Its submodules are still being cloned in the background.'),
       'info',
     );
     this.close();
@@ -808,7 +812,7 @@ export class GnCloneDialog extends LitElement {
     if (this.isCancelling) return;
 
     this.isCancelling = true;
-    this.progressText = 'Cancelling…';
+    this.progressText = msg('Cancelling…');
 
     const result = await cancelClone();
     if (!result.success) {
@@ -816,7 +820,7 @@ export class GnCloneDialog extends LitElement {
       // toast — and Cancel must become pressable again.
       this.isCancelling = false;
       this.progressText = '';
-      this.error = result.error?.message ?? 'Failed to cancel the clone';
+      this.error = result.error?.message ?? msg('Failed to cancel the clone');
     }
   }
 
@@ -839,7 +843,7 @@ export class GnCloneDialog extends LitElement {
   render() {
     return html`
       <gn-modal
-        modalTitle="Clone Repository"
+        modalTitle=${msg('Clone Repository')}
         @close=${this.handleModalClose}
       >
         <div class="form">
@@ -855,7 +859,7 @@ export class GnCloneDialog extends LitElement {
                aria-pressed are reached with Tab and activated with
                Enter/Space by the browser itself, and match the pattern the
                account picker's own repository rows already use. -->
-          <div class="source-tabs" role="group" aria-label="Repository source">
+          <div class="source-tabs" role="group" aria-label=${msg('Repository source')}>
             <button
               class="source-tab"
               type="button"
@@ -864,7 +868,7 @@ export class GnCloneDialog extends LitElement {
               @click=${() => this.handleSourceChange('url')}
               ?disabled=${this.isCloning}
             >
-              From URL
+              ${msg('From URL')}
             </button>
             <button
               class="source-tab"
@@ -874,7 +878,7 @@ export class GnCloneDialog extends LitElement {
               @click=${() => this.handleSourceChange('account')}
               ?disabled=${this.isCloning}
             >
-              From account
+              ${msg('From account')}
             </button>
           </div>
 
@@ -887,14 +891,14 @@ export class GnCloneDialog extends LitElement {
                 ></gn-account-repo-picker>
                 ${this.selectedRepoLabel
                   ? html`<div class="repo-name-preview">
-                      Selected: ${this.selectedRepoLabel}
+                      ${msg(str`Selected: ${this.selectedRepoLabel}`)}
                     </div>`
                   : nothing}
               `
             : nothing}
 
           <div class="field">
-            <label for="url">Repository URL</label>
+            <label for="url">${msg('Repository URL')}</label>
             <input
               id="url"
               type="text"
@@ -905,13 +909,15 @@ export class GnCloneDialog extends LitElement {
               autofocus
             />
             ${this.repoName
-              ? html`<div class="repo-name-preview">Repository name: ${this.repoName}</div>`
+              ? html`<div class="repo-name-preview">
+                  ${msg(str`Repository name: ${this.repoName}`)}
+                </div>`
               : ''}
           </div>
 
           <div class="field-row">
             <div class="field">
-              <label for="destination">Clone to</label>
+              <label for="destination">${msg('Clone to')}</label>
               <input
                 id="destination"
                 type="text"
@@ -926,32 +932,34 @@ export class GnCloneDialog extends LitElement {
               @click=${this.handleBrowse}
               ?disabled=${this.isCloning}
             >
-              Browse...
+              ${msg('Browse...')}
             </button>
           </div>
 
           <div class="field">
-            <label for="branch">Branch (optional)</label>
+            <label for="branch">${msg('Branch (optional)')}</label>
             <input
               id="branch"
               type="text"
-              placeholder="Leave empty for the default branch"
+              placeholder=${msg('Leave empty for the default branch')}
               .value=${this.branch}
               @input=${this.handleBranchChange}
               ?disabled=${this.isCloning}
             />
             <div class="field-hint">
-              Clones and checks out this branch instead of the one the remote points at.
+              ${msg(
+                'Clones and checks out this branch instead of the one the remote points at.',
+              )}
             </div>
           </div>
 
           <div class="field">
-            <label for="depth">Shallow clone depth (optional)</label>
+            <label for="depth">${msg('Shallow clone depth (optional)')}</label>
             <input
               id="depth"
               type="number"
               min="1"
-              placeholder="Leave empty for full clone"
+              placeholder=${msg('Leave empty for full clone')}
               .value=${this.depth !== null ? String(this.depth) : ''}
               @input=${this.handleDepthChange}
               ?disabled=${this.isCloning}
@@ -959,16 +967,20 @@ export class GnCloneDialog extends LitElement {
           </div>
 
           <div class="field">
-            <label for="filter">Partial clone filter (optional)</label>
+            <label for="filter">${msg('Partial clone filter (optional)')}</label>
             <select
               id="filter"
               .value=${this.filter ?? ''}
               @change=${(e: Event) => { this.filter = (e.target as HTMLSelectElement).value || null; }}
               ?disabled=${this.isCloning}
             >
-              <option value="">None (full clone)</option>
-              <option value="blob:none">blob:none — Skip file contents, fetch on demand</option>
-              <option value="tree:0">tree:0 — Skip trees and blobs, minimal clone</option>
+              <option value="">${msg('None (full clone)')}</option>
+              <option value="blob:none">
+                ${msg('blob:none — Skip file contents, fetch on demand')}
+              </option>
+              <option value="tree:0">
+                ${msg('tree:0 — Skip trees and blobs, minimal clone')}
+              </option>
             </select>
           </div>
 
@@ -980,7 +992,7 @@ export class GnCloneDialog extends LitElement {
               @change=${(e: Event) => { this.singleBranch = (e.target as HTMLInputElement).checked; }}
               ?disabled=${this.isCloning}
             />
-            <label for="single-branch" style="margin:0">Single branch only</label>
+            <label for="single-branch" style="margin:0">${msg('Single branch only')}</label>
           </div>
 
           <div class="field" style="flex-direction:row;align-items:center;gap:8px">
@@ -994,7 +1006,7 @@ export class GnCloneDialog extends LitElement {
               ?disabled=${this.isCloning}
             />
             <label for="clone-submodules" style="margin:0">
-              Clone submodules (fetched after the clone finishes)
+              ${msg('Clone submodules (fetched after the clone finishes)')}
             </label>
           </div>
 
@@ -1014,7 +1026,9 @@ export class GnCloneDialog extends LitElement {
           </div>
 
           ${this.fullPath
-            ? html`<div class="repo-name-preview">Full path: ${this.fullPath}</div>`
+            ? html`<div class="repo-name-preview">
+                ${msg(str`Full path: ${this.fullPath}`)}
+              </div>`
             : ''}
 
           ${this.isCloning || this.submodulePhase
@@ -1044,10 +1058,12 @@ export class GnCloneDialog extends LitElement {
             ?disabled=${this.isCancelling}
           >
             ${this.submodulePhase
-              ? 'Close'
+              ? msg('Close')
               : this.isCloning && !this.isComplete
-                ? (this.isCancelling ? 'Cancelling…' : 'Cancel Clone')
-                : 'Cancel'}
+                ? this.isCancelling
+                  ? msg('Cancelling…')
+                  : msg('Cancel Clone')
+                : msg('Cancel')}
           </button>
           <button
             class="btn btn-primary"
@@ -1055,12 +1071,12 @@ export class GnCloneDialog extends LitElement {
             ?disabled=${!this.canClone}
           >
             ${this.submodulePhase
-              ? 'Cloning submodules...'
+              ? msg('Cloning submodules...')
               : this.isComplete
-                ? 'Done'
+                ? msg('Done')
                 : this.isCloning
-                  ? 'Cloning...'
-                  : 'Clone'}
+                  ? msg('Cloning...')
+                  : msg('Clone')}
           </button>
         </div>
       </gn-modal>

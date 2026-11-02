@@ -4,12 +4,12 @@
 
 use crate::error::{GitnadoError, Result};
 use crate::services::ai::{
-    AiProviderInfo, AiProviderType, AiService, AiState, AiUnavailable, AnalysisFinding,
-    CommitSplitSuggestion, ConflictExplanation, ConflictResolutionSuggestion, FindingCategory,
-    GeneratedChangelog, GeneratedCommitMessage, GeneratedPrDescription, ReflogMatch, RiskLevel,
-    Severity, StagedAnalysis, CHANGELOG_PROMPT, COMMIT_SPLIT_PROMPT, CONFLICT_EXPLAIN_PROMPT,
-    CONFLICT_RESOLUTION_PROMPT, MAX_CHANGELOG_BYTES, MAX_CONFLICT_CONTEXT_BYTES, MAX_DIFF_BYTES,
-    PR_DESCRIPTION_PROMPT, REFLOG_MATCH_PROMPT, VIBE_CHECK_PROMPT,
+    changelog_prompt, commit_split_prompt, conflict_explain_prompt, conflict_resolution_prompt,
+    pr_description_prompt, reflog_match_prompt, vibe_check_prompt, AiProviderInfo, AiProviderType,
+    AiService, AiState, AiUnavailable, AnalysisFinding, CommitSplitSuggestion, ConflictExplanation,
+    ConflictResolutionSuggestion, FindingCategory, GeneratedChangelog, GeneratedCommitMessage,
+    GeneratedPrDescription, PromptLanguage, ReflogMatch, RiskLevel, Severity, StagedAnalysis,
+    MAX_CHANGELOG_BYTES, MAX_CONFLICT_CONTEXT_BYTES, MAX_DIFF_BYTES,
 };
 use tauri::{command, State};
 
@@ -25,6 +25,18 @@ fn guard_ai_request(service: &AiService) -> Result<()> {
         Some(endpoint) => crate::services::security::guard_endpoint(&endpoint),
         None => Ok(()),
     }
+}
+
+/// The reflog-matching system prompt in `language`, with the user's request
+/// substituted for the `{query}` placeholder.
+fn reflog_match_prompt_with_query(language: PromptLanguage, query: &str) -> String {
+    reflog_match_prompt(language).replace("{query}", query)
+}
+
+/// The PR-description system prompt in `language`, with the PR title
+/// substituted for the `{title}` placeholder.
+fn pr_description_prompt_with_title(language: PromptLanguage, title: &str) -> String {
+    pr_description_prompt(language).replace("{title}", title)
 }
 
 /// Get list of all AI providers with their status
@@ -105,7 +117,9 @@ pub async fn auto_detect_ai_providers(state: State<'_, AiState>) -> Result<Vec<A
 pub async fn generate_commit_message(
     state: State<'_, AiState>,
     repo_path: String,
+    prompt_language: Option<PromptLanguage>,
 ) -> Result<GeneratedCommitMessage> {
+    let language = prompt_language.unwrap_or_default();
     // Get staged diff
     let diff = get_staged_diff(&repo_path)?;
 
@@ -119,7 +133,7 @@ pub async fn generate_commit_message(
     let service = state.read().await;
     guard_ai_request(&service)?;
     service
-        .generate_commit_message(diff)
+        .generate_commit_message(diff, language)
         .await
         .map_err(GitnadoError::OperationFailed)
 }
@@ -152,6 +166,7 @@ pub async fn ai_unavailable_reason(state: State<'_, AiState>) -> Result<Option<A
 }
 
 /// Suggest a conflict resolution using AI
+#[allow(clippy::too_many_arguments)] // Tauri commands receive flat named arguments
 #[command]
 pub async fn suggest_conflict_resolution(
     state: State<'_, AiState>,
@@ -161,7 +176,9 @@ pub async fn suggest_conflict_resolution(
     base_content: Option<String>,
     context_before: Option<String>,
     context_after: Option<String>,
+    prompt_language: Option<PromptLanguage>,
 ) -> Result<ConflictResolutionSuggestion> {
+    let language = prompt_language.unwrap_or_default();
     let service = state.read().await;
     guard_ai_request(&service)?;
 
@@ -217,7 +234,7 @@ pub async fn suggest_conflict_resolution(
     }
 
     let response = service
-        .generate_text(CONFLICT_RESOLUTION_PROMPT, &user_prompt, None)
+        .generate_text(conflict_resolution_prompt(language), &user_prompt, None)
         .await
         .map_err(GitnadoError::OperationFailed)?;
 
@@ -233,8 +250,10 @@ pub async fn generate_changelog(
     base_ref: String,
     compare_ref: String,
     max_commits: Option<u32>,
+    prompt_language: Option<PromptLanguage>,
 ) -> Result<GeneratedChangelog> {
     let max_commits = max_commits.unwrap_or(200);
+    let language = prompt_language.unwrap_or_default();
 
     // Get commits between the two refs using git log
     let commits_text = get_commits_between_refs(&repo_path, &base_ref, &compare_ref, max_commits)?;
@@ -251,7 +270,7 @@ pub async fn generate_changelog(
     let service = state.read().await;
     guard_ai_request(&service)?;
     let response = service
-        .generate_text(CHANGELOG_PROMPT, truncated, Some(2000))
+        .generate_text(changelog_prompt(language), truncated, Some(2000))
         .await
         .map_err(GitnadoError::OperationFailed)?;
 
@@ -265,6 +284,7 @@ pub async fn generate_changelog(
 // ========================================================================
 
 /// Explain why a conflict occurred in plain language
+#[allow(clippy::too_many_arguments)] // Tauri commands receive flat named arguments
 #[command]
 pub async fn explain_conflict(
     state: State<'_, AiState>,
@@ -274,7 +294,9 @@ pub async fn explain_conflict(
     base_content: Option<String>,
     our_ref: Option<String>,
     their_ref: Option<String>,
+    prompt_language: Option<PromptLanguage>,
 ) -> Result<ConflictExplanation> {
+    let language = prompt_language.unwrap_or_default();
     let mut user_prompt = format!("File: {}\n\n", file_path);
 
     if let Some(ref our_branch) = our_ref {
@@ -309,7 +331,7 @@ pub async fn explain_conflict(
     let service = state.read().await;
     guard_ai_request(&service)?;
     let response = service
-        .generate_text(CONFLICT_EXPLAIN_PROMPT, &user_prompt, Some(500))
+        .generate_text(conflict_explain_prompt(language), &user_prompt, Some(500))
         .await
         .map_err(GitnadoError::OperationFailed)?;
 
@@ -322,7 +344,9 @@ pub async fn find_reflog_entry(
     state: State<'_, AiState>,
     repo_path: String,
     query: String,
+    prompt_language: Option<PromptLanguage>,
 ) -> Result<ReflogMatch> {
+    let language = prompt_language.unwrap_or_default();
     // Get reflog entries
     let output = std::process::Command::new("git")
         .arg("-C")
@@ -345,7 +369,7 @@ pub async fn find_reflog_entry(
         return Err(GitnadoError::OperationFailed("Reflog is empty".to_string()));
     }
 
-    let system_prompt = REFLOG_MATCH_PROMPT.replace("{query}", &query);
+    let system_prompt = reflog_match_prompt_with_query(language, &query);
 
     let service = state.read().await;
     guard_ai_request(&service)?;
@@ -424,7 +448,9 @@ fn get_commits_between_refs(
 pub async fn analyze_staged_changes(
     state: State<'_, AiState>,
     repo_path: String,
+    prompt_language: Option<PromptLanguage>,
 ) -> Result<StagedAnalysis> {
+    let language = prompt_language.unwrap_or_default();
     let diff = get_staged_diff(&repo_path)?;
 
     if diff.is_empty() {
@@ -459,7 +485,7 @@ pub async fn analyze_staged_changes(
     let ai_error = match blocked {
         Some(reason) => Some(reason),
         None => match service
-            .generate_text(VIBE_CHECK_PROMPT, truncated, Some(1000))
+            .generate_text(vibe_check_prompt(language), truncated, Some(1000))
             .await
         {
             Ok(response) => match parse_vibe_check_response(&response) {
@@ -522,7 +548,9 @@ pub async fn generate_pr_description(
     base_ref: String,
     head_ref: String,
     title: String,
+    prompt_language: Option<PromptLanguage>,
 ) -> Result<GeneratedPrDescription> {
+    let language = prompt_language.unwrap_or_default();
     // Get commits between refs
     let commits_text = get_commits_between_refs(&repo_path, &base_ref, &head_ref, 100)?;
 
@@ -539,7 +567,7 @@ pub async fn generate_pr_description(
     let truncated = truncate_content(&user_prompt, MAX_CHANGELOG_BYTES);
 
     // Replace {title} placeholder in prompt
-    let system_prompt = PR_DESCRIPTION_PROMPT.replace("{title}", &title);
+    let system_prompt = pr_description_prompt_with_title(language, &title);
 
     let service = state.read().await;
     guard_ai_request(&service)?;
@@ -558,7 +586,9 @@ pub async fn generate_pr_description(
 pub async fn suggest_commit_splits(
     state: State<'_, AiState>,
     repo_path: String,
+    prompt_language: Option<PromptLanguage>,
 ) -> Result<CommitSplitSuggestion> {
+    let language = prompt_language.unwrap_or_default();
     let diff = get_staged_diff(&repo_path)?;
 
     if diff.is_empty() {
@@ -584,7 +614,7 @@ pub async fn suggest_commit_splits(
     let service = state.read().await;
     guard_ai_request(&service)?;
     let response = service
-        .generate_text(COMMIT_SPLIT_PROMPT, truncated, Some(1500))
+        .generate_text(commit_split_prompt(language), truncated, Some(1500))
         .await
         .map_err(GitnadoError::OperationFailed)?;
 
@@ -792,6 +822,7 @@ fn get_staged_diff(repo_path: &str) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::services::ai::commit_message_prompt;
     use crate::test_utils::TestRepo;
 
     /// truncate_content takes a BYTE limit and used it as a slice index twice.
@@ -1217,5 +1248,85 @@ mod tests {
         let result = parse_reflog_match(response);
         assert!(result.is_ok());
         assert_eq!(result.unwrap().index, 5);
+    }
+
+    // ========================================================================
+    // Prompt language selection
+    // ========================================================================
+
+    /// The PR command substitutes `{title}` into whichever language's prompt
+    /// was selected — the placeholder lives in both variants.
+    #[test]
+    fn test_pr_description_prompt_substitutes_title_in_both_languages() {
+        for language in [PromptLanguage::En, PromptLanguage::Zh] {
+            let prompt = pr_description_prompt_with_title(language, "Add auth");
+            assert!(
+                !prompt.contains("{title}"),
+                "{language:?}: placeholder must be replaced"
+            );
+            assert!(prompt.contains("Add auth"), "{language:?}: title missing");
+        }
+        assert!(pr_description_prompt_with_title(PromptLanguage::En, "T").contains("PR Title: T"));
+        assert!(pr_description_prompt_with_title(PromptLanguage::Zh, "T").contains("PR 标题：T"));
+    }
+
+    #[test]
+    fn test_reflog_prompt_substitutes_query_in_both_languages() {
+        for language in [PromptLanguage::En, PromptLanguage::Zh] {
+            let prompt = reflog_match_prompt_with_query(language, "undo last 3 commits");
+            assert!(
+                !prompt.contains("{query}"),
+                "{language:?}: placeholder must be replaced"
+            );
+            assert!(
+                prompt.contains("undo last 3 commits"),
+                "{language:?}: query missing"
+            );
+        }
+    }
+
+    /// An older frontend sends no `promptLanguage` at all; that must keep
+    /// exactly today's English behaviour rather than defaulting to Chinese.
+    #[test]
+    fn test_absent_prompt_language_defaults_to_english() {
+        // `Option::unwrap_or_default()` on the command parameter, expressed
+        // without the literal `None` clippy rejects.
+        let language = PromptLanguage::default();
+        assert_eq!(language, PromptLanguage::En);
+        let prompt = pr_description_prompt_with_title(language, "T");
+        assert!(prompt.contains("PR Title: T"));
+        assert!(!prompt.contains("简体中文"));
+    }
+
+    type PromptSelector = fn(PromptLanguage) -> &'static str;
+
+    /// Every AI command picks its prompt through one of these selectors, so a
+    /// selector that forgot its Chinese variant would leave that command
+    /// writing English into a Chinese interface.
+    #[test]
+    fn test_ai_command_prompts_switch_on_language() {
+        let selectors: [(&str, PromptSelector); 8] = [
+            ("commit_message", commit_message_prompt),
+            ("vibe_check", vibe_check_prompt),
+            ("commit_split", commit_split_prompt),
+            ("changelog", changelog_prompt),
+            ("pr_description", pr_description_prompt),
+            ("conflict_resolution", conflict_resolution_prompt),
+            ("conflict_explain", conflict_explain_prompt),
+            ("reflog_match", reflog_match_prompt),
+        ];
+        for (name, select) in selectors {
+            let en = select(PromptLanguage::En);
+            let zh = select(PromptLanguage::Zh);
+            assert_ne!(en, zh, "{name}: zh prompt must differ from en");
+            assert!(
+                !en.contains("简体中文"),
+                "{name}: en prompt must stay English"
+            );
+            assert!(
+                zh.contains("简体中文"),
+                "{name}: zh prompt must require Simplified Chinese output"
+            );
+        }
     }
 }

@@ -1,5 +1,6 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, property, state, query } from 'lit/decorators.js';
+import { localized, msg, str } from '@lit/localize';
 import { sharedStyles } from '../../styles/shared-styles.ts';
 import { showPrompt } from '../../services/dialog.service.ts';
 
@@ -22,6 +23,7 @@ export interface FilterPreset {
 }
 
 @customElement('gn-search-bar')
+@localized()
 export class GnSearchBar extends LitElement {
   static styles = [
     sharedStyles,
@@ -360,7 +362,7 @@ export class GnSearchBar extends LitElement {
   }
 
   private async handleSavePreset(): Promise<void> {
-    const name = await showPrompt('Save Preset', 'Preset name:');
+    const name = await showPrompt(msg('Save Preset'), msg('Preset name:'));
     if (name?.trim()) {
       this.savePreset(name.trim());
     }
@@ -473,19 +475,19 @@ export class GnSearchBar extends LitElement {
 
           <input
             type="text"
-            placeholder="${this.searchMode === 'semantic' ? 'Search commits by meaning...' : 'Search commits...'}"
+            placeholder="${this.searchMode === 'semantic' ? msg('Search commits by meaning...') : msg('Search commits...')}"
             .value=${this.query}
             @input=${this.handleInput}
             @keydown=${this.handleKeyDown}
           />
 
           ${this.showResultCount && hasQuery
-            ? html`<span class="result-count">${this.resultCount} results</span>`
+            ? html`<span class="result-count">${msg(str`${this.resultCount} results`)}</span>`
             : null}
 
           ${hasQuery || hasFilters
             ? html`
-                <button class="clear-btn" @click=${this.handleClear} title="Clear search">
+                <button class="clear-btn" @click=${this.handleClear} title=${msg('Clear search')}>
                   <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
                     <path d="M6 4.586L1.707.293A1 1 0 00.293 1.707L4.586 6 .293 10.293a1 1 0 101.414 1.414L6 7.414l4.293 4.293a1 1 0 001.414-1.414L7.414 6l4.293-4.293A1 1 0 0010.293.293L6 4.586z"/>
                   </svg>
@@ -497,7 +499,7 @@ export class GnSearchBar extends LitElement {
             <button
               class="semantic-btn ${this.searchMode === 'semantic' ? 'active' : ''}"
               @click=${this.toggleSearchMode}
-              title="${this.searchMode === 'semantic' ? 'Switch to keyword search' : 'Switch to semantic search'}"
+              title=${this.searchMode === 'semantic' ? msg('Switch to keyword search') : msg('Switch to semantic search')}
             >
               <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
                 <path d="M8 1a3.5 3.5 0 0 0-3.5 3.5c0 1.193.603 2.26 1.5 2.898V9.5a1 1 0 0 0 .293.707l1 1a1 1 0 0 0 1.414 0l1-1A1 1 0 0 0 10 9.5V7.398A3.496 3.496 0 0 0 11.5 4.5 3.5 3.5 0 0 0 8 1zm0 1.5a2 2 0 0 1 2 2 2 2 0 0 1-2 2 2 2 0 0 1-2-2 2 2 0 0 1 2-2zM5.5 12a.5.5 0 0 0 0 1h5a.5.5 0 0 0 0-1h-5zm1 2a.5.5 0 0 0 0 1h3a.5.5 0 0 0 0-1h-3z"/>
@@ -508,7 +510,7 @@ export class GnSearchBar extends LitElement {
           <button
             class="filter-btn ${hasFilters ? 'active' : ''}"
             @click=${this.toggleFilters}
-            title="Advanced filters"
+            title=${msg('Advanced filters')}
           >
             <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
               <path d="M1.5 1.5A.5.5 0 0 1 2 1h12a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-.128.334L10 8.692V13.5a.5.5 0 0 1-.342.474l-3 1A.5.5 0 0 1 6 14.5V8.692L1.628 3.834A.5.5 0 0 1 1.5 3.5v-2z"/>
@@ -520,18 +522,18 @@ export class GnSearchBar extends LitElement {
           ? html`
               <div class="filters-panel">
                 <div class="filter-row">
-                  <span class="filter-label">Author</span>
+                  <span class="filter-label">${msg('Author')}</span>
                   <input
                     type="text"
                     class="filter-input"
-                    placeholder="Author name or email"
+                    placeholder=${msg('Author name or email')}
                     .value=${this.author}
                     @input=${this.handleAuthorChange}
                   />
                 </div>
 
                 <div class="filter-row">
-                  <span class="filter-label">From</span>
+                  <span class="filter-label">${msg('From')}</span>
                   <input
                     type="date"
                     class="filter-input"
@@ -541,7 +543,7 @@ export class GnSearchBar extends LitElement {
                 </div>
 
                 <div class="filter-row">
-                  <span class="filter-label">To</span>
+                  <span class="filter-label">${msg('To')}</span>
                   <input
                     type="date"
                     class="filter-input"
@@ -551,36 +553,36 @@ export class GnSearchBar extends LitElement {
                 </div>
 
                 <div class="filter-row">
-                  <span class="filter-label">Path</span>
+                  <span class="filter-label">${msg('Path')}</span>
                   <input
                     type="text"
                     class="filter-input"
-                    placeholder="*.ts, src/**, or file path"
+                    placeholder=${msg('*.ts, src/**, or file path')}
                     .value=${this.filePath}
                     @input=${this.handleFilePathChange}
                   />
                 </div>
 
                 <div class="filter-row">
-                  <span class="filter-label">Branch</span>
+                  <span class="filter-label">${msg('Branch')}</span>
                   <input
                     type="text"
                     class="filter-input"
-                    placeholder="Branch or ref name"
+                    placeholder=${msg('Branch or ref name')}
                     .value=${this.branch}
                     @input=${this.handleBranchChange}
                   />
                 </div>
 
                 <div class="filter-actions">
-                  <button @click=${this.clearFilters}>Clear Filters</button>
-                  <button @click=${this.handleSavePreset}>Save Preset</button>
-                  <button class="primary" @click=${this.applyFilters}>Apply</button>
+                  <button @click=${this.clearFilters}>${msg('Clear Filters')}</button>
+                  <button @click=${this.handleSavePreset}>${msg('Save Preset')}</button>
+                  <button class="primary" @click=${this.applyFilters}>${msg('Apply')}</button>
                 </div>
                 ${this.presets.length > 0
                   ? html`
                       <div class="preset-list">
-                        <div class="preset-list-title">Saved Presets</div>
+                        <div class="preset-list-title">${msg('Saved Presets')}</div>
                         ${this.presets.map(
                           (preset) => html`
                             <div
@@ -594,7 +596,7 @@ export class GnSearchBar extends LitElement {
                                   e.stopPropagation();
                                   this.deletePreset(preset.id);
                                 }}
-                                title="Delete preset"
+                                title=${msg('Delete preset')}
                               >
                                 <svg width="10" height="10" viewBox="0 0 12 12" fill="currentColor">
                                   <path d="M6 4.586L1.707.293A1 1 0 00.293 1.707L4.586 6 .293 10.293a1 1 0 101.414 1.414L6 7.414l4.293 4.293a1 1 0 001.414-1.414L7.414 6l4.293-4.293A1 1 0 0010.293.293L6 4.586z"/>

@@ -36,6 +36,16 @@ import { clearGraphCacheForTests, evictGraphCache } from '../gn-graph-canvas.ts'
 import { searchIndexService } from '../../../services/search-index.service.ts';
 import { settingsStore } from '../../../stores/settings.store.ts';
 
+import { setAppLocale } from '../../../i18n/index.ts';
+
+// The fresh-install language default is Chinese (settings.store.ts), and
+// `resetToDefaults()` re-applies it. Every assertion in this file is about the
+// English source strings, so pin the locale before each test rather than
+// depending on the order the suites happen to run in.
+beforeEach(async () => {
+  await setAppLocale('en');
+  settingsStore.setState({ language: 'en' });
+});
 // ── Test data ──────────────────────────────────────────────────────────────
 const REPO_PATH = '/test/repo';
 
@@ -229,6 +239,49 @@ describe('gn-graph-canvas', () => {
       const buttonTexts = Array.from(buttons).map((b) => b.textContent?.trim());
       expect(buttonTexts).to.include('Branches');
       expect(buttonTexts).to.include('Export');
+    });
+
+    it('keeps the toolbar labels on one line over an opaque backdrop in Chinese', async () => {
+      // The toolbar is absolutely positioned over the canvas-painted column
+      // header row. With per-button backgrounds only, the two-pixel gaps
+      // between buttons showed fragments of the header text behind ("更改"),
+      // which looked like a clipped glyph — the toolbar needs its own backdrop.
+      await setAppLocale('zh');
+      const el = await renderCanvas();
+      const toolbar = el.shadowRoot!.querySelector('.graph-toolbar') as HTMLElement;
+
+      // Fully opaque (an rgba()/transparent backdrop would let the header text
+      // behind the toolbar bleed through the gaps again).
+      expect(getComputedStyle(toolbar).backgroundColor).to.match(/^rgb\(/);
+
+      const buttons = Array.from(
+        toolbar.querySelectorAll<HTMLElement>('.toolbar-btn')
+      );
+      expect(buttons.map((button) => button.textContent?.trim())).to.include.members([
+        '缩略图',
+        '分支',
+        '导出',
+      ]);
+
+      for (const button of buttons) {
+        const style = getComputedStyle(button);
+        expect(style.whiteSpace, 'localised labels must not wrap').to.equal('nowrap');
+        expect(style.flexShrink, 'the toolbar must not squeeze a label').to.equal('0');
+        expect(button.getBoundingClientRect().height).to.be.at.most(22);
+
+        // Every label renders on a single line: all text-node rects share one
+        // top coordinate.
+        const tops = new Set<number>();
+        for (const node of Array.from(button.childNodes)) {
+          if (node.nodeType !== Node.TEXT_NODE || !node.textContent?.trim()) continue;
+          const range = document.createRange();
+          range.selectNodeContents(node);
+          for (const rect of Array.from(range.getClientRects())) {
+            if (rect.width > 0) tops.add(Math.round(rect.top));
+          }
+        }
+        expect(tops.size, `${button.textContent?.trim()} wrapped onto several lines`).to.equal(1);
+      }
     });
 
     it('shows error panel when no repository path is set', async () => {
@@ -2823,10 +2876,14 @@ describe('gn-graph-canvas commit-size setting', () => {
 describe('gn-graph-canvas avatar fetch policy', () => {
   type RendererInternals = { renderer: { config: { fetchAvatars: boolean } } };
 
-  beforeEach(() => {
+  beforeEach(async () => {
     clearHistory();
     setupDefaultMocks();
     settingsStore.getState().resetToDefaults();
+    // resetToDefaults() re-applies the fresh-install default, which is Chinese;
+    // the assertions here are about the English source strings.
+    await setAppLocale('en');
+    settingsStore.setState({ language: 'en' });
   });
 
   afterEach(() => {

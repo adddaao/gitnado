@@ -5,6 +5,7 @@
 
 import { LitElement, html, css } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
+import { localized, msg, str } from '@lit/localize';
 import { sharedStyles } from '../../styles/shared-styles.ts';
 import * as gitService from '../../services/git.service.ts';
 import type { BisectStatus, CulpritCommit } from '../../services/git.service.ts';
@@ -20,6 +21,7 @@ import {
 type BisectStep = 'setup' | 'in-progress' | 'complete';
 
 @customElement('gn-bisect-dialog')
+@localized()
 export class GnBisectDialog extends LitElement {
   static styles = [
     sharedStyles,
@@ -559,7 +561,7 @@ export class GnBisectDialog extends LitElement {
         this.culprit = null;
         this.currentCommitInfo = null;
         this.step = 'setup';
-        this.error = result.error?.message || 'Failed to get bisect status';
+        this.error = result.error?.message || msg('Failed to get bisect status');
       }
     } catch (err) {
       if (this.repositoryPath !== loadedPath) return;
@@ -567,7 +569,7 @@ export class GnBisectDialog extends LitElement {
       this.culprit = null;
       this.currentCommitInfo = null;
       this.step = 'setup';
-      this.error = err instanceof Error ? err.message : 'Failed to get bisect status';
+      this.error = err instanceof Error ? err.message : msg('Failed to get bisect status');
     } finally {
       if (this.repositoryPath === loadedPath) {
         this.loading = false;
@@ -584,13 +586,13 @@ export class GnBisectDialog extends LitElement {
     } else {
       // Leave a visible fallback instead of an eternal "Loading..." message
       this.currentCommitInfo = null;
-      this.error = result.error?.message || 'Failed to load current commit details';
+      this.error = result.error?.message || msg('Failed to load current commit details');
     }
   }
 
   private async handleStart(): Promise<void> {
     if (!this.badCommitInput || !this.goodCommitInput) {
-      this.error = 'Please provide both bad and good commit references';
+      this.error = msg('Please provide both bad and good commit references');
       return;
     }
 
@@ -600,7 +602,7 @@ export class GnBisectDialog extends LitElement {
     // the shared working-tree lock, so without claiming it a checkout stayed
     // clickable while bisect was mid-step.
     if (!tryAcquireRefOp(repoPath)) {
-      this.error = 'Another operation is already running in this repository.';
+      this.error = msg('Another operation is already running in this repository.');
       return;
     }
     this.loading = true;
@@ -635,7 +637,7 @@ export class GnBisectDialog extends LitElement {
           }
         }
       } else {
-        this.error = result.error?.message || 'Failed to start bisect';
+        this.error = result.error?.message || msg('Failed to start bisect');
       }
 
       if (this.repositoryPath === repoPath) {
@@ -660,7 +662,7 @@ export class GnBisectDialog extends LitElement {
     const repoPath = this.repositoryPath;
     // Shared working-tree lock — see handleStart.
     if (!tryAcquireRefOp(repoPath)) {
-      this.error = 'Another operation is already running in this repository.';
+      this.error = msg('Another operation is already running in this repository.');
       return;
     }
     this.loading = true;
@@ -687,7 +689,7 @@ export class GnBisectDialog extends LitElement {
           await this.fetchCurrentCommitInfo(result.data.status.currentCommit);
         }
       } else {
-        this.error = result.error?.message || 'Failed to mark as bad';
+        this.error = result.error?.message || msg('Failed to mark as bad');
       }
 
       if (this.repositoryPath === repoPath) {
@@ -704,7 +706,7 @@ export class GnBisectDialog extends LitElement {
     const repoPath = this.repositoryPath;
     // Shared working-tree lock — see handleStart.
     if (!tryAcquireRefOp(repoPath)) {
-      this.error = 'Another operation is already running in this repository.';
+      this.error = msg('Another operation is already running in this repository.');
       return;
     }
     this.loading = true;
@@ -728,7 +730,7 @@ export class GnBisectDialog extends LitElement {
           await this.fetchCurrentCommitInfo(result.data.status.currentCommit);
         }
       } else {
-        this.error = result.error?.message || 'Failed to mark as good';
+        this.error = result.error?.message || msg('Failed to mark as good');
       }
 
       if (this.repositoryPath === repoPath) {
@@ -745,7 +747,7 @@ export class GnBisectDialog extends LitElement {
     const repoPath = this.repositoryPath;
     // Shared working-tree lock — see handleStart.
     if (!tryAcquireRefOp(repoPath)) {
-      this.error = 'Another operation is already running in this repository.';
+      this.error = msg('Another operation is already running in this repository.');
       return;
     }
     this.loading = true;
@@ -764,7 +766,7 @@ export class GnBisectDialog extends LitElement {
           await this.fetchCurrentCommitInfo(result.data.status.currentCommit);
         }
       } else {
-        this.error = result.error?.message || 'Failed to skip commit';
+        this.error = result.error?.message || msg('Failed to skip commit');
       }
 
       if (this.repositoryPath === repoPath) {
@@ -785,7 +787,7 @@ export class GnBisectDialog extends LitElement {
     // this button stays live through it. `git bisect reset` checks the original
     // HEAD back out, so it takes the shared working-tree lock too.
     if (!tryAcquireRefOp(repoPath)) {
-      this.error = 'Another operation is already running in this repository.';
+      this.error = msg('Another operation is already running in this repository.');
       return;
     }
     this.loading = true;
@@ -802,12 +804,16 @@ export class GnBisectDialog extends LitElement {
     if (this.step === 'in-progress') {
       const stepsTaken = this.status?.currentStep ?? 0;
       const confirmed = await showConfirm(
-        'Abort Bisect',
+        msg('Abort Bisect'),
         stepsTaken > 0
-          ? `End this bisect and discard the ${stepsTaken} step${stepsTaken === 1 ? '' : 's'} ` +
-            `already narrowed down? The original HEAD is checked back out; the search itself ` +
-            `is not recorded anywhere and would have to be repeated.`
-          : `End this bisect? The original HEAD is checked back out.`,
+          ? stepsTaken === 1
+            ? msg(
+                str`End this bisect and discard the ${stepsTaken} step already narrowed down? The original HEAD is checked back out; the search itself is not recorded anywhere and would have to be repeated.`,
+              )
+            : msg(
+                str`End this bisect and discard the ${stepsTaken} steps already narrowed down? The original HEAD is checked back out; the search itself is not recorded anywhere and would have to be repeated.`,
+              )
+          : msg('End this bisect? The original HEAD is checked back out.'),
         'warning'
       );
       if (!confirmed) {
@@ -825,7 +831,7 @@ export class GnBisectDialog extends LitElement {
       if (result.success) {
         this.resetSessionState();
       } else {
-        this.error = result.error?.message || 'Failed to reset bisect';
+        this.error = result.error?.message || msg('Failed to reset bisect');
       }
       this.loading = false;
     }
@@ -846,36 +852,36 @@ export class GnBisectDialog extends LitElement {
   private renderSetup() {
     return html`
       <div class="setup-section">
-        <h3>Bad Commit (has the bug)</h3>
+        <h3>${msg('Bad Commit (has the bug)')}</h3>
         <div class="commit-input-group">
           <div class="commit-input">
             <input
               type="text"
-              placeholder="HEAD, commit hash, or branch name"
+              placeholder=${msg('HEAD, commit hash, or branch name')}
               .value=${this.badCommitInput}
               @input=${(e: Event) => {
                 this.badCommitInput = (e.target as HTMLInputElement).value;
               }}
             />
           </div>
-          <span class="hint">Usually HEAD or your current branch</span>
+          <span class="hint">${msg('Usually HEAD or your current branch')}</span>
         </div>
       </div>
 
       <div class="setup-section">
-        <h3>Good Commit (before the bug)</h3>
+        <h3>${msg('Good Commit (before the bug)')}</h3>
         <div class="commit-input-group">
           <div class="commit-input">
             <input
               type="text"
-              placeholder="Commit hash, tag, or branch name"
+              placeholder=${msg('Commit hash, tag, or branch name')}
               .value=${this.goodCommitInput}
               @input=${(e: Event) => {
                 this.goodCommitInput = (e.target as HTMLInputElement).value;
               }}
             />
           </div>
-          <span class="hint">A commit where the bug did not exist</span>
+          <span class="hint">${msg('A commit where the bug did not exist')}</span>
         </div>
       </div>
     `;
@@ -889,15 +895,15 @@ export class GnBisectDialog extends LitElement {
               <div class="progress-stats">
                 <div class="progress-stat">
                   <div class="progress-stat-value">${this.status.remaining ?? '?'}</div>
-                  <div class="progress-stat-label">Commits left</div>
+                  <div class="progress-stat-label">${msg('Commits left')}</div>
                 </div>
                 <div class="progress-stat">
                   <div class="progress-stat-value">${this.status.currentStep ?? 0}</div>
-                  <div class="progress-stat-label">Steps taken</div>
+                  <div class="progress-stat-label">${msg('Steps taken')}</div>
                 </div>
                 <div class="progress-stat">
                   <div class="progress-stat-value">~${this.status.totalSteps ?? '?'}</div>
-                  <div class="progress-stat-label">Total steps</div>
+                  <div class="progress-stat-label">${msg('Total steps')}</div>
                 </div>
               </div>
             </div>
@@ -905,12 +911,12 @@ export class GnBisectDialog extends LitElement {
         : ''}
 
       <div class="current-commit">
-        <div class="current-commit-label">Current Commit to Test</div>
+        <div class="current-commit-label">${msg('Current Commit to Test')}</div>
         <div class="current-commit-oid">
           ${this.status?.currentCommit?.substring(0, 12) ?? '...'}
         </div>
         <div class="current-commit-message">
-          ${this.currentCommitInfo?.summary ?? 'Loading...'}
+          ${this.currentCommitInfo?.summary ?? msg('Loading...')}
         </div>
       </div>
 
@@ -921,7 +927,7 @@ export class GnBisectDialog extends LitElement {
           ?disabled=${this.loading || this.lock.busy}
         >
           <div class="action-btn-icon">&#10003;</div>
-          <div class="action-btn-label">Good</div>
+          <div class="action-btn-label">${msg('Good')}</div>
         </button>
         <button
           class="action-btn bad"
@@ -929,7 +935,7 @@ export class GnBisectDialog extends LitElement {
           ?disabled=${this.loading || this.lock.busy}
         >
           <div class="action-btn-icon">&#10007;</div>
-          <div class="action-btn-label">Bad</div>
+          <div class="action-btn-label">${msg('Bad')}</div>
         </button>
         <button
           class="action-btn skip"
@@ -937,7 +943,7 @@ export class GnBisectDialog extends LitElement {
           ?disabled=${this.loading || this.lock.busy}
         >
           <div class="action-btn-icon">&#8594;</div>
-          <div class="action-btn-label">Skip</div>
+          <div class="action-btn-label">${msg('Skip')}</div>
         </button>
       </div>
 
@@ -956,12 +962,12 @@ export class GnBisectDialog extends LitElement {
                   <line x1="12" y1="8" x2="12" y2="12"></line>
                   <line x1="12" y1="16" x2="12.01" y2="16"></line>
                 </svg>
-                <span class="culprit-title">Bug-Introducing Commit Found</span>
+                <span class="culprit-title">${msg('Bug-Introducing Commit Found')}</span>
               </div>
               <div class="culprit-oid">${this.culprit.oid}</div>
               <div class="culprit-summary">${this.culprit.summary}</div>
               <div class="culprit-author">
-                by ${this.culprit.author} &lt;${this.culprit.email}&gt;
+                ${msg(str`by ${this.culprit.author} <${this.culprit.email}>`)}
               </div>
             </div>
           `
@@ -976,7 +982,7 @@ export class GnBisectDialog extends LitElement {
 
     return html`
       <div class="bisect-log">
-        <div class="bisect-log-title">Bisect History</div>
+        <div class="bisect-log-title">${msg('Bisect History')}</div>
         <div class="bisect-log-entries">
           ${this.status.log.map(
             (entry) => html`
@@ -1003,7 +1009,7 @@ export class GnBisectDialog extends LitElement {
                 <circle cx="12" cy="12" r="3"></circle>
                 <path d="M12 2v4m0 12v4M2 12h4m12 0h4"></path>
               </svg>
-              Git Bisect
+              ${msg('Git Bisect')}
             </span>
             <button class="close-btn" @click=${this.handleClose}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1015,7 +1021,7 @@ export class GnBisectDialog extends LitElement {
 
           <div class="dialog-content">
             ${this.loading
-              ? html`<div class="loading">Loading...</div>`
+              ? html`<div class="loading">${msg('Loading...')}</div>`
               : ''}
 
             ${this.error
@@ -1039,14 +1045,14 @@ export class GnBisectDialog extends LitElement {
             ${this.step === 'setup'
               ? html`
                   <button class="btn btn-secondary" @click=${this.handleClose}>
-                    Cancel
+                    ${msg('Cancel')}
                   </button>
                   <button
                     class="btn btn-primary"
                     @click=${this.handleStart}
                     ?disabled=${this.loading || this.lock.busy || !this.badCommitInput || !this.goodCommitInput}
                   >
-                    Start Bisect
+                    ${msg('Start Bisect')}
                   </button>
                 `
               : this.step === 'in-progress'
@@ -1056,7 +1062,7 @@ export class GnBisectDialog extends LitElement {
                       @click=${this.handleReset}
                       ?disabled=${this.loading || this.lock.busy}
                     >
-                      Abort Bisect
+                      ${msg('Abort Bisect')}
                     </button>
                   `
                 : html`
@@ -1065,7 +1071,7 @@ export class GnBisectDialog extends LitElement {
                       @click=${this.handleReset}
                       ?disabled=${this.loading || this.lock.busy}
                     >
-                      Finish
+                      ${msg('Finish')}
                     </button>
                   `}
           </div>

@@ -5,6 +5,7 @@
 
 import { LitElement, html, css } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
+import { localized, msg, str } from '@lit/localize';
 import { sharedStyles } from '../../styles/shared-styles.ts';
 import * as gitService from '../../services/git.service.ts';
 import { showConfirm } from '../../services/dialog.service.ts';
@@ -23,6 +24,7 @@ import { samePath } from '../../utils/path-compare.ts';
 type DialogMode = 'list' | 'add';
 
 @customElement('gn-worktree-dialog')
+@localized()
 export class GnWorktreeDialog extends LitElement {
   static styles = [
     sharedStyles,
@@ -494,12 +496,12 @@ export class GnWorktreeDialog extends LitElement {
         this.worktrees = result.data;
       } else {
         this.worktrees = [];
-        this.error = result.error?.message || 'Failed to load worktrees';
+        this.error = result.error?.message || msg('Failed to load worktrees');
       }
     } catch (err) {
       if (repoPath !== this.pinnedRepoPath) return;
       this.worktrees = [];
-      this.error = err instanceof Error ? err.message : 'Failed to load worktrees';
+      this.error = err instanceof Error ? err.message : msg('Failed to load worktrees');
     } finally {
       if (repoPath === this.pinnedRepoPath) {
         this.loading = false;
@@ -530,28 +532,28 @@ export class GnWorktreeDialog extends LitElement {
         this.branches = result.data.filter((b) => !b.isRemote && !usedBranches.has(b.name));
       } else {
         this.branches = [];
-        showToast(result.error?.message || 'Failed to load branches', 'error');
+        showToast(result.error?.message || msg('Failed to load branches'), 'error');
       }
     } catch (err) {
       if (repoPath !== this.pinnedRepoPath) return;
       this.branches = [];
-      showToast(err instanceof Error ? err.message : 'Failed to load branches', 'error');
+      showToast(err instanceof Error ? err.message : msg('Failed to load branches'), 'error');
     }
   }
 
   private async handleAdd(): Promise<void> {
     if (!this.addPath) {
-      this.error = 'Path is required';
+      this.error = msg('Path is required');
       return;
     }
 
     if (!this.createNewBranch && !this.addBranch) {
-      this.error = 'Please select a branch or create a new one';
+      this.error = msg('Please select a branch or create a new one');
       return;
     }
 
     if (this.createNewBranch && !this.newBranchName) {
-      this.error = 'New branch name is required';
+      this.error = msg('New branch name is required');
       return;
     }
 
@@ -569,7 +571,7 @@ export class GnWorktreeDialog extends LitElement {
     });
 
     if (result.success) {
-      this.success = 'Worktree added successfully';
+      this.success = msg('Worktree added successfully');
       this.addPath = '';
       this.addBranch = '';
       this.newBranchName = '';
@@ -586,7 +588,7 @@ export class GnWorktreeDialog extends LitElement {
         detail: { repositoryPath: repoPath || this.repositoryPath },
       }));
     } else {
-      this.error = result.error?.message || 'Failed to add worktree';
+      this.error = result.error?.message || msg('Failed to add worktree');
     }
     } finally {
       this.loading = false;
@@ -618,7 +620,7 @@ export class GnWorktreeDialog extends LitElement {
 
   private async handleRemove(worktree: Worktree): Promise<void> {
     if (worktree.isMain) {
-      this.error = 'Cannot remove the main worktree';
+      this.error = msg('Cannot remove the main worktree');
       return;
     }
     // `git worktree remove` deliberately allows removing the worktree you are
@@ -630,8 +632,9 @@ export class GnWorktreeDialog extends LitElement {
     // confirm that never said this was the repository you have open. Removing
     // it left every subsequent command failing on a directory that was gone.
     if (this.isCurrentWorktree(worktree)) {
-      this.error =
-        'Cannot remove the worktree you currently have open. Open a different worktree first.';
+      this.error = msg(
+        'Cannot remove the worktree you currently have open. Open a different worktree first.'
+      );
       return;
     }
     // A DEDICATED flag, not `loading`: that one also tracks background list
@@ -654,8 +657,8 @@ export class GnWorktreeDialog extends LitElement {
     this.removingPath = worktree.path;
 
     const confirmed = await showConfirm(
-      'Remove Worktree',
-      `Remove the worktree at "${worktree.path}"? Its working directory will be deleted; committed work stays in the repository.`,
+      msg('Remove Worktree'),
+      msg(str`Remove the worktree at "${worktree.path}"? Its working directory will be deleted; committed work stays in the repository.`),
       'warning'
     );
 
@@ -681,8 +684,8 @@ export class GnWorktreeDialog extends LitElement {
       // escalation discards uncommitted work, so it is the last place that
       // should be re-enterable.
       const forced = await showConfirm(
-        'Remove Worktree',
-        `The worktree at "${worktree.path}" contains modified or untracked files. Removing it will permanently discard that work. Continue?`,
+        msg('Remove Worktree'),
+        msg(str`The worktree at "${worktree.path}" contains modified or untracked files. Removing it will permanently discard that work. Continue?`),
         'error'
       );
       if (!forced) {
@@ -690,15 +693,16 @@ export class GnWorktreeDialog extends LitElement {
         // all, so the git refusal that explains why the worktree is still
         // there — the only thing that makes the outcome legible — vanished
         // with the prompt.
-        this.error =
-          'Removal cancelled — the worktree still contains modified or untracked files.';
+        this.error = msg(
+          'Removal cancelled — the worktree still contains modified or untracked files.'
+        );
         return;
       }
       result = await gitService.removeWorktree(repoPath, worktree.path, true);
     }
 
     if (result.success) {
-      this.success = 'Worktree removed';
+      this.success = msg('Worktree removed');
       this.error = '';
       await this.loadWorktrees(repoPath);
       await this.loadBranches(repoPath);
@@ -706,7 +710,7 @@ export class GnWorktreeDialog extends LitElement {
         detail: { repositoryPath: repoPath || this.repositoryPath },
       }));
     } else {
-      this.error = result.error?.message || 'Failed to remove worktree';
+      this.error = result.error?.message || msg('Failed to remove worktree');
     }
     } finally {
       this.loading = false;
@@ -738,13 +742,13 @@ export class GnWorktreeDialog extends LitElement {
       const result = await gitService.lockWorktree(repoPath, worktree.path);
 
       if (result.success) {
-        this.success = 'Worktree locked successfully';
+        this.success = msg('Worktree locked successfully');
         await this.loadWorktrees(repoPath);
         this.dispatchEvent(new CustomEvent('worktrees-changed', {
         detail: { repositoryPath: repoPath || this.repositoryPath },
       }));
       } else {
-        this.error = result.error?.message || 'Failed to lock worktree';
+        this.error = result.error?.message || msg('Failed to lock worktree');
       }
     } finally {
       this.loading = false;
@@ -769,13 +773,13 @@ export class GnWorktreeDialog extends LitElement {
       const result = await gitService.unlockWorktree(repoPath, worktree.path);
 
       if (result.success) {
-        this.success = 'Worktree unlocked successfully';
+        this.success = msg('Worktree unlocked successfully');
         await this.loadWorktrees(repoPath);
         this.dispatchEvent(new CustomEvent('worktrees-changed', {
         detail: { repositoryPath: repoPath || this.repositoryPath },
       }));
       } else {
-        this.error = result.error?.message || 'Failed to unlock worktree';
+        this.error = result.error?.message || msg('Failed to unlock worktree');
       }
     } finally {
       this.loading = false;
@@ -797,7 +801,7 @@ export class GnWorktreeDialog extends LitElement {
     if (this.worktrees.length === 0) {
       return html`
         <div class="empty-state">
-          <div>No worktrees found</div>
+          <div>${msg('No worktrees found')}</div>
         </div>
       `;
     }
@@ -814,9 +818,9 @@ export class GnWorktreeDialog extends LitElement {
               </div>
               <div class="worktree-info">
                 <div class="worktree-branch">
-                  ${wt.branch || 'detached HEAD'}
-                  ${wt.isMain ? html`<span class="main-badge">main</span>` : ''}
-                  ${wt.isLocked ? html`<span class="locked-badge">locked</span>` : ''}
+                  ${wt.branch || msg('detached HEAD')}
+                  ${wt.isMain ? html`<span class="main-badge">${msg('main')}</span>` : ''}
+                  ${wt.isLocked ? html`<span class="locked-badge">${msg('locked')}</span>` : ''}
                 </div>
                 <div class="worktree-path" title="${wt.path}">${wt.path}</div>
               </div>
@@ -825,7 +829,7 @@ export class GnWorktreeDialog extends LitElement {
                   ? html`
                       <button
                         class="action-btn"
-                        title="Unlock"
+                        title=${msg('Unlock')}
                         @click=${() => this.handleUnlock(wt)}
                         ?disabled=${this.loading || this.repositoryBusy || this.removingPath !== null}
                       >
@@ -838,7 +842,7 @@ export class GnWorktreeDialog extends LitElement {
                   : html`
                       <button
                         class="action-btn"
-                        title="Lock"
+                        title=${msg('Lock')}
                         @click=${() => this.handleLock(wt)}
                         ?disabled=${this.loading ||
                         this.repositoryBusy ||
@@ -853,7 +857,7 @@ export class GnWorktreeDialog extends LitElement {
                     `}
                 <button
                   class="action-btn danger"
-                  title="Remove"
+                  title=${msg('Remove')}
                   @click=${() => this.handleRemove(wt)}
                   ?disabled=${this.loading ||
                   this.repositoryBusy ||
@@ -878,7 +882,7 @@ export class GnWorktreeDialog extends LitElement {
   private renderAddForm() {
     return html`
       <div class="form-group">
-        <label class="form-label">Worktree Path</label>
+        <label class="form-label">${msg('Worktree Path')}</label>
         <input
           type="text"
           class="form-input"
@@ -888,7 +892,7 @@ export class GnWorktreeDialog extends LitElement {
             this.addPath = (e.target as HTMLInputElement).value;
           }}
         />
-        <div class="form-hint">Path where the new worktree will be created</div>
+        <div class="form-hint">${msg('Path where the new worktree will be created')}</div>
       </div>
 
       <div class="form-group">
@@ -900,14 +904,14 @@ export class GnWorktreeDialog extends LitElement {
               this.createNewBranch = (e.target as HTMLInputElement).checked;
             }}
           />
-          Create new branch
+          ${msg('Create new branch')}
         </label>
       </div>
 
       ${this.createNewBranch
         ? html`
             <div class="form-group">
-              <label class="form-label">New Branch Name</label>
+              <label class="form-label">${msg('New Branch Name')}</label>
               <input
                 type="text"
                 class="form-input"
@@ -921,7 +925,7 @@ export class GnWorktreeDialog extends LitElement {
           `
         : html`
             <div class="form-group">
-              <label class="form-label">Branch</label>
+              <label class="form-label">${msg('Branch')}</label>
               <select
                 class="form-select"
                 .value=${this.addBranch}
@@ -929,13 +933,13 @@ export class GnWorktreeDialog extends LitElement {
                   this.addBranch = (e.target as HTMLSelectElement).value;
                 }}
               >
-                <option value="">Select a branch...</option>
+                <option value="">${msg('Select a branch...')}</option>
                 ${this.branches.map(
                   (b) => html`<option value="${b.name}">${b.name}</option>`
                 )}
               </select>
               <div class="form-hint">
-                Only branches not checked out in other worktrees are shown
+                ${msg('Only branches not checked out in other worktrees are shown')}
               </div>
             </div>
           `}
@@ -953,7 +957,7 @@ export class GnWorktreeDialog extends LitElement {
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
               </svg>
-              ${this.mode === 'list' ? 'Worktrees' : 'Add Worktree'}
+              ${this.mode === 'list' ? msg('Worktrees') : msg('Add Worktree')}
             </span>
             <button
               class="close-btn"
@@ -968,7 +972,7 @@ export class GnWorktreeDialog extends LitElement {
           </div>
 
           <div class="dialog-content">
-            ${this.loading ? html`<div class="loading">Loading...</div>` : ''}
+            ${this.loading ? html`<div class="loading">${msg('Loading...')}</div>` : ''}
 
             ${this.error ? html`<div class="message error">${this.error}</div>` : ''}
 
@@ -996,7 +1000,7 @@ export class GnWorktreeDialog extends LitElement {
                       <line x1="12" y1="5" x2="12" y2="19"/>
                       <line x1="5" y1="12" x2="19" y2="12"/>
                     </svg>
-                    Add Worktree
+                    ${msg('Add Worktree')}
                   </button>
                   <div class="dialog-footer-right">
                     <button
@@ -1004,7 +1008,7 @@ export class GnWorktreeDialog extends LitElement {
                       @click=${this.handleClose}
                       ?disabled=${this.operationInFlight}
                     >
-                      Close
+                      ${msg('Close')}
                     </button>
                   </div>
                 `
@@ -1017,7 +1021,7 @@ export class GnWorktreeDialog extends LitElement {
                       this.success = '';
                     }}
                   >
-                    Cancel
+                    ${msg('Cancel')}
                   </button>
                   <div class="dialog-footer-right">
                     <button
@@ -1025,7 +1029,7 @@ export class GnWorktreeDialog extends LitElement {
                       @click=${this.handleAdd}
                       ?disabled=${this.loading || this.repositoryBusy || !this.addPath}
                     >
-                      Add Worktree
+                      ${msg('Add Worktree')}
                     </button>
                   </div>
                 `}

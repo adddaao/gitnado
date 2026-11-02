@@ -78,6 +78,34 @@ describe('gn-welcome localisation', () => {
     ]);
   });
 
+  it('re-renders in Chinese without being recreated', async () => {
+    await setAppLocale('zh');
+    await waitUntil(
+      () => text(el, '.tagline') === '功能强大的开源 Git 客户端',
+      'the welcome screen re-rendered in Chinese'
+    );
+    expect(text(el, '.recent-title')).to.equal('最近打开的仓库');
+    expect(text(el, '.empty-recent')).to.equal('暂无最近打开的仓库');
+    const actions = Array.from(el.shadowRoot?.querySelectorAll('.action-btn span') ?? []).map(
+      (span) => span.textContent?.trim()
+    );
+    expect(actions).to.deep.equal(['打开', '克隆', '初始化', '扫描', '配置档案与账号']);
+  });
+
+  it('translates the drop overlay into Chinese, not just the buttons', async () => {
+    el.dragActive = true;
+    await el.updateComplete;
+
+    await setAppLocale('zh');
+    await waitUntil(
+      () => text(el, '.drop-overlay-title') === '拖放文件夹以打开',
+      'the drop overlay re-rendered in Chinese'
+    );
+    expect(text(el, '.drop-overlay-hint')).to.equal(
+      'Git 仓库会直接打开；其他文件夹可以扫描或初始化。'
+    );
+  });
+
   it('goes back to English when the locale is switched back', async () => {
     await setAppLocale('fr');
     await waitUntil(() => text(el, '.tagline') === 'Un client Git puissant et open source');

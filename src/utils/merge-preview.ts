@@ -18,6 +18,7 @@
  * conflict to resolve it; the point is that they choose to.
  */
 
+import { msg, str } from '@lit/localize';
 import * as gitService from '../services/git.service.ts';
 import type { MergePreview } from '../services/git.service.ts';
 import { loggers } from './logger.ts';
@@ -34,32 +35,32 @@ export function formatMergePreview(preview: MergePreview, sourceLabel: string): 
 
   switch (preview.outcome) {
     case 'upToDate':
-      lines.push('Already up to date — this merge would do nothing.');
+      lines.push(msg('Already up to date — this merge would do nothing.'));
       break;
     case 'fastForward':
-      lines.push('This will fast-forward — no merge commit, no conflicts.');
+      lines.push(msg('This will fast-forward — no merge commit, no conflicts.'));
       break;
     case 'unborn':
       lines.push(
-        `The branch being merged into has no commits yet — it will be set to "${sourceLabel}".`,
+        msg(str`The branch being merged into has no commits yet — it will be set to "${sourceLabel}".`),
       );
       break;
     case 'normal':
       if (preview.conflictCount === 0) {
-        lines.push('This will create a merge commit. No conflicts predicted.');
+        lines.push(msg('This will create a merge commit. No conflicts predicted.'));
       } else {
         const shown = preview.conflictingFiles.slice(0, MERGE_PREVIEW_LISTED_PATHS);
         lines.push(
           preview.conflictCount === 1
-            ? '1 file would conflict:'
-            : `${preview.conflictCount} files would conflict:`,
+            ? msg('1 file would conflict:')
+            : msg(str`${preview.conflictCount} files would conflict:`),
         );
         for (const file of shown) lines.push(`  • ${file}`);
         // `conflictingFiles` is itself capped by the backend, so the remainder
         // is counted from conflictCount — the only exact number available.
         const remaining = preview.conflictCount - shown.length;
-        if (remaining > 0) lines.push(`  …and ${remaining} more`);
-        lines.push('You can still merge and resolve the conflicts.');
+        if (remaining > 0) lines.push(msg(str`  …and ${remaining} more`));
+        lines.push(msg('You can still merge and resolve the conflicts.'));
       }
       break;
     default:
@@ -69,12 +70,13 @@ export function formatMergePreview(preview: MergePreview, sourceLabel: string): 
   }
 
   if (preview.unrelatedHistories) {
-    lines.push('These branches share no common history.');
+    lines.push(msg('These branches share no common history.'));
   }
   if (preview.operationInProgress) {
     lines.push(
-      `A ${preview.operationInProgress.toLowerCase()} is already in progress — ` +
-        'finish or abort it first, or this merge will be refused.',
+      msg(
+        str`A ${preview.operationInProgress.toLowerCase()} is already in progress — finish or abort it first, or this merge will be refused.`
+      ),
     );
   }
 

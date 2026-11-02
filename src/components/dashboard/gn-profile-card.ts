@@ -5,10 +5,12 @@
 
 import { LitElement, html, css, nothing } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
+import { localized, msg } from '@lit/localize';
 import { sharedStyles } from '../../styles/shared-styles.ts';
 import type { UnifiedProfile, ProfileAssignmentSource } from '../../types/unified-profile.types.ts';
 
 @customElement('gn-profile-card')
+@localized()
 export class GnProfileCard extends LitElement {
   static styles = [
     sharedStyles,
@@ -235,11 +237,11 @@ export class GnProfileCard extends LitElement {
   private getAssignmentSourceLabel(): string {
     switch (this.assignmentSource) {
       case 'manual':
-        return 'Manually assigned';
+        return msg('Manually assigned');
       case 'url-pattern':
-        return 'Matched by URL pattern';
+        return msg('Matched by URL pattern');
       case 'default':
-        return 'Default profile';
+        return msg('Default profile');
       default:
         return '';
     }
@@ -270,13 +272,15 @@ export class GnProfileCard extends LitElement {
               <path d="M11 6a3 3 0 1 1-6 0 3 3 0 0 1 6 0z"/>
               <path fill-rule="evenodd" d="M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8zm8-7a7 7 0 0 0-5.468 11.37C3.242 11.226 4.805 10 8 10s4.757 1.225 5.468 2.37A7 7 0 0 0 8 1z"/>
             </svg>
-            <div class="empty-title">No Profile Active</div>
-            <div class="empty-description">Set up a profile to manage your git identity</div>
+            <div class="empty-title">${msg('No Profile Active')}</div>
+            <div class="empty-description">
+              ${msg('Set up a profile to manage your git identity')}
+            </div>
             <button class="setup-btn" @click=${this.handleEdit}>
               <svg viewBox="0 0 16 16" fill="currentColor">
                 <path d="M8 2a.75.75 0 0 1 .75.75v4.5h4.5a.75.75 0 0 1 0 1.5h-4.5v4.5a.75.75 0 0 1-1.5 0v-4.5h-4.5a.75.75 0 0 1 0-1.5h4.5v-4.5A.75.75 0 0 1 8 2Z"/>
               </svg>
-              Set Up Profile
+              ${msg('Set Up Profile')}
             </button>
           </div>
         </div>
@@ -292,10 +296,14 @@ export class GnProfileCard extends LitElement {
             <div class="profile-dot" style="background: ${this.profile.color}"></div>
             <span class="profile-name">${this.profile.name}</span>
             ${this.profile.isDefault
-              ? html`<span class="default-badge">Default</span>`
+              ? html`<span class="default-badge">${msg('Default')}</span>`
               : nothing}
           </div>
-          <button class="edit-btn" @click=${this.handleEdit} title="Edit profile">
+          <button
+            class="edit-btn"
+            @click=${this.handleEdit}
+            title=${msg('Edit profile')}
+          >
             <svg viewBox="0 0 16 16" fill="currentColor">
               <path d="M12.146.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1 0 .708l-10 10a.5.5 0 0 1-.168.11l-5 2a.5.5 0 0 1-.65-.65l2-5a.5.5 0 0 1 .11-.168l10-10zM11.207 2.5 13.5 4.793 14.793 3.5 12.5 1.207 11.207 2.5zm1.586 3L10.5 3.207 4 9.707V10h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.293l6.5-6.5zm-9.761 5.175-.106.106-1.528 3.821 3.821-1.528.106-.106A.5.5 0 0 1 5 12.5V12h-.5a.5.5 0 0 1-.5-.5V11h-.5a.5.5 0 0 1-.468-.325z"/>
             </svg>
@@ -304,27 +312,27 @@ export class GnProfileCard extends LitElement {
 
         <div class="git-identity">
           <div class="identity-row">
-            <span class="identity-label">Name</span>
+            <span class="identity-label">${msg('Name')}</span>
             <span class="identity-value">${this.profile.gitName}</span>
           </div>
           <div class="identity-row">
-            <span class="identity-label">Email</span>
+            <span class="identity-label">${msg('Email')}</span>
             <span class="identity-value">${this.profile.gitEmail}</span>
           </div>
           <div class="identity-row">
-            <span class="identity-label">GPG</span>
+            <span class="identity-label">${msg('GPG')}</span>
             ${this.profile.signingKey
               ? html`
                   <span class="signing-key configured">
                     <svg viewBox="0 0 16 16" fill="currentColor">
                       <path d="M12.354 4.354a.5.5 0 0 0-.708-.708L5 10.293 3.354 8.646a.5.5 0 1 0-.708.708l2 2a.5.5 0 0 0 .708 0l7-7z"/>
                     </svg>
-                    Configured
+                    ${msg('Configured')}
                   </span>
                 `
               : html`
                   <span class="signing-key not-configured">
-                    Not configured
+                    ${msg('Not configured')}
                   </span>
                 `}
           </div>
@@ -339,7 +347,7 @@ export class GnProfileCard extends LitElement {
             `
           : html`
               <div class="assignment-source fallback">
-                <span>Active — no rule matched (first available)</span>
+                <span>${msg('Active — no rule matched (first available)')}</span>
               </div>
             `}
       </div>

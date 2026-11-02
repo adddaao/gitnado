@@ -1,5 +1,6 @@
 import { LitElement, html, css, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
+import { localized, msg, str } from '@lit/localize';
 import { sharedStyles } from '../../styles/shared-styles.ts';
 import * as gitService from '../../services/git.service.ts';
 import type { ImageVersions } from '../../types/git.types.ts';
@@ -35,6 +36,7 @@ const HIGHLIGHT_ALPHA = 180;
 const UNCHANGED_OPACITY_FACTOR = 0.3;
 
 @customElement('gn-image-diff')
+@localized()
 export class GnImageDiff extends LitElement {
   static styles = [
     sharedStyles,
@@ -543,12 +545,12 @@ export class GnImageDiff extends LitElement {
         this.imageData = result.data;
       } else {
         this.imageData = null;
-        this.error = result.error?.message || 'Failed to load images';
+        this.error = result.error?.message || msg('Failed to load images');
       }
     } catch (err) {
       if (seq !== this.loadSeq) return;
       this.imageData = null;
-      this.error = err instanceof Error ? err.message : 'Failed to load images';
+      this.error = err instanceof Error ? err.message : msg('Failed to load images');
     } finally {
       if (seq === this.loadSeq) {
         this.loading = false;
@@ -695,7 +697,7 @@ export class GnImageDiff extends LitElement {
       if (width === 0 || height === 0) {
         this.differenceFailedFor = imageData;
         this.differenceDataUrl = null;
-        this.differenceError = 'Failed to compute image difference';
+        this.differenceError = msg('Failed to compute image difference');
         return;
       }
 
@@ -713,7 +715,7 @@ export class GnImageDiff extends LitElement {
 
       if (!oldCtx || !newCtx || !diffCtx) {
         this.differenceFailedFor = imageData;
-        this.differenceError = 'Failed to create canvas context for difference computation';
+        this.differenceError = msg('Failed to create canvas context for difference computation');
         return;
       }
 
@@ -833,7 +835,7 @@ export class GnImageDiff extends LitElement {
       // Log error and set error state so user knows computation failed
       console.error('Error computing image difference:', err);
       this.differenceFailedFor = imageData;
-      this.differenceError = 'Failed to compute image difference';
+      this.differenceError = msg('Failed to compute image difference');
       this.differenceDataUrl = null;
     } finally {
       // Always reset the computing flag to allow future computations
@@ -883,27 +885,27 @@ export class GnImageDiff extends LitElement {
     return html`
       <div class="side-by-side">
         <div class="image-panel">
-          <span class="image-label old">Before</span>
+          <span class="image-label old">${msg('Before')}</span>
           <div class="image-wrapper">
             ${oldSrc
               ? html`<img
                   src=${oldSrc}
-                  alt="Before"
+                  alt=${msg('Before')}
                   style="transform: scale(${this.zoom / 100})"
                 />`
-              : html`<div class="no-image">No previous version</div>`}
+              : html`<div class="no-image">${msg('No previous version')}</div>`}
           </div>
         </div>
         <div class="image-panel">
-          <span class="image-label new">After</span>
+          <span class="image-label new">${msg('After')}</span>
           <div class="image-wrapper">
             ${newSrc
               ? html`<img
                   src=${newSrc}
-                  alt="After"
+                  alt=${msg('After')}
                   style="transform: scale(${this.zoom / 100})"
                 />`
-              : html`<div class="no-image">File deleted</div>`}
+              : html`<div class="no-image">${msg('File deleted')}</div>`}
           </div>
         </div>
       </div>
@@ -921,33 +923,33 @@ export class GnImageDiff extends LitElement {
     );
 
     if (!oldSrc && !newSrc) {
-      return html`<div class="no-image">No images to compare</div>`;
+      return html`<div class="no-image">${msg('No images to compare')}</div>`;
     }
 
     return html`
       <div class="onion-skin">
         <div class="onion-container" style="transform: scale(${this.zoom / 100})">
-          ${oldSrc ? html`<img src=${oldSrc} alt="Before" />` : nothing}
+          ${oldSrc ? html`<img src=${oldSrc} alt=${msg('Before')} />` : nothing}
           ${newSrc
             ? html`<img
                 class="overlay"
                 src=${newSrc}
-                alt="After"
+                alt=${msg('After')}
                 style="opacity: ${this.opacity / 100}"
               />`
             : nothing}
         </div>
         <div class="opacity-slider">
-          <span class="image-label old">Before</span>
+          <span class="image-label old">${msg('Before')}</span>
           <input
             type="range"
             min="0"
             max="100"
-            aria-label="Opacity blend between before and after images"
+            aria-label=${msg('Opacity blend between before and after images')}
             .value=${String(this.opacity)}
             @input=${this.handleOpacityChange}
           />
-          <span class="image-label new">After</span>
+          <span class="image-label new">${msg('After')}</span>
           <span class="opacity-value">${this.opacity}%</span>
         </div>
       </div>
@@ -965,7 +967,7 @@ export class GnImageDiff extends LitElement {
     );
 
     if (!oldSrc && !newSrc) {
-      return html`<div class="no-image">No images to compare</div>`;
+      return html`<div class="no-image">${msg('No images to compare')}</div>`;
     }
 
     return html`
@@ -974,19 +976,19 @@ export class GnImageDiff extends LitElement {
         style="transform: scale(${this.zoom / 100})"
         @mousedown=${this.handleSwipeStart}
       >
-        ${oldSrc ? html`<img src=${oldSrc} alt="Before" />` : nothing}
+        ${oldSrc ? html`<img src=${oldSrc} alt=${msg('Before')} />` : nothing}
         ${newSrc
           ? html`<img
               class="new-image"
               src=${newSrc}
-              alt="After"
+              alt=${msg('After')}
               style="clip-path: inset(0 0 0 ${this.swipePosition}%)"
             />`
           : nothing}
         <div class="swipe-handle" style="left: ${this.swipePosition}%"></div>
         <div class="swipe-labels">
-          <span class="image-label old">Before</span>
-          <span class="image-label new">After</span>
+          <span class="image-label old">${msg('Before')}</span>
+          <span class="image-label new">${msg('After')}</span>
         </div>
       </div>
     `;
@@ -999,9 +1001,9 @@ export class GnImageDiff extends LitElement {
       }
       // Show loading if computation is in progress or will be triggered by updated()
       if (this.computingDifference || (this.imageData && (this.imageData.oldData || this.imageData.newData))) {
-        return html`<div class="loading">Computing difference...</div>`;
+        return html`<div class="loading">${msg('Computing difference...')}</div>`;
       }
-      return html`<div class="no-image">No images to compare</div>`;
+      return html`<div class="no-image">${msg('No images to compare')}</div>`;
     }
 
     const totalPixels =
@@ -1019,19 +1021,19 @@ export class GnImageDiff extends LitElement {
           <div class="difference-canvas-wrapper">
             <img
               src=${this.differenceDataUrl}
-              alt="Difference"
+              alt=${msg('Difference')}
               style="transform: scale(${this.zoom / 100})"
             />
           </div>
         </div>
         <div class="difference-controls">
           <div class="threshold-slider">
-            <label>Sensitivity:</label>
+            <label>${msg('Sensitivity:')}</label>
             <input
               type="range"
               min="0"
               max="100"
-              aria-label="Difference detection sensitivity threshold"
+              aria-label=${msg('Difference detection sensitivity threshold')}
               .value=${String(this.differenceThreshold)}
               @input=${this.handleThresholdChange}
             />
@@ -1040,15 +1042,15 @@ export class GnImageDiff extends LitElement {
           <div class="difference-legend">
             <div class="legend-item">
               <span class="legend-swatch added"></span>
-              <span>Added (${formatPercent(this.differenceStats.added)}%)</span>
+              <span>${msg(str`Added (${formatPercent(this.differenceStats.added)}%)`)}</span>
             </div>
             <div class="legend-item">
               <span class="legend-swatch removed"></span>
-              <span>Removed (${formatPercent(this.differenceStats.removed)}%)</span>
+              <span>${msg(str`Removed (${formatPercent(this.differenceStats.removed)}%)`)}</span>
             </div>
             <div class="legend-item">
               <span class="legend-swatch changed"></span>
-              <span>Changed (${formatPercent(this.differenceStats.changed)}%)</span>
+              <span>${msg(str`Changed (${formatPercent(this.differenceStats.changed)}%)`)}</span>
             </div>
           </div>
         </div>
@@ -1068,37 +1070,37 @@ export class GnImageDiff extends LitElement {
             <button
               class="mode-btn ${this.mode === 'side-by-side' ? 'active' : ''}"
               @click=${() => this.setMode('side-by-side')}
-              title="Side by side"
+              title=${msg('Side by side')}
             >
-              Side by Side
+              ${msg('Side by Side')}
             </button>
             <button
               class="mode-btn ${this.mode === 'onion-skin' ? 'active' : ''}"
               @click=${() => this.setMode('onion-skin')}
-              title="Onion skin (opacity overlay)"
+              title=${msg('Onion skin (opacity overlay)')}
             >
-              Onion Skin
+              ${msg('Onion Skin')}
             </button>
             <button
               class="mode-btn ${this.mode === 'swipe' ? 'active' : ''}"
               @click=${() => this.setMode('swipe')}
-              title="Swipe comparison"
+              title=${msg('Swipe comparison')}
             >
-              Swipe
+              ${msg('Swipe')}
             </button>
             <button
               class="mode-btn ${this.mode === 'difference' ? 'active' : ''}"
               @click=${() => this.setMode('difference')}
-              title="Highlight differences"
+              title=${msg('Highlight differences')}
             >
-              Difference
+              ${msg('Difference')}
             </button>
           </div>
           <div class="zoom-controls">
-            <button class="zoom-btn" @click=${this.zoomOut} title="Zoom out">-</button>
+            <button class="zoom-btn" @click=${this.zoomOut} title=${msg('Zoom out')}>-</button>
             <span class="zoom-level">${this.zoom}%</span>
-            <button class="zoom-btn" @click=${this.zoomIn} title="Zoom in">+</button>
-            <button class="zoom-btn" @click=${this.zoomFit} title="Fit to view">
+            <button class="zoom-btn" @click=${this.zoomIn} title=${msg('Zoom in')}>+</button>
+            <button class="zoom-btn" @click=${this.zoomFit} title=${msg('Fit to view')}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <rect x="3" y="3" width="18" height="18" rx="2"></rect>
                 <circle cx="12" cy="12" r="3"></circle>
@@ -1109,7 +1111,7 @@ export class GnImageDiff extends LitElement {
       </div>
       <div class="container">
         ${this.loading
-          ? html`<div class="loading">Loading images...</div>`
+          ? html`<div class="loading">${msg('Loading images...')}</div>`
           : this.error
             ? html`<div class="error">${this.error}</div>`
             : this.mode === 'side-by-side'

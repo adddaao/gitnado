@@ -99,6 +99,30 @@ impl AiProviderType {
     }
 }
 
+/// Language AI prompts are written in — and therefore the language every
+/// human-visible value the model returns is written in.
+///
+/// Deliberately separate from the UI language: a user reading a Chinese
+/// interface may still want English commit messages (or vice versa), so this
+/// travels with each request instead of being derived from the interface.
+///
+/// `Default` is `En` so a frontend that predates the setting — or an older
+/// persisted payload — keeps exactly today's English prompts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PromptLanguage {
+    #[default]
+    En,
+    Zh,
+}
+
+impl PromptLanguage {
+    /// True when the request must produce Simplified Chinese text.
+    pub fn is_zh(self) -> bool {
+        matches!(self, PromptLanguage::Zh)
+    }
+}
+
 /// Generated commit message result
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -166,11 +190,13 @@ pub trait AiProvider: Send + Sync {
     /// List available models from the provider
     async fn list_models(&self) -> Result<Vec<String>, String>;
 
-    /// Generate a commit message from a diff
+    /// Generate a commit message from a diff, with every human-visible value
+    /// (summary and body) written in `language`.
     async fn generate_commit_message(
         &self,
         diff: &str,
         model: Option<&str>,
+        language: PromptLanguage,
     ) -> Result<GeneratedCommitMessage, String>;
 
     /// Generate free-form text from a system prompt and user prompt
@@ -189,14 +215,45 @@ Use conventional commit format: type(scope): description
 Types: feat, fix, docs, style, refactor, test, chore
 
 Rules:
+- The FIRST line is the commit subject; put any explanation after a blank line
 - Summary line should be 50 characters or less
 - Use imperative mood ("add" not "added")
 - Do not end summary with a period
 - If the change is simple, just provide the summary
 - Only add a body if the change needs explanation
+- Never list the changed file names or paths in the message, and never repeat the diff
+- Output ONLY the commit message — no preamble, no explanation, no code fences
 
 Diff:
 "#;
+
+/// Chinese (Simplified) variant of [`COMMIT_MESSAGE_PROMPT`].
+pub const COMMIT_MESSAGE_PROMPT_ZH: &str = r#"为以下代码差异（diff）生成一条简洁的 git 提交信息。
+使用约定式提交格式：type(scope): 描述
+类型：feat, fix, docs, style, refactor, test, chore
+
+规则：
+- 第一行是提交摘要；需要解释时在空行之后写正文
+- 摘要行不超过 50 个字符
+- 使用祈使语气（"添加"而不是"已添加"）
+- 摘要结尾不要加句号
+- 如果改动很简单，只提供摘要
+- 只有在改动需要解释时才添加正文
+- 不要在提交信息中列出文件名或路径，也不要重复 diff 内容
+- 只输出提交信息本身，不要任何前言、解释或代码块
+- 摘要和正文等所有人类可读内容必须使用简体中文
+
+Diff:
+"#;
+
+/// The commit-message prompt for `language`.
+pub fn commit_message_prompt(language: PromptLanguage) -> &'static str {
+    if language.is_zh() {
+        COMMIT_MESSAGE_PROMPT_ZH
+    } else {
+        COMMIT_MESSAGE_PROMPT
+    }
+}
 
 /// Maximum diff size, in BYTES, to send to the AI provider.
 pub const MAX_DIFF_BYTES: usize = 12000;
@@ -235,6 +292,38 @@ Rules:
 
 Commits:
 "#;
+
+/// Chinese (Simplified) variant of [`CHANGELOG_PROMPT`].
+pub const CHANGELOG_PROMPT_ZH: &str = r#"分析以下 git 提交记录，并生成 Markdown 格式的结构化发布说明。
+
+将改动归类到以下章节（省略空章节）：
+## 新功能
+## 缺陷修复
+## 性能
+## 文档
+## 内部改动
+
+规则：
+- 从用户视角描述（说明对他们有什么变化）
+- 使用过去时（"新增"、"修复"、"改进"）
+- 每个逻辑改动一条要点（将相关提交合并为一条）
+- 跳过合并提交和无关紧要的依赖升级，除非影响重大
+- 每条要点末尾用括号附上提交短哈希，例如 (abc1234)
+- 每条要点保持一句话，简洁明了
+- 不要包含标题或版本号 — 只输出上述章节
+- 所有人类可读内容必须使用简体中文
+
+提交记录：
+"#;
+
+/// The changelog prompt for `language`.
+pub fn changelog_prompt(language: PromptLanguage) -> &'static str {
+    if language.is_zh() {
+        CHANGELOG_PROMPT_ZH
+    } else {
+        CHANGELOG_PROMPT
+    }
+}
 
 // ========================================================================
 // Phase 3: "Local Bouncer" types and prompts
@@ -346,6 +435,39 @@ Rules:
 Diff:
 "#;
 
+/// Chinese (Simplified) variant of [`VIBE_CHECK_PROMPT`].
+///
+/// The JSON keys and the `category` / `severity` / `riskLevel` enum values are
+/// the wire format the parser reads, so they stay English; only the free-text
+/// `message` and `summary` values are Chinese.
+pub const VIBE_CHECK_PROMPT_ZH: &str = r#"分析以下 git diff 中可能存在的问题。只返回一个 JSON 对象（不要 markdown 代码块），结构如下：
+{"findings": [{"category": "secret|complexity|quality", "severity": "info|warning|error", "message": "问题描述", "filePath": "path/to/file 或 null"}], "summary": "一句话总结", "riskLevel": "low|medium|high"}
+
+请检查：
+1. **密钥**：硬编码的 API key、token、密码、连接字符串、私钥
+2. **复杂度**：函数变得过于庞大、嵌套过深、圈复杂度过高
+3. **质量**：缺少错误处理、新增的 TODO/FIXME 注释、遗留的 console.log/println
+
+规则：
+- 简洁 — 每个发现一句话
+- 只报告真实问题，不要误报
+- 如果没有发现问题，返回空的 findings 数组，riskLevel 为 "low"
+- filePath 必须使用 diff 头中的文件路径（a/path 或 b/path）
+- JSON 的键名以及 category/severity/riskLevel 的取值必须保持上面给出的英文形式，不得翻译
+- message 和 summary 等所有人类可读内容必须使用简体中文
+
+Diff:
+"#;
+
+/// The pre-commit "vibe check" prompt for `language`.
+pub fn vibe_check_prompt(language: PromptLanguage) -> &'static str {
+    if language.is_zh() {
+        VIBE_CHECK_PROMPT_ZH
+    } else {
+        VIBE_CHECK_PROMPT
+    }
+}
+
 /// System prompt for PR description generation
 pub const PR_DESCRIPTION_PROMPT: &str = r#"Generate a pull request description in Markdown based on the following commits and diff statistics. Return ONLY the markdown body (no JSON wrapper).
 
@@ -371,6 +493,43 @@ PR Title: {title}
 Commits and stats:
 "#;
 
+/// Chinese (Simplified) variant of [`PR_DESCRIPTION_PROMPT`].
+///
+/// Keeps the `{title}` placeholder that the command replaces before sending.
+pub const PR_DESCRIPTION_PROMPT_ZH: &str = r#"根据以下提交记录和 diff 统计，生成 Markdown 格式的 Pull Request 描述。只返回 Markdown 正文（不要 JSON 包装）。
+
+结构：
+## 摘要
+用 2-3 句话描述这个 PR 做了什么以及为什么。
+
+## 变更
+- 按领域（前端、后端、测试、配置）分组的变更要点列表
+- 每个逻辑改动一条要点
+
+## 测试计划
+- 需要测试的内容
+- 任何风险区域
+
+规则：
+- 关注"做了什么"和"为什么"，而不是"怎么做"
+- 保持简洁 — 要点总数不超过 15 条
+- 使用现在时（"新增"、"修复"、"更新"）
+- 所有人类可读内容必须使用简体中文
+
+PR 标题：{title}
+
+提交记录和统计：
+"#;
+
+/// The PR-description prompt for `language`.
+pub fn pr_description_prompt(language: PromptLanguage) -> &'static str {
+    if language.is_zh() {
+        PR_DESCRIPTION_PROMPT_ZH
+    } else {
+        PR_DESCRIPTION_PROMPT
+    }
+}
+
 /// System prompt for tangled commit detection
 pub const COMMIT_SPLIT_PROMPT: &str = r#"Analyze the following staged diff and determine if it contains multiple logically separate concerns that should be split into separate commits.
 
@@ -387,6 +546,35 @@ Rules:
 Diff:
 "#;
 
+/// Chinese (Simplified) variant of [`COMMIT_SPLIT_PROMPT`].
+///
+/// JSON keys and the conventional-commit type prefixes stay English.
+pub const COMMIT_SPLIT_PROMPT_ZH: &str = r#"分析以下已暂存的 diff，判断其中是否包含多个在逻辑上相互独立的改动、需要拆分成多个提交。
+
+只返回一个 JSON 对象（不要 markdown 代码块）：
+{"shouldSplit": true|false, "groups": [{"label": "简短描述", "files": ["path1", "path2"], "suggestedMessage": "约定式提交信息"}], "explanation": "为什么建议拆分，或者为什么这些改动是内聚的"}
+
+规则：
+- 只有在确实存在相互独立的关注点时（例如缺陷修复混入了重构，或新增功能混入了不相关的测试改动）才建议拆分
+- 修改多个文件并不意味着需要拆分 — 跨文件的相关改动是正常的
+- 如果改动是内聚的，将 shouldSplit 设为 false，groups 为空数组
+- 每个分组的 suggestedMessage 应遵循约定式提交格式（feat:, fix:, refactor:, test:, docs:, chore:）
+- 文件路径应与 diff 头中的路径一致
+- JSON 的键名和提交类型前缀必须保持英文形式，不得翻译
+- label、explanation 等所有人类可读内容必须使用简体中文
+
+Diff:
+"#;
+
+/// The tangled-commit-detection prompt for `language`.
+pub fn commit_split_prompt(language: PromptLanguage) -> &'static str {
+    if language.is_zh() {
+        COMMIT_SPLIT_PROMPT_ZH
+    } else {
+        COMMIT_SPLIT_PROMPT
+    }
+}
+
 /// System prompt for AI-powered conflict resolution
 pub const CONFLICT_RESOLUTION_PROMPT: &str = r#"You are a merge conflict resolution assistant. You will be given the "ours" (current branch) and "theirs" (incoming branch) versions of a conflicting code section, optionally with a common ancestor "base" version and surrounding context.
 
@@ -399,6 +587,31 @@ Respond with ONLY a JSON object (no markdown code fences) in this format:
 {"resolvedContent": "the merged code here", "explanation": "brief explanation of how you resolved the conflict"}
 
 Do NOT include conflict markers (<<<<<<, =======, >>>>>>>) in the resolved content."#;
+
+/// Chinese (Simplified) variant of [`CONFLICT_RESOLUTION_PROMPT`].
+///
+/// `resolvedContent` is code and keeps the file's own language; `explanation`
+/// is the human-visible value that must be Simplified Chinese.
+pub const CONFLICT_RESOLUTION_PROMPT_ZH: &str = r#"你是一名合并冲突解决助手。你会收到冲突代码段的 "ours"（当前分支）和 "theirs"（合入分支）版本，可能还会收到共同祖先 "base" 版本以及周边上下文。
+
+你的任务是产出一个单一、正确的合并版本，要求：
+1. 尽可能保留双方改动的意图
+2. 基于代码上下文智能地解决任何矛盾
+3. 保持正确的语法、缩进，以及与文件一致的风格
+
+只返回一个 JSON 对象（不要 markdown 代码块），格式如下：
+{"resolvedContent": "合并后的代码", "explanation": "简要说明你是如何解决这个冲突的"}
+
+resolvedContent 是合并后的代码本身，不要包含冲突标记（<<<<<<, =======, >>>>>>>）。explanation 等所有人类可读内容必须使用简体中文，JSON 键名保持英文。"#;
+
+/// The conflict-resolution prompt for `language`.
+pub fn conflict_resolution_prompt(language: PromptLanguage) -> &'static str {
+    if language.is_zh() {
+        CONFLICT_RESOLUTION_PROMPT_ZH
+    } else {
+        CONFLICT_RESOLUTION_PROMPT
+    }
+}
 
 // ========================================================================
 // Phase 4: "Rebase Pilot" types and prompts
@@ -453,6 +666,30 @@ Rules:
 
 "#;
 
+/// Chinese (Simplified) variant of [`CONFLICT_EXPLAIN_PROMPT`].
+pub const CONFLICT_EXPLAIN_PROMPT_ZH: &str = r#"你是一名 git 合并冲突分析师。请用通俗的语言解释这个冲突为什么会发生。
+
+只返回一个 JSON 对象（不要 markdown 代码块）：
+{"explanation": "用通俗语言解释冲突存在的原因", "oursSummary": "当前分支改动了什么", "theirsSummary": "合入分支改动了什么"}
+
+规则：
+- 简洁 — 每项 1-2 句话
+- 关注语义意图，而不是逐行差异
+- 如果提供了分支名就使用分支名
+- 说明双方改动是兼容的（可以共存）还是相互矛盾的
+- JSON 键名保持英文；explanation、oursSummary、theirsSummary 等所有人类可读内容必须使用简体中文
+
+"#;
+
+/// The conflict-explanation prompt for `language`.
+pub fn conflict_explain_prompt(language: PromptLanguage) -> &'static str {
+    if language.is_zh() {
+        CONFLICT_EXPLAIN_PROMPT_ZH
+    } else {
+        CONFLICT_EXPLAIN_PROMPT
+    }
+}
+
 /// System prompt for reflog entry matching
 pub const REFLOG_MATCH_PROMPT: &str = r#"Given the following git reflog entries and a user's natural language request, identify which reflog entry best matches their intent.
 
@@ -470,6 +707,36 @@ User request: {query}
 
 Reflog:
 "#;
+
+/// Chinese (Simplified) variant of [`REFLOG_MATCH_PROMPT`].
+///
+/// Keeps the `{query}` placeholder the command replaces before sending.
+pub const REFLOG_MATCH_PROMPT_ZH: &str = r#"给定以下 git reflog 记录以及用户的自然语言请求，找出最符合其意图的 reflog 记录。
+
+只返回一个 JSON 对象（不要 markdown 代码块）：
+{"index": <reflog 索引编号>, "description": "重置到该状态后会发生什么的通俗描述"}
+
+规则：
+- 将用户意图匹配到最接近的 reflog 记录
+- 对于基于时间的查询（"10 分钟前"），按时间戳匹配
+- 对于基于操作的查询（"rebase 之前"），找到该操作之前的那条记录
+- 对于基于数量的查询（"撤销最近 3 次提交"），从 HEAD 往前数
+- description 应该用通俗语言说明会发生什么变化
+- JSON 键名保持英文；description 必须使用简体中文
+
+用户请求：{query}
+
+Reflog:
+"#;
+
+/// The reflog-matching prompt for `language`.
+pub fn reflog_match_prompt(language: PromptLanguage) -> &'static str {
+    if language.is_zh() {
+        REFLOG_MATCH_PROMPT_ZH
+    } else {
+        REFLOG_MATCH_PROMPT
+    }
+}
 
 /// AI Service managing providers and configuration
 pub struct AiService {
@@ -970,10 +1237,14 @@ impl AiService {
         Ok(provider.is_available().await)
     }
 
-    /// Generate a commit message using the active provider
+    /// Generate a commit message using the active provider.
+    ///
+    /// `language` is threaded all the way to the provider so the summary and
+    /// body are written in the language chosen in Settings.
     pub async fn generate_commit_message(
         &self,
         diff: String,
+        language: PromptLanguage,
     ) -> Result<GeneratedCommitMessage, String> {
         let (provider, provider_type) = self.resolve_provider().await?;
 
@@ -998,7 +1269,7 @@ impl AiService {
             .and_then(|s| s.model.as_deref());
 
         provider
-            .generate_commit_message(&truncated_diff, model)
+            .generate_commit_message(&truncated_diff, model, language)
             .await
     }
 
@@ -1057,6 +1328,22 @@ impl AiService {
             Ok(engine) => {
                 self.local_provider.set_engine(Box::new(engine)).await;
                 tracing::info!("Local inference engine loaded and ready");
+
+                // Best-effort warm-up: the first generation after a load pays
+                // for llama.cpp's kernel/context setup and the model's first
+                // prompt eval, which is a noticeable part of first-token
+                // latency for the small token budgets used per file. Run it in
+                // the background so loading still returns immediately, and
+                // never let its failure fail the load — a warm-up that fails
+                // is only a slower first request.
+                let provider = self.local_provider.clone();
+                tokio::spawn(async move {
+                    match provider.warm_up().await {
+                        Ok(()) => tracing::debug!("Local model warm-up completed"),
+                        Err(e) => tracing::debug!("Local model warm-up failed (ignored): {e}"),
+                    }
+                });
+
                 Ok(())
             }
             Err(e) => {
@@ -1220,6 +1507,7 @@ mod tests {
             &self,
             _diff: &str,
             _model: Option<&str>,
+            _language: PromptLanguage,
         ) -> Result<GeneratedCommitMessage, String> {
             Ok(GeneratedCommitMessage {
                 summary: "feat: stub".to_string(),
@@ -1299,7 +1587,7 @@ mod tests {
             .insert(AiProviderType::Anthropic, Box::new(StubProvider));
 
         let result = service
-            .generate_commit_message("diff --git a/a b/a".to_string())
+            .generate_commit_message("diff --git a/a b/a".to_string(), PromptLanguage::En)
             .await;
 
         assert_eq!(result.unwrap().summary, "feat: stub");
@@ -1341,7 +1629,7 @@ mod tests {
         let (service, _config_dir, _models_dir) = service_fixture().await;
 
         let err = service
-            .generate_commit_message("diff --git a/a b/a".to_string())
+            .generate_commit_message("diff --git a/a b/a".to_string(), PromptLanguage::En)
             .await
             .unwrap_err();
 
@@ -1372,7 +1660,7 @@ mod tests {
             .insert(AiProviderType::Anthropic, Box::new(StubProvider));
 
         let err = service
-            .generate_commit_message("diff --git a/a b/a".to_string())
+            .generate_commit_message("diff --git a/a b/a".to_string(), PromptLanguage::En)
             .await
             .unwrap_err();
 
@@ -1402,7 +1690,7 @@ mod tests {
             .insert(AiProviderType::Anthropic, Box::new(StubProvider));
 
         let err = service
-            .generate_commit_message("diff --git a/a b/a".to_string())
+            .generate_commit_message("diff --git a/a b/a".to_string(), PromptLanguage::En)
             .await
             .unwrap_err();
 
@@ -1476,7 +1764,10 @@ mod tests {
         service.config.active_provider = Some(AiProviderType::Anthropic);
 
         let err = service
-            .generate_commit_message("diff --git a/a.rs b/a.rs\n+secret\n".to_string())
+            .generate_commit_message(
+                "diff --git a/a.rs b/a.rs\n+secret\n".to_string(),
+                PromptLanguage::En,
+            )
             .await
             .unwrap_err();
         assert!(err.contains("Anthropic Claude"), "{err}");
@@ -1704,5 +1995,222 @@ mod tests {
             service.get_local_model_status().await,
             providers::LocalModelStatus::Unloaded
         );
+    }
+
+    // --- Prompt language selection ------------------------------------------
+    //
+    // The prompt constants above are the English behaviour that predates the
+    // language setting; the selectors must keep returning exactly those for
+    // `En` so an older frontend (or a persisted payload without the field)
+    // behaves as it always did, and must return a genuinely Chinese prompt —
+    // instructions in Chinese AND an explicit Simplified-Chinese output rule —
+    // for `Zh`, with the JSON keys the parsers read left in English.
+
+    fn contains_cjk(text: &str) -> bool {
+        text.chars().any(|c| ('\u{4e00}'..='\u{9fff}').contains(&c))
+    }
+
+    fn assert_zh_prompt(name: &str, prompt: &str) {
+        assert!(!prompt.trim().is_empty(), "{name}: prompt is empty");
+        assert!(
+            contains_cjk(prompt),
+            "{name}: Chinese prompt must contain CJK instructions"
+        );
+        assert!(
+            prompt.contains("简体中文"),
+            "{name}: must explicitly require Simplified Chinese output"
+        );
+    }
+
+    #[test]
+    fn test_prompt_language_default_is_english() {
+        assert_eq!(PromptLanguage::default(), PromptLanguage::En);
+        assert!(!PromptLanguage::En.is_zh());
+        assert!(PromptLanguage::Zh.is_zh());
+    }
+
+    #[test]
+    fn test_prompt_language_wire_format_is_snake_case() {
+        // These exact strings are the IPC wire format the TypeScript
+        // `PromptLanguage` union sends and the settings store persists.
+        assert_eq!(
+            serde_json::to_string(&PromptLanguage::En).unwrap(),
+            "\"en\""
+        );
+        assert_eq!(
+            serde_json::to_string(&PromptLanguage::Zh).unwrap(),
+            "\"zh\""
+        );
+        assert_eq!(
+            serde_json::from_str::<PromptLanguage>("\"zh\"").unwrap(),
+            PromptLanguage::Zh
+        );
+        assert_eq!(
+            serde_json::from_str::<PromptLanguage>("\"en\"").unwrap(),
+            PromptLanguage::En
+        );
+    }
+
+    /// The English selector must be a drop-in for the old constant, because a
+    /// frontend that has not been updated sends no `promptLanguage` at all.
+    #[test]
+    fn test_english_prompt_selectors_return_the_existing_constants() {
+        assert_eq!(
+            commit_message_prompt(PromptLanguage::En),
+            COMMIT_MESSAGE_PROMPT
+        );
+        assert_eq!(vibe_check_prompt(PromptLanguage::En), VIBE_CHECK_PROMPT);
+        assert_eq!(commit_split_prompt(PromptLanguage::En), COMMIT_SPLIT_PROMPT);
+        assert_eq!(changelog_prompt(PromptLanguage::En), CHANGELOG_PROMPT);
+        assert_eq!(
+            pr_description_prompt(PromptLanguage::En),
+            PR_DESCRIPTION_PROMPT
+        );
+        assert_eq!(
+            conflict_resolution_prompt(PromptLanguage::En),
+            CONFLICT_RESOLUTION_PROMPT
+        );
+        assert_eq!(
+            conflict_explain_prompt(PromptLanguage::En),
+            CONFLICT_EXPLAIN_PROMPT
+        );
+        assert_eq!(reflog_match_prompt(PromptLanguage::En), REFLOG_MATCH_PROMPT);
+    }
+
+    #[test]
+    fn test_every_prompt_selector_returns_non_empty_text() {
+        for language in [PromptLanguage::En, PromptLanguage::Zh] {
+            let prompts: [(&str, &str); 8] = [
+                ("commit_message_prompt", commit_message_prompt(language)),
+                ("vibe_check_prompt", vibe_check_prompt(language)),
+                ("commit_split_prompt", commit_split_prompt(language)),
+                ("changelog_prompt", changelog_prompt(language)),
+                ("pr_description_prompt", pr_description_prompt(language)),
+                (
+                    "conflict_resolution_prompt",
+                    conflict_resolution_prompt(language),
+                ),
+                ("conflict_explain_prompt", conflict_explain_prompt(language)),
+                ("reflog_match_prompt", reflog_match_prompt(language)),
+            ];
+            for (name, prompt) in prompts {
+                assert!(
+                    !prompt.trim().is_empty(),
+                    "{name}: empty prompt for {language:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_chinese_prompt_selectors_require_simplified_chinese_output() {
+        let prompts: [(&str, &str); 8] = [
+            (
+                "commit_message_prompt",
+                commit_message_prompt(PromptLanguage::Zh),
+            ),
+            ("vibe_check_prompt", vibe_check_prompt(PromptLanguage::Zh)),
+            (
+                "commit_split_prompt",
+                commit_split_prompt(PromptLanguage::Zh),
+            ),
+            ("changelog_prompt", changelog_prompt(PromptLanguage::Zh)),
+            (
+                "pr_description_prompt",
+                pr_description_prompt(PromptLanguage::Zh),
+            ),
+            (
+                "conflict_resolution_prompt",
+                conflict_resolution_prompt(PromptLanguage::Zh),
+            ),
+            (
+                "conflict_explain_prompt",
+                conflict_explain_prompt(PromptLanguage::Zh),
+            ),
+            (
+                "reflog_match_prompt",
+                reflog_match_prompt(PromptLanguage::Zh),
+            ),
+        ];
+        for (name, prompt) in prompts {
+            assert_zh_prompt(name, prompt);
+        }
+    }
+
+    /// The Chinese prompts are still fed to parsers/key substitution, so the
+    /// placeholders and JSON keys must survive translation.
+    #[test]
+    fn test_chinese_prompts_keep_placeholders_and_json_keys() {
+        assert!(pr_description_prompt(PromptLanguage::En).contains("{title}"));
+        assert!(pr_description_prompt(PromptLanguage::Zh).contains("{title}"));
+        assert!(reflog_match_prompt(PromptLanguage::En).contains("{query}"));
+        assert!(reflog_match_prompt(PromptLanguage::Zh).contains("{query}"));
+
+        let vibe = vibe_check_prompt(PromptLanguage::Zh);
+        for key in ["findings", "category", "severity", "message", "filePath"] {
+            assert!(
+                vibe.contains(&format!("\"{key}\"")),
+                "vibe check zh prompt lost JSON key {key}"
+            );
+        }
+        assert!(vibe.contains("riskLevel"));
+
+        let split = commit_split_prompt(PromptLanguage::Zh);
+        for key in [
+            "shouldSplit",
+            "groups",
+            "label",
+            "files",
+            "suggestedMessage",
+        ] {
+            assert!(
+                split.contains(&format!("\"{key}\"")),
+                "commit split zh prompt lost JSON key {key}"
+            );
+        }
+
+        let resolution = conflict_resolution_prompt(PromptLanguage::Zh);
+        assert!(resolution.contains("resolvedContent"));
+        assert!(resolution.contains("explanation"));
+
+        let explain = conflict_explain_prompt(PromptLanguage::Zh);
+        assert!(explain.contains("oursSummary"));
+        assert!(explain.contains("theirsSummary"));
+
+        let reflog = reflog_match_prompt(PromptLanguage::Zh);
+        assert!(reflog.contains("\"index\""));
+        assert!(reflog.contains("\"description\""));
+    }
+
+    /// Providers concatenate the raw diff after the prompt, so the trailing
+    /// "Diff:"-style tail must be preserved in both languages.
+    #[test]
+    fn test_prompt_tails_are_kept_for_diff_concatenation() {
+        for language in [PromptLanguage::En, PromptLanguage::Zh] {
+            assert!(commit_message_prompt(language)
+                .trim_end()
+                .ends_with("Diff:"));
+            assert!(vibe_check_prompt(language).trim_end().ends_with("Diff:"));
+            assert!(commit_split_prompt(language).trim_end().ends_with("Diff:"));
+        }
+        // Human-facing tails are language specific.
+        assert!(changelog_prompt(PromptLanguage::En)
+            .trim_end()
+            .ends_with("Commits:"));
+        assert!(changelog_prompt(PromptLanguage::Zh)
+            .trim_end()
+            .ends_with("提交记录："));
+        assert!(pr_description_prompt(PromptLanguage::En)
+            .trim_end()
+            .ends_with("Commits and stats:"));
+        assert!(pr_description_prompt(PromptLanguage::Zh)
+            .trim_end()
+            .ends_with("提交记录和统计："));
+        assert!(reflog_match_prompt(PromptLanguage::En)
+            .trim_end()
+            .ends_with("Reflog:"));
+        assert!(reflog_match_prompt(PromptLanguage::Zh)
+            .trim_end()
+            .ends_with("Reflog:"));
     }
 }

@@ -3,7 +3,13 @@
  * Maps common Git error messages to user-friendly suggestions with optional action buttons
  */
 
+import { msg } from '@lit/localize';
 import { showToast } from './notification.service.ts';
+import {
+  backendErrorDisplayText,
+  backendErrorMatchText,
+  type BackendErrorLike,
+} from './backend-error.service.ts';
 import type { ToastAction } from '../stores/ui.store.ts';
 
 export interface ErrorSuggestion {
@@ -34,7 +40,7 @@ export function getErrorSuggestion(
 ): ErrorSuggestion | null {
   if (!errorMessage) return null;
 
-  const msg = errorMessage.toLowerCase();
+  const backendText = errorMessage.toLowerCase();
 
   // The backend refused because this repository already has a fetch, pull or
   // push in flight (GitnadoError::RemoteOperationInFlight).
@@ -47,8 +53,8 @@ export function getErrorSuggestion(
   // rules below would otherwise claim it and replace that with something
   // wrong: the timeout rule ("increase the timeout in Settings") and the
   // repository-lock rule ("remove the lock file").
-  if (msg.includes('already running for this repository') ||
-      msg.includes('remote_operation_in_flight')) {
+  if (backendText.includes('already running for this repository') ||
+      backendText.includes('remote_operation_in_flight')) {
     return { message: errorMessage };
   }
 
@@ -67,7 +73,7 @@ export function getErrorSuggestion(
   // ancestor", i.e. you amended or rebased. The git CLI's hyphenated
   // "non-fast-forward" means the opposite (you are behind) and is handled
   // below — the two differ only by those hyphens, so order matters.
-  if (msg.includes('fastforwardable')) {
+  if (backendText.includes('fastforwardable')) {
     // A tag that already exists on the remote at another commit fails the same
     // refspec-generic pre-check, and neither pulling nor "newer changes"
     // describes it.
@@ -76,9 +82,9 @@ export function getErrorSuggestion(
       // flow can now do it), and push_tag already implements the force
       // refspec — so offer the one-click recovery instead.
       return {
-        message: 'The remote already has this tag at a different commit.',
+        message: msg('The remote already has this tag at a different commit.'),
         action: {
-          label: 'Force Push Tag',
+          label: msg('Force Push Tag'),
           // The remote travels with the tag: the rejected push was aimed at a
           // remote the user picked, and a force retry that re-resolved the
           // destination would move the tag on a DIFFERENT remote and report
@@ -97,10 +103,9 @@ export function getErrorSuggestion(
     // back in, duplicating them and undoing the amend. Force-with-lease is the
     // safe recovery, and it refuses if the remote moved since the last fetch.
     return {
-      message:
-        'Your local history has diverged from the remote (an amend or rebase). Force-push to replace the remote commits with yours.',
+      message: msg('Your local history has diverged from the remote (an amend or rebase). Force-push to replace the remote commits with yours.'),
       action: {
-        label: 'Force Push',
+        label: msg('Force Push'),
         callback: () => window.dispatchEvent(new CustomEvent('force-push', {
           detail: { repoPath: context?.repoPath },
         })),
@@ -109,14 +114,14 @@ export function getErrorSuggestion(
   }
 
   if (
-    msg.includes('not present locally') ||
-    /non-fast-?forward/.test(msg) ||
-    (msg.includes('rejected') && context?.operation === 'push')
+    backendText.includes('not present locally') ||
+    /non-fast-?forward/.test(backendText) ||
+    (backendText.includes('rejected') && context?.operation === 'push')
   ) {
     return {
-      message: 'Remote has newer changes. Pull before pushing.',
+      message: msg('Remote has newer changes. Pull before pushing.'),
       action: {
-        label: 'Pull Now',
+        label: msg('Pull Now'),
         callback: () => window.dispatchEvent(new CustomEvent('trigger-pull', {
           // Pinned like force-delete below: the toast outlives a repo switch.
           detail: { repoPath: context?.repoPath },
@@ -126,11 +131,11 @@ export function getErrorSuggestion(
   }
 
   // Branch not fully merged
-  if (msg.includes('not fully merged') || msg.includes('not yet merged')) {
+  if (backendText.includes('not fully merged') || backendText.includes('not yet merged')) {
     return {
-      message: `Branch is not fully merged. Force delete if you're sure.`,
+      message: msg('Branch is not fully merged. Force delete if you\'re sure.'),
       action: {
-        label: 'Force Delete',
+        label: msg('Force Delete'),
         // repoPath travels with the branch name. The toast outlives a repo
         // switch (8s, and nothing clears toasts on switch), so resolving the
         // repo when the button is clicked force-deleted from whichever tab
@@ -163,26 +168,26 @@ export function getErrorSuggestion(
     // axis accidentally dropped a bare `auth` match that was catching the verb;
     // restoring `auth` wholesale would also match "Author identity unknown",
     // git's message when user.name is unset.
-    msg.includes('authenticat') ||
-    msg.includes('credentials') ||
-    msg.includes('publickey') ||
-    (msg.includes('permission denied') && isNetworkOp)
+    backendText.includes('authenticat') ||
+    backendText.includes('credentials') ||
+    backendText.includes('publickey') ||
+    (backendText.includes('permission denied') && isNetworkOp)
   ) {
     return {
-      message: 'Authentication failed. Check your credentials or SSH keys.',
+      message: msg('Authentication failed. Check your credentials or SSH keys.'),
       action: {
-        label: 'Open Settings',
+        label: msg('Open Settings'),
         callback: () => window.dispatchEvent(new CustomEvent('open-settings')),
       },
     };
   }
 
   // Rebase in progress
-  if (msg.includes('rebase in progress') || msg.includes('rebase already started')) {
+  if (backendText.includes('rebase in progress') || backendText.includes('rebase already started')) {
     return {
-      message: 'A rebase is already in progress. Resolve or abort it first.',
+      message: msg('A rebase is already in progress. Resolve or abort it first.'),
       action: {
-        label: 'Abort Rebase',
+        label: msg('Abort Rebase'),
         callback: () => window.dispatchEvent(new CustomEvent('trigger-abort', {
           // Pinned: aborting discards the in-progress rebase AND any conflict
           // resolution — doing that to whichever tab happens to be active when
@@ -194,39 +199,38 @@ export function getErrorSuggestion(
   }
 
   // No upstream branch
-  if (msg.includes('no upstream') || msg.includes('no tracking') ||
-      msg.includes('does not have a commit checked out') ||
-      msg.includes('has no upstream branch')) {
+  if (backendText.includes('no upstream') || backendText.includes('no tracking') ||
+      backendText.includes('does not have a commit checked out') ||
+      backendText.includes('has no upstream branch')) {
     return {
-      message: 'No upstream branch configured. Push with --set-upstream to create one.',
+      message: msg('No upstream branch configured. Push with --set-upstream to create one.'),
     };
   }
 
   // Operation timeout
-  if (msg.includes('timed out') || msg.includes('operation_timeout')) {
+  if (backendText.includes('timed out') || backendText.includes('operation_timeout')) {
     return {
-      message: 'Operation timed out. You can increase the timeout in Settings > Behavior.',
+      message: msg('Operation timed out. You can increase the timeout in Settings > Behavior.'),
       action: {
-        label: 'Open Settings',
+        label: msg('Open Settings'),
         callback: () => window.dispatchEvent(new CustomEvent('open-settings')),
       },
     };
   }
 
   // Operation cancelled
-  if (msg.includes('operation_cancelled')) {
+  if (backendText.includes('operation_cancelled')) {
     return {
-      message: 'Operation was cancelled.',
+      message: msg('Operation was cancelled.'),
     };
   }
 
   // git refuses a checkout that would overwrite local changes. libgit2's own
   // wording ("1 conflict prevents checkout") names neither the files nor a way
   // forward, and this path is reachable whenever Auto-Stash on Checkout is off.
-  if (/conflicts? prevent(s)? checkout|would be overwritten by checkout/.test(msg)) {
+  if (/conflicts? prevent(s)? checkout|would be overwritten by checkout/.test(backendText)) {
     return {
-      message:
-        'Your local changes would be overwritten by this checkout. Stash or commit them first, or turn on Auto-Stash on Checkout in Settings > Behavior.',
+      message: msg('Your local changes would be overwritten by this checkout. Stash or commit them first, or turn on Auto-Stash on Checkout in Settings > Behavior.'),
     };
   }
 
@@ -234,9 +238,9 @@ export function getErrorSuggestion(
   // matches "blocked", so a security-gate refusal ("Operation blocked by
   // security settings") was diagnosed as a stuck index.lock and sent the user
   // hunting for a file that does not exist.
-  if (/\block\b|\blocked\b|index\.lock/.test(msg)) {
+  if (/\block\b|\blocked\b|index\.lock/.test(backendText)) {
     return {
-      message: 'Repository is locked by another process. Wait or remove the lock file.',
+      message: msg('Repository is locked by another process. Wait or remove the lock file.'),
     };
   }
 
@@ -245,16 +249,21 @@ export function getErrorSuggestion(
 
 /**
  * Show an error toast with a suggestion if one matches, otherwise show a fallback message.
+ *
+ * Accepts the whole failed result (preferred) or a plain message string: the
+ * rules match on the backend's own English wording, while the toast shows the
+ * text `invokeCommand` already localised.
  */
 export function showErrorWithSuggestion(
-  errorMessage: string,
+  error: BackendErrorLike | string | null | undefined,
   fallbackMessage: string,
   context?: ErrorContext
 ): void {
-  const suggestion = getErrorSuggestion(errorMessage, context);
+  const suggestion = getErrorSuggestion(backendErrorMatchText(error), context);
+  const display = backendErrorDisplayText(error);
   if (suggestion) {
     showToast(suggestion.message, 'error', 8000, suggestion.action);
   } else {
-    showToast(errorMessage || fallbackMessage, 'error');
+    showToast(display || fallbackMessage, 'error');
   }
 }

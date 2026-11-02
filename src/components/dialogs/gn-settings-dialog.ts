@@ -12,6 +12,7 @@ import {
   type FontSize,
   type Density,
   type GraphColorScheme,
+  type AiPromptLanguage,
 } from '../../stores/settings.store.ts';
 import type { DiffWhitespaceMode } from '../../types/api.types.ts';
 import { supportedLocales, resolveLocale, type Locale } from '../../i18n/index.ts';
@@ -94,6 +95,30 @@ export function providerStatusLabel(
   return msg('(Unavailable)');
 }
 
+/**
+ * How many bullets the hidden access token shows.
+ *
+ * The backend generates 43-character tokens (`AUTH_TOKEN_LEN` in
+ * `src-tauri/src/services/ai/mcp/server.rs`) and the mask used to render one
+ * bullet per character. At 43 bullets the masked value alone was wider than
+ * the row, so it wrapped to two lines of dots and pushed "Regenerate" onto a
+ * second line. The bullets are a mask, not a length readout, so cap them.
+ */
+const MASKED_TOKEN_BULLETS = 12;
+
+/**
+ * The AI prompt-language options, in switch order.
+ *
+ * The labels are endonyms — 简 (Simplified Chinese) and 英 (English) — and are
+ * deliberately NOT passed through `msg()`: they have to stay readable whichever
+ * locale the UI is in, the same reason the language picker shows `English`,
+ * `Français` and `中文` untranslated.
+ */
+const AI_PROMPT_LANGUAGES: ReadonlyArray<{ value: AiPromptLanguage; label: string }> = [
+  { value: 'zh', label: '简' },
+  { value: 'en', label: '英' },
+];
+
 @customElement('gn-settings-dialog')
 @localized()
 export class GnSettingsDialog extends LitElement {
@@ -136,6 +161,41 @@ export class GnSettingsDialog extends LitElement {
         display: flex;
         flex-direction: column;
         gap: 2px;
+        /* The label is the part that gives way when a translated description
+           gets long. Without this the labels/controls beside it were the ones
+           shrinking — a two-character button ended up one character wide and
+           stacked vertically, which is how the Chinese build looked. */
+        flex: 1 1 auto;
+        min-width: 0;
+      }
+
+      /* Controls keep their intrinsic width; the label shrinks instead. */
+      .setting-row > :not(.setting-label) {
+        flex-shrink: 0;
+      }
+
+      /* Some rows are only text — an error/status line, the About block or the
+         "Detecting system capabilities…" note. Those are not a control beside
+         the label: keeping them at max-content would let a long backend error
+         (or a long translation) run past the dialog instead of wrapping. */
+      .setting-row > .error-text,
+      .setting-row > .version-info,
+      .setting-row > .setting-description {
+        flex-shrink: 1;
+        min-width: 0;
+      }
+
+      /* Rows whose control is as wide as the label itself (the access token
+         plus its Reveal/Copy/Regenerate actions) put the control on its own
+         line rather than squeezing both into a column each. */
+      .setting-row.setting-row-stacked {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+      }
+
+      .setting-row.setting-row-stacked > .setting-label {
+        flex: initial;
       }
 
       .setting-name {
@@ -146,6 +206,9 @@ export class GnSettingsDialog extends LitElement {
       .setting-description {
         font-size: 11px;
         color: var(--text-secondary);
+        /* Long words/URLs in a translated description wrap instead of
+           escaping the dialog. */
+        overflow-wrap: anywhere;
       }
 
       /* A setting another setting has taken away: dimmed, with the reason
@@ -195,6 +258,9 @@ export class GnSettingsDialog extends LitElement {
         border: 1px solid var(--border-color);
         background: var(--button-background);
         color: var(--text-primary);
+        /* A translated label ("重新生成") must stay on one line even when the
+           row is tight; CJK wraps at every character otherwise. */
+        white-space: nowrap;
       }
 
       button:hover {
@@ -284,6 +350,9 @@ export class GnSettingsDialog extends LitElement {
         font-size: 11px;
         color: var(--error-color);
         margin-top: 4px;
+        /* Backend errors can carry unbroken paths/URLs; wrap them rather than
+           letting the line overflow the dialog. */
+        overflow-wrap: anywhere;
       }
 
       /* The About row lays its status out inline next to the version, so the
@@ -296,8 +365,10 @@ export class GnSettingsDialog extends LitElement {
       .mcp-token-controls {
         display: flex;
         align-items: center;
-        justify-content: flex-end;
-        flex-wrap: wrap;
+        justify-content: flex-start;
+        /* Never wrap a button onto its own line: the token box shrinks (it can
+           wrap its characters) and the three actions stay together. */
+        flex-wrap: nowrap;
         gap: 8px;
       }
 
@@ -311,6 +382,10 @@ export class GnSettingsDialog extends LitElement {
         padding: 4px 8px;
         max-width: 280px;
         overflow-wrap: anywhere;
+        /* Give the token up before the buttons next to it: it can wrap its
+           characters, a "复制"/"重新生成" button cannot. */
+        flex: 0 1 auto;
+        min-width: 0;
       }
 
       .mcp-client-config {
@@ -333,6 +408,7 @@ export class GnSettingsDialog extends LitElement {
         font-size: 11px;
         padding: 2px 6px;
         border-radius: 4px;
+        white-space: nowrap;
       }
 
       .status-indicator.configured {
@@ -408,6 +484,45 @@ export class GnSettingsDialog extends LitElement {
         width: 100%;
       }
 
+      /* The AI prompt-language switch: a compact segmented two-button control.
+         Its labels are endonyms (简/英), so they are never localized and the
+         control stays legible in every locale. */
+      .prompt-language-switch {
+        display: inline-flex;
+        flex-shrink: 0;
+        border: 1px solid var(--border-color);
+        border-radius: 4px;
+        overflow: hidden;
+        /* The segmented control clips its children, so keep the shared focus
+           ring inside the pill instead of letting it be cut off. */
+        --gn-focus-ring-offset: -2px;
+      }
+
+      .prompt-language-switch .lang-option {
+        padding: 4px 10px;
+        border: none;
+        border-radius: 0;
+        background: transparent;
+        color: var(--text-secondary);
+        font-size: 12px;
+        line-height: 1.4;
+        cursor: pointer;
+      }
+
+      .prompt-language-switch .lang-option + .lang-option {
+        border-left: 1px solid var(--border-color);
+      }
+
+      .prompt-language-switch .lang-option:hover {
+        background: var(--button-hover-background);
+        color: var(--text-primary);
+      }
+
+      .prompt-language-switch .lang-option.active {
+        background: var(--color-primary);
+        color: white;
+      }
+
       .path-input-group {
         display: flex;
         gap: 6px;
@@ -469,6 +584,10 @@ export class GnSettingsDialog extends LitElement {
   // System tray settings
   @state() private minimizeToTray = false;
   @state() private showNativeNotifications = true;
+
+  // AI quick settings (mirrored from the store; see loadSettings/subscription)
+  @state() private aiPromptLanguage: AiPromptLanguage = 'zh';
+  @state() private showPromptLanguageSwitch = true;
 
   // AI settings
   @state() private aiProviders: AiProviderInfo[] = [];
@@ -539,11 +658,16 @@ export class GnSettingsDialog extends LitElement {
     super.connectedCallback();
     this.loadSettings();
     // The graph colour scheme can change underneath an open dialog when the OS
-    // high-contrast setting flips, so mirror it from the store.
+    // high-contrast setting flips, so mirror it from the store. The AI quick
+    // settings are mirrored for the same reason: the commit panel's 简/英
+    // shortcut writes the same language and visibility, so the two surfaces
+    // must never disagree while both are mounted.
     this.settingsUnsubscribe = settingsStore.subscribe((state) => {
       this.graphColorScheme = state.graphColorScheme;
       this.graphColorSchemeAuto = state.graphColorSchemeAuto;
       this.systemHighContrast = state.systemHighContrast;
+      this.aiPromptLanguage = state.aiPromptLanguage;
+      this.showPromptLanguageSwitch = state.showPromptLanguageSwitch;
     });
     this.loadVersion();
     this.loadAiProviders();
@@ -754,6 +878,8 @@ export class GnSettingsDialog extends LitElement {
     this.fetchOnFocus = settings.fetchOnFocus;
     this.minimizeToTray = settings.minimizeToTray;
     this.showNativeNotifications = settings.showNativeNotifications;
+    this.aiPromptLanguage = settings.aiPromptLanguage;
+    this.showPromptLanguageSwitch = settings.showPromptLanguageSwitch;
   }
 
   /**
@@ -804,6 +930,19 @@ export class GnSettingsDialog extends LitElement {
     settingsStore.getState().setGraphColorScheme(this.graphColorScheme);
     this.graphColorSchemeAuto = settingsStore.getState().graphColorSchemeAuto;
     window.dispatchEvent(new CustomEvent('settings-changed'));
+  }
+
+  /**
+   * Switch the language the AI prompts (and the text it writes back) use.
+   *
+   * Persisted straight away and announced on `ai-settings-changed`, the event
+   * every AI surface already listens for — the commit panel's quick switch is
+   * the other writer of the same setting.
+   */
+  private handlePromptLanguageSelect(language: AiPromptLanguage): void {
+    this.aiPromptLanguage = language;
+    settingsStore.getState().setAiPromptLanguage(language);
+    window.dispatchEvent(new CustomEvent('ai-settings-changed'));
   }
 
   private handleBranchNameChange(e: Event): void {
@@ -1200,6 +1339,10 @@ export class GnSettingsDialog extends LitElement {
         this.showNativeNotifications = value;
         store.setShowNativeNotifications(value);
         break;
+      case 'showPromptLanguageSwitch':
+        this.showPromptLanguageSwitch = value;
+        store.setShowPromptLanguageSwitch(value);
+        break;
     }
     window.dispatchEvent(new CustomEvent('settings-changed'));
     // Offline mode decides whether a cloud AI provider may be reached, so the
@@ -1512,7 +1655,9 @@ export class GnSettingsDialog extends LitElement {
 
   /** The token as shown while it is hidden — never a partial of the real value */
   private maskedMcpToken(): string {
-    return this.mcpToken ? '•'.repeat(this.mcpToken.length) : '';
+    return this.mcpToken
+      ? '•'.repeat(Math.min(this.mcpToken.length, MASKED_TOKEN_BULLETS))
+      : '';
   }
 
   private handleMcpTokenReveal(): void {
@@ -2251,6 +2396,40 @@ export class GnSettingsDialog extends LitElement {
         </div>
 
         <div class="settings-section">
+          <div class="section-title">${msg('AI Quick Settings')}</div>
+
+          <div class="setting-row">
+            <div class="setting-label">
+              <span class="setting-name">${msg('AI Prompt Language')}</span>
+              <span class="setting-description">${msg('Language used for AI prompts and the text they generate')}</span>
+            </div>
+            <div
+              class="prompt-language-switch"
+              role="group"
+              aria-label=${msg('AI prompt language')}
+            >
+              ${AI_PROMPT_LANGUAGES.map(
+                (option) => html`
+                  <button
+                    class="lang-option ${this.aiPromptLanguage === option.value ? 'active' : ''}"
+                    data-lang=${option.value}
+                    aria-pressed=${this.aiPromptLanguage === option.value ? 'true' : 'false'}
+                    @click=${() => this.handlePromptLanguageSelect(option.value)}
+                  >${option.label}</button>
+                `
+              )}
+            </div>
+          </div>
+
+          ${this.renderToggleRow(
+            msg('Show prompt-language switch'),
+            msg('Show the 简/英 shortcut in the commit panel'),
+            this.showPromptLanguageSwitch,
+            'showPromptLanguageSwitch'
+          )}
+        </div>
+
+        <div class="settings-section">
           <div class="section-title">${msg('Local AI Engine')}</div>
 
           ${this.systemCapabilities ? html`
@@ -2491,7 +2670,7 @@ export class GnSettingsDialog extends LitElement {
             </div>
           ` : nothing}
 
-          <div class="setting-row">
+          <div class="setting-row setting-row-stacked">
             <div class="setting-label">
               <span class="setting-name">${msg('Access Token')}</span>
               <span class="setting-description">

@@ -5,6 +5,7 @@
 
 import { LitElement, html, css } from 'lit';
 import { customElement, state, property, query } from 'lit/decorators.js';
+import { localized, msg } from '@lit/localize';
 import { sharedStyles } from '../../styles/shared-styles.ts';
 import { createBranch } from '../../services/git.service.ts';
 import { containsDeepActiveElement } from '../../utils/focus.ts';
@@ -17,6 +18,7 @@ import {
 } from '../../utils/ref-lock.ts';
 
 @customElement('gn-create-branch-dialog')
+@localized()
 export class GnCreateBranchDialog extends LitElement {
   static styles = [
     sharedStyles,
@@ -254,12 +256,12 @@ export class GnCreateBranchDialog extends LitElement {
     const name = this.branchName.trim();
 
     if (!name) {
-      this.error = 'Please enter a branch name';
+      this.error = msg('Please enter a branch name');
       return;
     }
 
     if (name.startsWith('-') || name.startsWith('.')) {
-      this.error = 'Branch name cannot start with - or .';
+      this.error = msg('Branch name cannot start with - or .');
       return;
     }
 
@@ -271,7 +273,7 @@ export class GnCreateBranchDialog extends LitElement {
     // than blocking on an unrelated operation.
     const needsLock = this.checkoutAfterCreate;
     if (needsLock && !tryAcquireRefOp(repoPath)) {
-      this.error = 'Another operation is already running in this repository.';
+      this.error = msg('Another operation is already running in this repository.');
       return;
     }
 
@@ -297,10 +299,10 @@ export class GnCreateBranchDialog extends LitElement {
         }));
         this.close();
       } else {
-        this.error = result.error?.message ?? 'Failed to create branch';
+        this.error = result.error?.message ?? msg('Failed to create branch');
       }
     } catch (err) {
-      this.error = err instanceof Error ? err.message : 'Unknown error occurred';
+      this.error = err instanceof Error ? err.message : msg('Unknown error occurred');
     } finally {
       this.isCreating = false;
       if (needsLock) releaseRefOp(repoPath);
@@ -334,12 +336,12 @@ export class GnCreateBranchDialog extends LitElement {
   render() {
     return html`
       <gn-modal
-        modalTitle="Create Branch"
+        modalTitle=${msg('Create Branch')}
         @close=${this.handleModalClose}
       >
         <div class="form" @keydown=${this.handleKeyDown}>
           <div class="field">
-            <label for="branch-name-input">Branch Name</label>
+            <label for="branch-name-input">${msg('Branch Name')}</label>
             <input
               id="branch-name-input"
               type="text"
@@ -348,12 +350,14 @@ export class GnCreateBranchDialog extends LitElement {
               @input=${this.handleNameChange}
               ?disabled=${this.isCreating}
             />
-            <span class="field-hint">Use / to organize branches (e.g., feature/, bugfix/)</span>
+            <span class="field-hint">
+              ${msg('Use / to organize branches (e.g., feature/, bugfix/)')}
+            </span>
           </div>
 
           ${this.startPoint ? html`
             <div class="field">
-              <label>Based on</label>
+              <label>${msg('Based on')}</label>
               <input
                 type="text"
                 .value=${this.startPoint}
@@ -371,7 +375,7 @@ export class GnCreateBranchDialog extends LitElement {
               @change=${this.handleCheckoutChange}
               ?disabled=${this.isCreating}
             />
-            <label for="checkout-after">Checkout new branch after creation</label>
+            <label for="checkout-after">${msg('Checkout new branch after creation')}</label>
           </div>
 
           ${this.error
@@ -385,7 +389,7 @@ export class GnCreateBranchDialog extends LitElement {
             @click=${this.close}
             ?disabled=${this.isCreating}
           >
-            Cancel
+            ${msg('Cancel')}
           </button>
           <button
             class="btn btn-primary"
@@ -397,7 +401,7 @@ export class GnCreateBranchDialog extends LitElement {
               // binding and the handler describe different contracts.
               (this.checkoutAfterCreate && this.lock.busy)}
           >
-            ${this.isCreating ? 'Creating...' : 'Create Branch'}
+            ${this.isCreating ? msg('Creating...') : msg('Create Branch')}
           </button>
         </div>
       </gn-modal>

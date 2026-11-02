@@ -32,6 +32,7 @@ export interface LocaleOption {
 const localeNames: Record<Locale, string> = {
   en: 'English',
   fr: 'Français',
+  zh: '中文',
 };
 
 export const supportedLocales: readonly LocaleOption[] = allLocales.map((code) => ({
@@ -46,6 +47,7 @@ export const supportedLocales: readonly LocaleOption[] = allLocales.map((code) =
  */
 const localeLoaders: Record<string, () => Promise<LocaleModule>> = {
   fr: () => import('./generated/locales/fr.ts'),
+  zh: () => import('./generated/locales/zh.ts'),
 };
 
 export const { getLocale, setLocale } = configureLocalization({
@@ -74,22 +76,6 @@ export function resolveLocale(code: string | null | undefined): Locale {
   if (isSupportedLocale(code)) return code;
   const base = code.split('-')[0].toLowerCase();
   return isSupportedLocale(base) ? base : sourceLocale;
-}
-
-/**
- * The locale to start from on a fresh install: the first of the OS/browser
- * preferred languages that we actually ship, English otherwise.
- */
-export function detectSystemLocale(): Locale {
-  if (typeof navigator === 'undefined') return sourceLocale;
-  const preferred = navigator.languages?.length ? navigator.languages : [navigator.language];
-  for (const tag of preferred) {
-    if (!tag) continue;
-    if (isSupportedLocale(tag)) return tag;
-    const base = tag.split('-')[0].toLowerCase();
-    if (isSupportedLocale(base)) return base;
-  }
-  return sourceLocale;
 }
 
 /**

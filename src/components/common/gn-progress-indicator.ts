@@ -8,6 +8,7 @@ import { customElement, property } from 'lit/decorators.js';
 import { sharedStyles } from '../../styles/shared-styles.ts';
 import type { ProgressOperation } from '../../services/progress.service.ts';
 
+import { localizeBackendMessage } from '../../services/backend-message.service.ts';
 // Re-export for backwards compatibility
 export type { ProgressOperation } from '../../services/progress.service.ts';
 
@@ -257,7 +258,7 @@ export class GnProgressIndicator extends LitElement {
           <div class="progress-item">
             ${this.getIcon(op.type)}
             <div class="progress-content">
-              <div class="progress-message">${op.message}</div>
+              <div class="progress-message">${localizeBackendMessage(op.message)}</div>
               <div class="progress-bar">
                 <div
                   class="progress-fill ${op.progress === undefined ? 'indeterminate' : ''}"

@@ -17,6 +17,7 @@
  */
 
 import { emit } from '@tauri-apps/api/event';
+import { msg } from '@lit/localize';
 import { showToast } from './notification.service.ts';
 
 /**
@@ -62,7 +63,9 @@ export async function emitSecuritySettings(
     if (!failureReported) {
       failureReported = true;
       showToast(
-        'Could not apply your security settings to the backend. Restart Gitnado to be sure they take effect.',
+        msg(
+          'Could not apply your security settings to the backend. Restart Gitnado to be sure they take effect.'
+        ),
         'error',
       );
     }

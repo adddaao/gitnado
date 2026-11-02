@@ -3,6 +3,7 @@
  * Provides high-level Git operations via Tauri commands
  */
 
+import { msg, str } from "@lit/localize";
 import { invokeCommand, listenToEvent } from "./tauri-api.ts";
 import { showToast } from "./notification.service.ts";
 import { showErrorWithSuggestion } from "./error-suggestion.service.ts";
@@ -348,7 +349,7 @@ async function checkNetworkAllowed(
 
   if (settings.offlineMode) {
     if (!silent) {
-      showToast('Offline mode is enabled. Disable in Settings > Security.', 'warning');
+      showToast(msg('Offline mode is enabled. Disable in Settings > Security.'), 'warning');
     }
     return 'offline';
   }
@@ -382,8 +383,8 @@ async function checkNetworkAllowed(
     if (!silent) {
       showToast(
         url
-          ? `Remote "${url}" is not in your allowlist`
-          : 'Could not determine the remote URL, and an allowlist is configured',
+          ? msg(str`Remote "${url}" is not in your allowlist`)
+          : msg('Could not determine the remote URL, and an allowlist is configured'),
         'error',
       );
     }
@@ -468,8 +469,10 @@ async function checkNetworkPermission(
     // distinguish it from a block so they don't report it back as a red error.
     const label = remotes ? remotes.map((t) => t.name).join(', ') : remote;
     const ok = await showConfirm(
-      'Network Operation',
-      `Allow ${operation}${label ? ` to ${label}` : ''}?`,
+      msg('Network Operation'),
+      label
+        ? msg(str`Allow ${operation} to ${label}?`)
+        : msg(str`Allow ${operation}?`),
     );
     if (!ok) {
       lastNetworkBlockReason = 'declined';
@@ -1025,7 +1028,7 @@ export async function cloneRepository(
 ): Promise<CommandResult<Repository>> {
   // A clone URL is a git remote: `git clone sub/mybackup.git` is a copy from a
   // repository on this disk, and the backend's `guard_remote_url` says so too.
-  if (!await checkNetworkPermission('clone', null, args.url, undefined, undefined, 'remote')) {
+  if (!await checkNetworkPermission(msg('clone'), null, args.url, undefined, undefined, 'remote')) {
     return blockedResult();
   }
 
@@ -1089,7 +1092,7 @@ export async function deepenRepository(
   path: string,
   depth: number,
 ): Promise<CommandResult<void>> {
-  if (!await checkNetworkPermission('deepen', path)) {
+  if (!await checkNetworkPermission(msg('deepen'), path)) {
     return blockedResult();
   }
   return surfaceBackendRefusal(
@@ -1102,7 +1105,7 @@ export async function deepenRepository(
 export async function unshallowRepository(
   path: string,
 ): Promise<CommandResult<void>> {
-  if (!await checkNetworkPermission('unshallow', path)) {
+  if (!await checkNetworkPermission(msg('unshallow'), path)) {
     return blockedResult();
   }
   return surfaceBackendRefusal(
@@ -1337,11 +1340,10 @@ export async function createCommit(
   // the one call all three share, so none of them can be forgotten.
   if (args.amend && (await amendWouldRewritePublishedHistory(path))) {
     const proceed = await showConfirm(
-      "Amend a pushed commit?",
-      "This commit is already on the remote. Amending replaces it, so your " +
-        "branch and its upstream will diverge and the next push will be " +
-        "rejected until you force push — which discards any work others based " +
-        "on it.\n\nAmend anyway?",
+      msg("Amend a pushed commit?"),
+      msg(
+        "This commit is already on the remote. Amending replaces it, so your branch and its upstream will diverge and the next push will be rejected until you force push — which discards any work others based on it.\n\nAmend anyway?"
+      ),
       "warning",
     );
     if (!proceed) {
@@ -1665,7 +1667,7 @@ export async function fetch(
       args.remote = resolved.data;
     }
   }
-  if (!await checkNetworkPermission('fetch', args?.path ?? null, args?.remote)) {
+  if (!await checkNetworkPermission(msg('fetch'), args?.path ?? null, args?.remote)) {
     return blockedResult();
   }
 
@@ -1688,10 +1690,10 @@ export async function fetch(
   const result = await invokeCommand<void>("fetch", args);
   if (!args?.silent) {
     if (result.success) {
-      showToast("Fetch completed successfully", "success");
+      showToast(msg("Fetch completed successfully"), "success");
     } else {
       showToast(
-        `Fetch failed: ${result.error?.message ?? "Unknown error"}`,
+        msg(str`Fetch failed: ${result.error?.message ?? msg("Unknown error")}`),
         "error",
       );
     }
@@ -1715,7 +1717,7 @@ export async function pull(
       args.remote = resolved.data;
     }
   }
-  if (!await checkNetworkPermission('pull', args?.path ?? null, args?.remote)) {
+  if (!await checkNetworkPermission(msg('pull'), args?.path ?? null, args?.remote)) {
     return blockedResult();
   }
 
@@ -1738,10 +1740,10 @@ export async function pull(
   const result = await invokeCommand<void>("pull", args);
   if (!args?.silent) {
     if (result.success) {
-      showToast("Pull completed successfully", "success");
+      showToast(msg("Pull completed successfully"), "success");
     } else {
       showToast(
-        `Pull failed: ${result.error?.message ?? "Unknown error"}`,
+        msg(str`Pull failed: ${result.error?.message ?? msg("Unknown error")}`),
         "error",
       );
     }
@@ -1774,7 +1776,7 @@ export async function push(
     args?.path && args.remote && isNetworkPolicyActive()
       ? await resolveRemotePushUrl(args.path, args.remote)
       : null;
-  if (!await checkNetworkPermission('push', args?.path ?? null, args?.remote, pushUrl)) {
+  if (!await checkNetworkPermission(msg('push'), args?.path ?? null, args?.remote, pushUrl)) {
     return blockedResult();
   }
 
@@ -1797,10 +1799,10 @@ export async function push(
   const result = await invokeCommand<void>("push", args);
   if (!args?.silent) {
     if (result.success) {
-      showToast("Push completed successfully", "success");
+      showToast(msg("Push completed successfully"), "success");
     } else {
       showToast(
-        `Push failed: ${result.error?.message ?? "Unknown error"}`,
+        msg(str`Push failed: ${result.error?.message ?? msg("Unknown error")}`),
         "error",
       );
     }
@@ -1845,7 +1847,7 @@ export async function pushToMultipleRemotes(
   const targets: NetworkRemoteTarget[] = remotes.map((name, i) => ({ name, url: pushUrls[i] }));
   if (
     !await checkNetworkPermission(
-      'push',
+      msg('push'),
       args?.path ?? null,
       undefined,
       undefined,
@@ -1871,18 +1873,22 @@ export async function pushToMultipleRemotes(
       const { totalSuccess, totalFailed } = result.data;
       if (totalFailed === 0) {
         showToast(
-          `Pushed to ${totalSuccess} remote(s) successfully`,
+          totalSuccess === 1
+            ? msg(str`Pushed to ${totalSuccess} remote successfully`)
+            : msg(str`Pushed to ${totalSuccess} remotes successfully`),
           "success",
         );
       } else {
         showToast(
-          `Pushed to ${totalSuccess} remote(s), ${totalFailed} failed`,
+          totalSuccess === 1
+            ? msg(str`Pushed to ${totalSuccess} remote, ${totalFailed} failed`)
+            : msg(str`Pushed to ${totalSuccess} remotes, ${totalFailed} failed`),
           "warning",
         );
       }
     } else {
       showToast(
-        `Multi-push failed: ${result.error?.message ?? "Unknown error"}`,
+        msg(str`Multi-push failed: ${result.error?.message ?? msg("Unknown error")}`),
         "error",
       );
     }
@@ -1918,7 +1924,7 @@ export async function fetchAllRemotes(
     if (!Array.isArray(remotes.data)) {
       return {
         success: false,
-        error: { code: 'REMOTE_LIST_FAILED', message: 'Failed to list repository remotes' },
+        error: { code: 'REMOTE_LIST_FAILED', message: msg('Failed to list repository remotes') },
       };
     }
     targets = remotes.data.map((item) => ({ name: item.name, url: item.url }));
@@ -1930,7 +1936,7 @@ export async function fetchAllRemotes(
     // and wave an ungated `fetch_all_remotes` straight through.
     if (targets.length === 0) targets = undefined;
   }
-  if (!await checkNetworkPermission('fetch', args?.path ?? null, undefined, undefined, targets)) {
+  if (!await checkNetworkPermission(msg('fetch'), args?.path ?? null, undefined, undefined, targets)) {
     return blockedResult();
   }
   // If no token is provided, try to find one for the repository
@@ -1946,16 +1952,23 @@ export async function fetchAllRemotes(
     if (result.success && result.data) {
       const { totalFetched, totalFailed } = result.data;
       if (totalFailed === 0) {
-        showToast(`Fetched from ${totalFetched} remote(s) successfully`, "success");
+        showToast(
+          totalFetched === 1
+            ? msg(str`Fetched from ${totalFetched} remote successfully`)
+            : msg(str`Fetched from ${totalFetched} remotes successfully`),
+          "success",
+        );
       } else {
         showToast(
-          `Fetched from ${totalFetched} remote(s), ${totalFailed} failed`,
+          totalFetched === 1
+            ? msg(str`Fetched from ${totalFetched} remote, ${totalFailed} failed`)
+            : msg(str`Fetched from ${totalFetched} remotes, ${totalFailed} failed`),
           "warning",
         );
       }
     } else {
       showToast(
-        `Fetch all failed: ${result.error?.message ?? "Unknown error"}`,
+        msg(str`Fetch all failed: ${result.error?.message ?? msg("Unknown error")}`),
         "error",
       );
     }
@@ -2814,7 +2827,7 @@ export async function pushTag(
   args: PushTagCommand,
 ): Promise<CommandResult<void>> {
   const pushUrl = args.remote ? await resolveRemotePushUrl(args.path, args.remote) : null;
-  if (!await checkNetworkPermission('push tag', args.path, args.remote, pushUrl)) {
+  if (!await checkNetworkPermission(msg('push tag'), args.path, args.remote, pushUrl)) {
     return blockedResult();
   }
 
@@ -2862,7 +2875,7 @@ export async function deleteRemoteTag(
   args: DeleteRemoteTagCommand,
 ): Promise<CommandResult<void>> {
   const pushUrl = args.remote ? await resolveRemotePushUrl(args.path, args.remote) : null;
-  if (!await checkNetworkPermission('delete remote tag', args.path, args.remote, pushUrl)) {
+  if (!await checkNetworkPermission(msg('delete remote tag'), args.path, args.remote, pushUrl)) {
     return blockedResult();
   }
 
@@ -3563,7 +3576,7 @@ export async function addSubmodule(
   const relative = isRelativeSubmoduleUrl(url);
   if (
     !await checkNetworkPermission(
-      'add submodule',
+      msg('add submodule'),
       relative ? repoPath : null,
       relative ? undefined : url,
       undefined,
@@ -3618,7 +3631,7 @@ export async function updateSubmodules(
   // The confirm, when the user asked for one. The hard blocks were settled
   // above against the submodule hosts, so none is named here for the
   // allowlist to resolve — an empty target list runs only the confirm.
-  if (!await checkNetworkPermission('update submodules', repoPath, undefined, undefined, [])) {
+  if (!await checkNetworkPermission(msg('update submodules'), repoPath, undefined, undefined, [])) {
     return blockedResult();
   }
 
@@ -3897,7 +3910,7 @@ export async function lfsPull(
   // `sub/mybackup.git`, a repository on this disk.
   if (
     !await checkNetworkPermission(
-      'LFS pull',
+      msg('LFS pull'),
       repoPath,
       undefined,
       endpoint?.url ?? null,
@@ -3920,7 +3933,7 @@ export async function lfsFetch(
   // fallback endpoint IS the git remote.
   if (
     !await checkNetworkPermission(
-      'LFS fetch',
+      msg('LFS fetch'),
       repoPath,
       undefined,
       endpoint?.url ?? null,
@@ -4477,7 +4490,7 @@ export async function testCredentials(
   // "not a URL" path, where it matched no remote name and fell back to the
   // first remote in the list — refusing the test with a toast naming a host
   // the operation would never have contacted.
-  if (!await checkNetworkPermission('test credentials', path, remoteUrl, remoteUrl)) {
+  if (!await checkNetworkPermission(msg('test credentials'), path, remoteUrl, remoteUrl)) {
     return blockedResult();
   }
   // The backend guards this one too, and the two allowlists can disagree —
@@ -6460,7 +6473,7 @@ export async function startAutoFetch(
       success: false,
       error: {
         code: "REMOTE_NOT_FOUND",
-        message: `Could not resolve URL for remote "${remote}"`,
+        message: msg(str`Could not resolve URL for remote "${remote}"`),
       },
     };
   }
@@ -6548,6 +6561,26 @@ export interface RemoteOperationResult {
 let remoteOperationUnlisten: UnlistenFn | null = null;
 
 /**
+ * Localised name for the backend's operation token on a remote-operation event.
+ *
+ * The token is machine data (`fetch` / `pull` / `push`); the title it lands in
+ * is user-visible copy, so a known kind is translated. An unknown kind is left
+ * as the backend sent it rather than guessed at.
+ */
+function remoteOperationWord(operation: string): string {
+  switch (operation) {
+    case 'fetch':
+      return msg('fetch');
+    case 'pull':
+      return msg('pull');
+    case 'push':
+      return msg('push');
+    default:
+      return operation;
+  }
+}
+
+/**
  * Set up listeners for remote operation events (fetch/pull/push completions).
  * These are particularly useful for auto-fetch and other background operations.
  * Call this once when the app starts.
@@ -6616,20 +6649,32 @@ export async function setupRemoteOperationListeners(): Promise<void> {
         // Success notifications
         switch (result.operation) {
           case "fetch":
-            showToast(`Fetched from ${result.remote}`, "success", 3000);
+            showToast(msg(str`Fetched from ${result.remote}`), "success", 3000);
             break;
           case "pull":
-            showToast(result.message || `Pulled from ${result.remote}`, "success", 3000);
+            showToast(
+              result.message || msg(str`Pulled from ${result.remote}`),
+              "success",
+              3000,
+            );
             break;
           case "push":
-            showToast(result.message || `Pushed to ${result.remote}`, "success", 3000);
+            showToast(
+              result.message || msg(str`Pushed to ${result.remote}`),
+              "success",
+              3000,
+            );
             break;
           default:
             showToast(result.message, "success", 3000);
         }
       } else {
         // Error notifications
-        showErrorWithSuggestion(result.message, `${result.operation} failed`, { operation: result.operation });
+        showErrorWithSuggestion(
+          result.message,
+          msg(str`${remoteOperationWord(result.operation)} failed`),
+          { operation: result.operation },
+        );
       }
     },
   );
@@ -6729,7 +6774,7 @@ export async function applyProfile(
     if (profile) {
       workflowStore.getState().setActiveProfile(profile);
     }
-    showToast("Profile applied successfully", "success");
+    showToast(msg("Profile applied successfully"), "success");
   }
   return result;
 }
@@ -6883,9 +6928,9 @@ export async function detectRepositoryIntegration(
       providerName: "GitHub",
       isConfigured: hasAccountOfType("github"),
       features: [
-        "Pull request overlays",
-        "Create PRs from branches",
-        "Link issues",
+        msg("Pull request overlays"),
+        msg("Create PRs from branches"),
+        msg("Link issues"),
       ],
     };
   }
@@ -6896,7 +6941,7 @@ export async function detectRepositoryIntegration(
       provider: "ado",
       providerName: "Azure DevOps",
       isConfigured: hasAccountOfType("azure-devops"),
-      features: ["Pull request overlays", "Work item linking"],
+      features: [msg("Pull request overlays"), msg("Work item linking")],
     };
   }
 
@@ -6906,7 +6951,7 @@ export async function detectRepositoryIntegration(
       provider: "gitlab",
       providerName: "GitLab",
       isConfigured: hasAccountOfType("gitlab"),
-      features: ["Merge request overlays", "Issue linking"],
+      features: [msg("Merge request overlays"), msg("Issue linking")],
     };
   }
 
@@ -6916,7 +6961,7 @@ export async function detectRepositoryIntegration(
       provider: "bitbucket",
       providerName: "Bitbucket",
       isConfigured: hasAccountOfType("bitbucket"),
-      features: ["Pull request overlays"],
+      features: [msg("Pull request overlays")],
     };
   }
 
@@ -9021,7 +9066,7 @@ export async function pruneRemoteTrackingBranches(
     if (!Array.isArray(remotes.data)) {
       return {
         success: false,
-        error: { code: 'REMOTE_LIST_FAILED', message: 'Failed to list repository remotes' },
+        error: { code: 'REMOTE_LIST_FAILED', message: msg('Failed to list repository remotes') },
       };
     }
     targets = remotes.data.map((item) => item.name);
@@ -9035,7 +9080,7 @@ export async function pruneRemoteTrackingBranches(
     return { success: true, data: { success: true, branchesPruned: [] } };
   }
   if (!await checkNetworkPermission(
-    'prune remote-tracking branches',
+    msg('prune remote-tracking branches'),
     repoPath,
     undefined,
     undefined,
@@ -9373,7 +9418,7 @@ export async function runGc(
     if (result.success && result.data) {
       showToast(result.data.message, "success");
     } else {
-      showToast(`Garbage collection failed: ${result.error?.message}`, "error");
+      showToast(msg(str`Garbage collection failed: ${result.error?.message}`), "error");
     }
   }
   return result;
@@ -9391,7 +9436,7 @@ export async function runFsck(
     if (result.success && result.data) {
       showToast(result.data.message, "success");
     } else {
-      showToast(`Repository check failed: ${result.error?.message}`, "error");
+      showToast(msg(str`Repository check failed: ${result.error?.message}`), "error");
     }
   }
   return result;
@@ -9594,7 +9639,7 @@ export async function runPrune(
     if (result.success && result.data) {
       showToast(result.data.message, "success");
     } else {
-      showToast(`Prune failed: ${result.error?.message}`, "error");
+      showToast(msg(str`Prune failed: ${result.error?.message}`), "error");
     }
   }
   return result;

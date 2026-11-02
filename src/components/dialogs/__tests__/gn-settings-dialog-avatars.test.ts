@@ -60,6 +60,7 @@ import type { GnSettingsDialog } from '../gn-settings-dialog.ts';
 import type { GnToggle } from '../../common/gn-toggle.ts';
 import { settingsStore } from '../../../stores/settings.store.ts';
 
+import { setAppLocale } from '../../../i18n/index.ts';
 /** The `.setting-row` whose `.setting-name` reads exactly "Show Avatars". */
 function avatarRow(el: GnSettingsDialog): HTMLElement {
   const rows = [...el.renderRoot.querySelectorAll('.setting-row')] as HTMLElement[];
@@ -91,8 +92,12 @@ describe('gn-settings-dialog Show Avatars row', () => {
     await el.updateComplete;
   }
 
-  beforeEach(() => {
+  beforeEach(async () => {
     settingsStore.getState().resetToDefaults();
+    // resetToDefaults() re-applies the fresh-install default, which is Chinese;
+    // every assertion in this file is about the English source strings.
+    await setAppLocale('en');
+    settingsStore.setState({ language: 'en' });
   });
 
   afterEach(() => {

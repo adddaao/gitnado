@@ -9,6 +9,7 @@ import type { GnCreateBranchDialog } from './components/dialogs/gn-create-branch
 import type { GnExportImportDialog } from './components/dialogs/gn-export-import-dialog.ts';
 import type { GnDescribeDialog } from './components/dialogs/gn-describe-dialog.ts';
 import type { GnCompareBranchesDialog } from './components/dialogs/gn-compare-branches-dialog.ts';
+import { msg, str } from '@lit/localize';
 import { dialogs } from './stores/dialog.store.ts';
 import { uiStore } from './stores/index.ts';
 import { showToast } from './services/notification.service.ts';
@@ -79,28 +80,28 @@ export function buildPaletteCommands(shell: PaletteCommandHost): PaletteCommand[
   const commands: PaletteCommand[] = [
     {
       id: 'fetch',
-      label: 'Fetch from remote',
+      label: msg('Fetch from remote'),
       category: 'action',
       icon: 'fetch',
       action: shell.requiresRepository(() => shell.handleFetch()),
     },
     {
       id: 'pull',
-      label: 'Pull from remote',
+      label: msg('Pull from remote'),
       category: 'action',
       icon: 'pull',
       action: shell.requiresRepository(() => shell.handlePull()),
     },
     {
       id: 'push',
-      label: 'Push to remote',
+      label: msg('Push to remote'),
       category: 'action',
       icon: 'push',
       action: shell.requiresRepository(() => shell.handlePush()),
     },
     {
       id: 'refresh',
-      label: 'Refresh repository',
+      label: msg('Refresh repository'),
       category: 'action',
       icon: 'refresh',
       shortcut: `${mod}R`,
@@ -108,7 +109,7 @@ export function buildPaletteCommands(shell: PaletteCommandHost): PaletteCommand[
     },
     {
       id: 'graph-jump-head',
-      label: 'Graph: Jump to HEAD',
+      label: msg('Graph: Jump to HEAD'),
       category: 'navigation',
       icon: 'commit',
       action: shell.requiresRepository(() => {
@@ -121,13 +122,13 @@ export function buildPaletteCommands(shell: PaletteCommandHost): PaletteCommand[
         if (headOid !== undefined) {
           shell.revealCommitInGraph(headOid);
         } else {
-          showToast('HEAD commit is not loaded in the graph', 'info', 4000);
+          showToast(msg('HEAD commit is not loaded in the graph'), 'info', 4000);
         }
       }),
     },
     {
       id: 'toggle-output-panel',
-      label: 'Toggle Output Panel',
+      label: msg('Toggle Output Panel'),
       category: 'action',
       icon: 'terminal',
       // The panel is rendered only inside the active-repository layout, so
@@ -139,14 +140,14 @@ export function buildPaletteCommands(shell: PaletteCommandHost): PaletteCommand[
     },
     {
       id: 'stash',
-      label: 'Create stash',
+      label: msg('Create stash'),
       category: 'action',
       icon: 'stash',
       action: shell.requiresRepository(() => shell.handleCreateStash()),
     },
     {
       id: 'create-branch',
-      label: 'Create branch',
+      label: msg('Create branch'),
       category: 'action',
       icon: 'branch',
       shortcut: `${mod}⇧N`,
@@ -154,21 +155,21 @@ export function buildPaletteCommands(shell: PaletteCommandHost): PaletteCommand[
     },
     {
       id: 'create-tag',
-      label: 'Create tag',
+      label: msg('Create tag'),
       category: 'action',
       icon: 'tag',
       action: shell.requiresRepository(() => shell.createTagDialog?.open()),
     },
     {
       id: 'export-archive',
-      label: 'Export archive…',
+      label: msg('Export archive…'),
       category: 'action',
       icon: 'file',
       action: shell.requiresRepository(() => shell.exportImportDialog?.open({ tab: 'archive' })),
     },
     {
       id: 'create-patch',
-      label: 'Create patch from commits…',
+      label: msg('Create patch from commits…'),
       category: 'action',
       icon: 'commit',
       action: shell.requiresRepository(() =>
@@ -181,7 +182,7 @@ export function buildPaletteCommands(shell: PaletteCommandHost): PaletteCommand[
     },
     {
       id: 'apply-patch',
-      label: 'Apply patch file…',
+      label: msg('Apply patch file…'),
       category: 'action',
       icon: 'commit',
       action: shell.requiresRepository(() =>
@@ -190,7 +191,7 @@ export function buildPaletteCommands(shell: PaletteCommandHost): PaletteCommand[
     },
     {
       id: 'create-bundle',
-      label: 'Create bundle…',
+      label: msg('Create bundle…'),
       category: 'action',
       icon: 'file',
       action: shell.requiresRepository(() =>
@@ -199,7 +200,7 @@ export function buildPaletteCommands(shell: PaletteCommandHost): PaletteCommand[
     },
     {
       id: 'import-bundle',
-      label: 'Import bundle…',
+      label: msg('Import bundle…'),
       category: 'action',
       icon: 'file',
       action: shell.requiresRepository(() =>
@@ -208,7 +209,7 @@ export function buildPaletteCommands(shell: PaletteCommandHost): PaletteCommand[
     },
     {
       id: 'settings',
-      label: 'Open settings',
+      label: msg('Open settings'),
       category: 'action',
       icon: 'settings',
       shortcut: `${mod},`,
@@ -216,14 +217,14 @@ export function buildPaletteCommands(shell: PaletteCommandHost): PaletteCommand[
     },
     {
       id: 'remotes',
-      label: 'Manage remotes',
+      label: msg('Manage remotes'),
       category: 'action',
       icon: 'globe',
       action: shell.requiresRepository(() => { dialogs.open('remotes'); }),
     },
     {
       id: 'changelog',
-      label: 'Generate Changelog',
+      label: msg('Generate Changelog'),
       category: 'action',
       icon: 'tag',
       action: shell.requiresRepository(() => {
@@ -233,7 +234,7 @@ export function buildPaletteCommands(shell: PaletteCommandHost): PaletteCommand[
     },
     {
       id: 'smart-undo',
-      label: 'Smart Undo (AI)',
+      label: msg('Smart Undo (AI)'),
       category: 'action',
       icon: 'undo',
       action: shell.requiresRepository(async () => {
@@ -241,7 +242,12 @@ export function buildPaletteCommands(shell: PaletteCommandHost): PaletteCommand[
         // reflog reset must run on the repo it was invoked on, even if the
         // user switches tabs while any of those dialogs/calls are pending.
         const repoPath = shell.activeRepository!.repository.path;
-        const query = await showPrompt('Smart Undo (AI)', 'Describe what you want to undo (e.g., "before the rebase", "undo last 3 commits"):');
+        const query = await showPrompt(
+          msg('Smart Undo (AI)'),
+          msg(
+            'Describe what you want to undo (e.g., "before the rebase", "undo last 3 commits"):',
+          ),
+        );
         if (!query) return;
 
         const result = await import('./services/ai.service.ts').then(m =>
@@ -261,16 +267,15 @@ export function buildPaletteCommands(shell: PaletteCommandHost): PaletteCommand[
           const target = reflog.success ? reflog.data?.[match.index] : undefined;
 
           if (!target) {
-            showToast('Could not resolve that reflog entry — try again', 'error');
+            showToast(msg('Could not resolve that reflog entry — try again'), 'error');
             return;
           }
 
           const confirmed = await showConfirm(
-            'Smart Undo',
-            `${match.description}\n\nReset to ${target.shortId} (HEAD@{${match.index}})?\n\n` +
-              `This branch will point at ${target.shortId}. Any commit no longer ` +
-              `reachable from it is recoverable only through the reflog. Your ` +
-              `changes remain staged.`,
+            msg('Smart Undo'),
+            msg(
+              str`${match.description}\n\nReset to ${target.shortId} (HEAD@{${match.index}})?\n\nThis branch will point at ${target.shortId}. Any commit no longer reachable from it is recoverable only through the reflog. Your changes remain staged.`,
+            ),
             'warning'
           );
           if (confirmed) {
@@ -295,128 +300,131 @@ export function buildPaletteCommands(shell: PaletteCommandHost): PaletteCommand[
                 target.oid
               );
               if (resetResult.success) {
-                showToast('Undo successful', 'success');
+                showToast(msg('Undo successful'), 'success');
                 shell.refreshConflictDialogRepo(repoPath);
               } else {
-                showToast(resetResult.error?.message ?? 'Undo failed', 'error');
+                showToast(resetResult.error?.message ?? msg('Undo failed'), 'error');
               }
             } finally {
               shell.releaseRefOperation(repoPath);
             }
           }
         } else {
-          showToast(result.error?.message ?? 'Could not find matching reflog entry', 'error');
+          showToast(
+            result.error?.message ?? msg('Could not find matching reflog entry'),
+            'error',
+          );
         }
       }),
     },
     {
       id: 'clean',
-      label: 'Clean working directory',
+      label: msg('Clean working directory'),
       category: 'action',
       icon: 'trash',
       action: shell.requiresRepository(() => { dialogs.open('clean'); }),
     },
     {
       id: 'branch-cleanup',
-      label: 'Clean up branches',
+      label: msg('Clean up branches'),
       category: 'action',
       icon: 'git-branch',
       action: shell.requiresRepository(() => { void shell.openBranchCleanup(); }),
     },
     {
       id: 'bisect',
-      label: 'Start bisect (find bug)',
+      label: msg('Start bisect (find bug)'),
       category: 'action',
       icon: 'search',
       action: shell.requiresRepository(() => { dialogs.open('bisect'); }),
     },
     {
       id: 'submodules',
-      label: 'Manage submodules',
+      label: msg('Manage submodules'),
       category: 'action',
       icon: 'folder',
       action: shell.requiresRepository(() => { dialogs.open('submodules'); }),
     },
     {
       id: 'worktrees',
-      label: 'Manage worktrees',
+      label: msg('Manage worktrees'),
       category: 'action',
       icon: 'folder',
       action: shell.requiresRepository(() => { dialogs.open('worktrees'); }),
     },
     {
       id: 'lfs',
-      label: 'Manage Git LFS',
+      label: msg('Manage Git LFS'),
       category: 'action',
       icon: 'folder',
       action: shell.requiresRepository(() => { dialogs.open('lfs'); }),
     },
     {
       id: 'gpg',
-      label: 'GPG Signing Settings',
+      label: msg('GPG Signing Settings'),
       category: 'action',
       icon: 'key',
       action: shell.requiresRepository(() => { dialogs.open('gpg'); }),
     },
     {
       id: 'ssh',
-      label: 'SSH Key Management',
+      label: msg('SSH Key Management'),
       category: 'action',
       icon: 'key',
       action: () => { dialogs.open('ssh'); },
     },
     {
       id: 'config',
-      label: 'Git Configuration',
+      label: msg('Git Configuration'),
       category: 'action',
       icon: 'settings',
       action: shell.requiresRepository(() => { dialogs.open('config'); }),
     },
     {
       id: 'credentials',
-      label: 'Credential Management',
+      label: msg('Credential Management'),
       category: 'action',
       icon: 'key',
       action: shell.requiresRepository(() => { dialogs.open('credentials'); }),
     },
     {
       id: 'gc',
-      label: 'Run Garbage Collection',
+      label: msg('Run Garbage Collection'),
       category: 'action',
       icon: 'trash',
       action: shell.requiresRepository(() => shell.handleRunGc()),
     },
     {
       id: 'gc-aggressive',
-      label: 'Run Garbage Collection (Aggressive)',
+      label: msg('Run Garbage Collection (Aggressive)'),
       category: 'action',
       icon: 'trash',
       action: shell.requiresRepository(() => shell.handleRunGc(true)),
     },
     {
       id: 'fsck',
-      label: 'Check Repository Integrity',
+      label: msg('Check Repository Integrity'),
       category: 'action',
       icon: 'search',
       action: shell.requiresRepository(() => shell.handleRunFsck()),
     },
     {
       id: 'prune',
-      label: 'Prune Unreachable Objects',
+      label: msg('Prune Unreachable Objects'),
       category: 'action',
       icon: 'trash',
       action: shell.requiresRepository(() => shell.handleRunPrune()),
     },
     {
       id: 'repository-health',
-      label: 'Repository Health & Maintenance',
+      label: msg('Repository Health & Maintenance'),
       category: 'action',
       icon: 'activity',
       action: shell.requiresRepository(() => { dialogs.open('repositoryHealth'); }),
     },
     {
       id: 'github',
-      label: 'GitHub Integration',
+      label: msg('GitHub Integration'),
       category: 'action',
       icon: 'github',
       // Account connection is repo-independent; only PR/issue/pipeline tabs guard themselves.
@@ -424,42 +432,42 @@ export function buildPaletteCommands(shell: PaletteCommandHost): PaletteCommand[
     },
     {
       id: 'gitlab',
-      label: 'GitLab Integration',
+      label: msg('GitLab Integration'),
       category: 'action',
       icon: 'gitlab',
       action: () => shell.openIntegrationStandalone('gitlab'),
     },
     {
       id: 'bitbucket',
-      label: 'Bitbucket Integration',
+      label: msg('Bitbucket Integration'),
       category: 'action',
       icon: 'bitbucket',
       action: () => shell.openIntegrationStandalone('bitbucket'),
     },
     {
       id: 'azure-devops',
-      label: 'Azure DevOps Integration',
+      label: msg('Azure DevOps Integration'),
       category: 'action',
       icon: 'azure',
       action: () => shell.openIntegrationStandalone('azure-devops'),
     },
     {
       id: 'oidc',
-      label: 'Enterprise SSO (OIDC) Integration',
+      label: msg('Enterprise SSO (OIDC) Integration'),
       category: 'action',
       icon: 'key',
       action: () => shell.openIntegrationStandalone('oidc'),
     },
     {
       id: 'profiles',
-      label: 'Profiles & Accounts',
+      label: msg('Profiles & Accounts'),
       category: 'action',
       icon: 'user',
       action: () => { dialogs.open('profileManager'); },
     },
     {
       id: 'search',
-      label: 'Search commits',
+      label: msg('Search commits'),
       category: 'action',
       icon: 'search',
       shortcut: `${mod}F`,
@@ -467,21 +475,21 @@ export function buildPaletteCommands(shell: PaletteCommandHost): PaletteCommand[
     },
     {
       id: 'search-in-files',
-      label: 'Search in files',
+      label: msg('Search in files'),
       category: 'action',
       icon: 'search',
       action: shell.requiresRepository(() => shell.openSearchDialog('files')),
     },
     {
       id: 'search-in-diff',
-      label: 'Search in current diff',
+      label: msg('Search in current diff'),
       category: 'action',
       icon: 'search',
       action: shell.requiresRepository(() => shell.openSearchDialog('diff')),
     },
     {
       id: 'search-commit-content',
-      label: 'Find commits that changed text',
+      label: msg('Find commits that changed text'),
       category: 'action',
       icon: 'search',
       action: shell.requiresRepository(() => shell.openSearchDialog('commits')),
@@ -494,35 +502,35 @@ export function buildPaletteCommands(shell: PaletteCommandHost): PaletteCommand[
     // narrowed scope in a toast when a filter was in force.
     {
       id: 'stage-all',
-      label: 'Stage all changes',
+      label: msg('Stage all changes'),
       category: 'action',
       icon: 'commit',
       action: shell.requiresRepository(() => shell.handleStageAll()),
     },
     {
       id: 'unstage-all',
-      label: 'Unstage all changes',
+      label: msg('Unstage all changes'),
       category: 'action',
       icon: 'commit',
       action: shell.requiresRepository(() => shell.handleUnstageAll()),
     },
     {
       id: 'toggle-left-panel',
-      label: 'Toggle left panel',
+      label: msg('Toggle left panel'),
       category: 'navigation',
       shortcut: `${mod}B`,
       action: () => shell.toggleLeftPanel(),
     },
     {
       id: 'toggle-right-panel',
-      label: 'Toggle right panel',
+      label: msg('Toggle right panel'),
       category: 'navigation',
       shortcut: `${mod}J`,
       action: () => uiStore.getState().togglePanel('right'),
     },
     {
       id: 'undo',
-      label: 'Undo (open reflog)',
+      label: msg('Undo (open reflog)'),
       category: 'action',
       icon: 'refresh',
       shortcut: `${mod}Z`,
@@ -530,35 +538,35 @@ export function buildPaletteCommands(shell: PaletteCommandHost): PaletteCommand[
     },
     {
       id: 'describe',
-      label: 'Describe commit (git describe)',
+      label: msg('Describe commit (git describe)'),
       category: 'action',
       icon: 'tag',
       action: shell.requiresRepository(() => { shell.describeDialog?.open(); }),
     },
     {
       id: 'compare-branches',
-      label: 'Compare branches',
+      label: msg('Compare branches'),
       category: 'action',
       icon: 'branch',
       action: shell.requiresRepository(() => { shell.compareBranchesDialog?.open(); }),
     },
     {
       id: 'workspaces',
-      label: 'Manage workspaces',
+      label: msg('Manage workspaces'),
       category: 'action',
       icon: 'folder',
       action: () => { dialogs.open('workspaceManager'); },
     },
     {
       id: 'hooks',
-      label: 'Manage git hooks',
+      label: msg('Manage git hooks'),
       category: 'action',
       icon: 'terminal',
       action: shell.requiresRepository(() => { dialogs.open('hooks'); }),
     },
     {
       id: 'gitignore',
-      label: 'Edit .gitignore & .gitattributes',
+      label: msg('Edit .gitignore & .gitattributes'),
       category: 'action',
       icon: 'file',
       action: shell.requiresRepository(() => { dialogs.open('gitignore'); }),
@@ -569,7 +577,7 @@ export function buildPaletteCommands(shell: PaletteCommandHost): PaletteCommand[
     // spawned) are toasted by the shared service with the backend message.
     {
       id: 'open-in-terminal',
-      label: 'Open in Terminal',
+      label: msg('Open in Terminal'),
       category: 'action',
       icon: 'terminal',
       action: shell.requiresRepository(() => {
@@ -578,7 +586,7 @@ export function buildPaletteCommands(shell: PaletteCommandHost): PaletteCommand[
     },
     {
       id: 'reveal-in-file-manager',
-      label: 'Reveal in File Manager',
+      label: msg('Reveal in File Manager'),
       category: 'action',
       icon: 'folder',
       action: shell.requiresRepository(() => {
@@ -587,7 +595,7 @@ export function buildPaletteCommands(shell: PaletteCommandHost): PaletteCommand[
     },
     {
       id: 'open-in-editor',
-      label: 'Open in Editor',
+      label: msg('Open in Editor'),
       category: 'action',
       icon: 'file',
       action: shell.requiresRepository(() => {

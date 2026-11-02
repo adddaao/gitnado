@@ -13,8 +13,15 @@ export interface CommandResult<T> {
 
 export interface CommandError {
   code: string;
+  /** Display text — localized by `invokeCommand` from `originalMessage`. */
   message: string;
   details?: string;
+  /**
+   * The backend's raw English message. Kept because a few rules match on the
+   * backend's own wording (error suggestions, conflict checks); see
+   * `src/services/backend-error.service.ts`.
+   */
+  originalMessage?: string;
 }
 
 /**

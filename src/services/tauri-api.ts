@@ -4,6 +4,7 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
+import { localizeBackendError } from './backend-error.service.ts';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import type { CommandResult } from '../types/api.types.ts';
 import {
@@ -93,7 +94,11 @@ export async function invokeCommand<T, A = unknown>(
       success: false,
       error: {
         code,
-        message,
+        // Every surface reads `message`, so the one place that knows the error
+        // CODE translates it here; `originalMessage` keeps the backend's own
+        // wording for the rules that match on it.
+        message: localizeBackendError(code, message),
+        originalMessage: message,
       },
     };
   }

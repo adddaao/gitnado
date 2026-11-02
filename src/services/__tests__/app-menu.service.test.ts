@@ -30,13 +30,16 @@ import {
   noteAcceleratorKeydown,
   resetAcceleratorGuard,
   resolveMenuAction,
+  localizedMenuLabels,
   shouldSuppressMenuAction,
   startAcceleratorWatch,
   syncAppMenu,
+  syncAppMenuLabels,
   toAccelerator,
   type MenuShellHandlers,
 } from '../app-menu.service.ts';
 import { keyboardService, registerDefaultShortcuts } from '../keyboard.service.ts';
+import { setAppLocale } from '../../i18n/index.ts';
 import type { PaletteCommand } from '../../components/dialogs/gn-command-palette.ts';
 
 function noop(): void {
@@ -236,6 +239,73 @@ describe('app-menu service', () => {
     it('reports a failed sync instead of throwing', async () => {
       invokeFails = true;
       const result = await syncAppMenu(true);
+      expect(result.success).to.be.false;
+      expect(result.error?.message).to.contain('no menu');
+    });
+  });
+
+  describe('localised labels', () => {
+    /**
+     * Every row the native menu builds. Sections come from `APP_MENU` in
+     * `src-tauri/src/menu.rs`, `edit` is the macOS Edit submenu Tauri builds for
+     * clipboard roles; `scripts/menu-contract.test.mjs` keeps this in step with
+     * the Rust table, including the English defaults asserted below.
+     */
+    const SECTION_IDS = ['file', 'repository', 'branch', 'view', 'help', 'edit'];
+
+    afterEach(async () => {
+      await setAppLocale('en');
+    });
+
+    it('names every section and every item the native menu builds', () => {
+      const labels = localizedMenuLabels();
+
+      for (const id of SECTION_IDS) {
+        expect(labels[id], `section "${id}" has a label`).to.be.a('string').and.not.empty;
+      }
+      for (const action of APP_MENU_ACTIONS) {
+        expect(labels[action.id], `item "${action.id}" has a label`).to.be.a('string').and.not.empty;
+      }
+      // No extra rows: an id the native menu cannot show is dead weight, and it
+      // would quietly stop the contract test from noticing a removed item.
+      expect(Object.keys(labels)).to.have.lengthOf(SECTION_IDS.length + APP_MENU_ACTIONS.length);
+    });
+
+    it('uses the native table’s English labels under the source locale', () => {
+      const labels = localizedMenuLabels();
+
+      expect(labels.file).to.equal('File');
+      expect(labels.fetch).to.equal('Fetch');
+      expect(labels.gitignore).to.equal('.gitignore & .gitattributes…');
+      expect(labels['repository-health']).to.equal('Repository Health & Maintenance…');
+    });
+
+    it('follows the active locale', async () => {
+      await setAppLocale('zh');
+      const zh = localizedMenuLabels();
+      expect(zh.file).to.equal('文件');
+      expect(zh.fetch).to.equal('获取');
+
+      await setAppLocale('fr');
+      const fr = localizedMenuLabels();
+      expect(fr.file).to.equal('Fichier');
+      expect(fr.fetch).to.equal('Récupérer');
+    });
+
+    it('pushes the labels to the backend command', async () => {
+      const result = await syncAppMenuLabels();
+
+      expect(result.success).to.be.true;
+      const call = invokeCalls.find((c) => c.command === 'set_app_menu_labels');
+      expect(call, 'set_app_menu_labels should be invoked').to.exist;
+      const labels = call!.args.labels as Record<string, string>;
+      expect(labels.file).to.equal('File');
+      expect(labels.fetch).to.equal('Fetch');
+    });
+
+    it('reports a failed label sync instead of throwing', async () => {
+      invokeFails = true;
+      const result = await syncAppMenuLabels();
       expect(result.success).to.be.false;
       expect(result.error?.message).to.contain('no menu');
     });

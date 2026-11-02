@@ -341,4 +341,137 @@ test.describe('Settings Dialog — MCP Server', () => {
       page.locator('gn-settings-dialog .setting-row', { hasText: 'MCP Client Configuration' })
     ).toContainText('401');
   });
+
+  test('keeps the translated MCP controls on one line instead of a per-character column', async ({
+    page,
+  }) => {
+    await startCommandCaptureWithMocks(
+      page,
+      mcpMocks({
+        get_mcp_config: {
+          enabled: false,
+          port: 3001,
+          allowedOrigins: [],
+          authToken: tokens43,
+        },
+      })
+    );
+    await openSettings(page);
+
+    // Switch the real language setting; the dialog re-renders in place.
+    await page.locator('gn-settings-dialog #language-select').selectOption('zh');
+    await expect(page.locator('gn-settings-dialog .section-title').first()).toHaveText('外观');
+
+    const proxyRow = page.locator('gn-settings-dialog .setting-row', { hasText: '上下文代理' });
+    const status = proxyRow.locator('.status-indicator');
+    const toggle = proxyRow.locator('button.mcp-toggle');
+
+    await expect(status).toHaveText('已禁用');
+    await expect(toggle).toHaveText('启动');
+    await expect(status).toHaveCSS('white-space', 'nowrap');
+    await expect(toggle).toHaveCSS('white-space', 'nowrap');
+
+    const proxyLayout = await proxyRow.evaluate((row) => {
+      const statusEl = row.querySelector('.status-indicator') as HTMLElement;
+      const toggleEl = row.querySelector('button.mcp-toggle') as HTMLElement;
+      const el = row as HTMLElement;
+      return {
+        overflow: el.scrollWidth - el.clientWidth,
+        statusHeight: statusEl.getBoundingClientRect().height,
+        toggleHeight: toggleEl.getBoundingClientRect().height,
+      };
+    });
+
+    // The old layout let the row's controls shrink: the status pill became one
+    // character wide and stacked 已/禁/用 vertically, and the button did the
+    // same with 启/动. Neither may happen, and nothing may spill sideways.
+    expect(proxyLayout.overflow).toBeLessThanOrEqual(1);
+    expect(proxyLayout.statusHeight).toBeLessThan(30);
+    expect(proxyLayout.toggleHeight).toBeLessThan(40);
+
+    // The token row gives its token + actions a full-width line of their own.
+    const tokenRow = page.locator('gn-settings-dialog .setting-row', { hasText: '访问令牌' });
+    await expect(tokenRow).toHaveClass(/setting-row-stacked/);
+
+    // The mask is capped, so the hidden value stays on one line even though a
+    // real backend token is 43 characters.
+    const maskedText = ((await mcpTokenValue(page).textContent()) ?? '').trim();
+    expect(maskedText).toMatch(/^•+$/);
+    expect(maskedText.length).toBeLessThanOrEqual(12);
+
+    const tokenLayout = () =>
+      tokenRow.evaluate((row) => {
+        const label = row.querySelector('.setting-label') as HTMLElement;
+        const controls = row.querySelector('.mcp-token-controls') as HTMLElement;
+        const buttons = Array.from(controls.querySelectorAll('button')).map((button) => ({
+          height: button.getBoundingClientRect().height,
+          top: Math.round(button.getBoundingClientRect().top),
+        }));
+        return {
+          labelBottom: label.getBoundingClientRect().bottom,
+          controlsTop: controls.getBoundingClientRect().top,
+          controlsWidth: controls.getBoundingClientRect().width,
+          tokenHeight: (controls.querySelector('.mcp-token-value') as HTMLElement)
+            .getBoundingClientRect().height,
+          buttons,
+          overflow: (row as HTMLElement).scrollWidth - (row as HTMLElement).clientWidth,
+        };
+      });
+
+    const masked = await tokenLayout();
+    expect(masked.controlsTop).toBeGreaterThanOrEqual(masked.labelBottom - 1);
+    expect(masked.controlsWidth).toBeGreaterThan(400);
+    expect(masked.tokenHeight).toBeLessThan(40);
+    expect(masked.buttons.every((button) => button.height < 40)).toBe(true);
+    expect(new Set(masked.buttons.map((button) => button.top)).size).toBe(1);
+    expect(masked.overflow).toBeLessThanOrEqual(1);
+
+    // Revealing the 43-character token may wrap the token box, but the three
+    // actions still share one row.
+    await page.locator('gn-settings-dialog button.mcp-token-reveal').click();
+    await expect(mcpTokenValue(page)).toHaveText(tokens43);
+    const revealed = await tokenLayout();
+    expect(revealed.buttons.every((button) => button.height < 40)).toBe(true);
+    expect(new Set(revealed.buttons.map((button) => button.top)).size).toBe(1);
+    expect(revealed.overflow).toBeLessThanOrEqual(1);
+  });
+
+  test('wraps a long backend error instead of scrolling the dialog sideways', async ({ page }) => {
+    // A real bind failure is far longer than the 500px dialog. The error row is
+    // plain text, not a control, so it must wrap rather than stretch to
+    // max-content and push the modal into horizontal scrolling.
+    const longError =
+      'Failed to bind to 127.0.0.1:3001: Address already in use — another process is listening on that port (stop it or pick a different port in Settings)';
+    await startCommandCaptureWithMocks(
+      page,
+      mcpMocks({
+        get_mcp_config: { enabled: true, port: 3001, allowedOrigins: [], authToken: 'token-abc123' },
+        get_mcp_status: { running: false, port: 3001, url: null, lastError: longError },
+      })
+    );
+    await openSettings(page);
+
+    const errorRow = page.locator('gn-settings-dialog .setting-row', {
+      hasText: 'Address already in use',
+    });
+    await expect(errorRow).toBeVisible();
+
+    const rowLayout = await errorRow.evaluate((row) => ({
+      overflow: (row as HTMLElement).scrollWidth - (row as HTMLElement).clientWidth,
+      errorHeight: (row.querySelector('.error-text') as HTMLElement).getBoundingClientRect().height,
+    }));
+    expect(rowLayout.overflow).toBeLessThanOrEqual(1);
+    // Wrapped onto more than one line instead of one 800px-long line.
+    expect(rowLayout.errorHeight).toBeGreaterThan(20);
+
+    const contentLayout = await page.locator('gn-settings-dialog').evaluate((host) => {
+      const modal = host.closest('gn-modal');
+      const content = modal?.shadowRoot?.querySelector<HTMLElement>('.content');
+      return content ? { overflow: content.scrollWidth - content.clientWidth } : null;
+    });
+    expect(contentLayout?.overflow).toBeLessThanOrEqual(1);
+  });
 });
+
+/** A production-length MCP token (`AUTH_TOKEN_LEN` = 43 in the Rust backend). */
+const tokens43 = 'a'.repeat(43);

@@ -21,6 +21,7 @@
 
 import { LitElement, html, css, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
+import { localized, msg, str } from '@lit/localize';
 import { sharedStyles } from '../../styles/shared-styles.ts';
 import { codeStyles } from '../../styles/code-styles.ts';
 import * as gitService from '../../services/git.service.ts';
@@ -56,26 +57,39 @@ interface OutputSegment {
   fromConflict: boolean;
 }
 
-/** Per-operation pane labels: during a rebase the sides are semantically
- * swapped (ours = the branch being rebased onto, theirs = your own commit). */
-const SIDE_LABELS: Record<MergeOperationType, { ours: string; theirs: string }> = {
-  merge: { ours: 'Ours (Current Branch)', theirs: 'Theirs (Incoming)' },
-  rebase: { ours: 'Ours (Rebasing Onto)', theirs: 'Theirs (Your Commit)' },
-  'cherry-pick': { ours: 'Ours (Current Branch)', theirs: 'Theirs (Picked Commit)' },
-  revert: { ours: 'Ours (Current Branch)', theirs: 'Theirs (Revert Changes)' },
-  stash: { ours: 'Ours (Working Tree)', theirs: 'Theirs (Stashed Changes)' },
-};
+/**
+ * Per-operation pane labels: during a rebase the sides are semantically
+ * swapped (ours = the branch being rebased onto, theirs = your own commit).
+ *
+ * A function rather than a module constant: `msg()` evaluated at module load
+ * would freeze the labels at the startup locale and stop following a language
+ * change.
+ */
+function getSideLabels(): Record<MergeOperationType, { ours: string; theirs: string }> {
+  return {
+    merge: { ours: msg('Ours (Current Branch)'), theirs: msg('Theirs (Incoming)') },
+    rebase: { ours: msg('Ours (Rebasing Onto)'), theirs: msg('Theirs (Your Commit)') },
+    'cherry-pick': { ours: msg('Ours (Current Branch)'), theirs: msg('Theirs (Picked Commit)') },
+    revert: { ours: msg('Ours (Current Branch)'), theirs: msg('Theirs (Revert Changes)') },
+    stash: { ours: msg('Ours (Working Tree)'), theirs: msg('Theirs (Stashed Changes)') },
+  };
+}
 
-const ORIGIN_LABELS: Record<SegmentOrigin, string> = {
-  ours: 'Ours',
-  theirs: 'Theirs',
-  both: 'Both',
-  base: 'Base',
-  manual: 'Edited',
-  ai: 'AI',
-};
+/** How a resolved segment was produced, in the ACTIVE locale. Same reason as
+ * `getSideLabels()`: a module-level `msg()` would freeze at the startup locale. */
+function getOriginLabels(): Record<SegmentOrigin, string> {
+  return {
+    ours: msg('Ours'),
+    theirs: msg('Theirs'),
+    both: msg('Both'),
+    base: msg('Base'),
+    manual: msg('Edited'),
+    ai: msg('AI'),
+  };
+}
 
 @customElement('gn-merge-editor')
+@localized()
 export class GnMergeEditor extends CodeRenderMixin(LitElement) {
   static styles = [
     sharedStyles,
@@ -592,6 +606,12 @@ export class GnMergeEditor extends CodeRenderMixin(LitElement) {
   /** Guards against scroll-sync feedback loops between the panes. */
   private syncingScroll = false;
 
+  /** Resolved at render time so a language change reaches the panes. */
+  private get sideLabels(): { ours: string; theirs: string } {
+    const labels = getSideLabels();
+    return labels[this.operationType] ?? labels.merge;
+  }
+
   private boundHandleAiSettingsChanged = async () => {
     await this.refreshAiAvailability();
   };
@@ -665,8 +685,10 @@ export class GnMergeEditor extends CodeRenderMixin(LitElement) {
       let proceed = false;
       try {
         proceed = await showConfirm(
-          'Discard in-progress resolution?',
-          'The external tool works on the file as saved on disk — your unsaved picks here will be replaced by its result.',
+          msg('Discard in-progress resolution?'),
+          msg(
+            'The external tool works on the file as saved on disk — your unsaved picks here will be replaced by its result.'
+          ),
           'warning',
         );
       } finally {
@@ -738,9 +760,9 @@ export class GnMergeEditor extends CodeRenderMixin(LitElement) {
         // the resolution — a green toast over "N conflicts remaining" would
         // read as success for an unfinished merge.
         if (stillConflicted) {
-          showToast('File still has conflicts', 'warning');
+          showToast(msg('File still has conflicts'), 'warning');
         } else {
-          showToast('Merge tool completed', 'success');
+          showToast(msg('Merge tool completed'), 'success');
           this.dispatchEvent(new CustomEvent('conflict-resolved', {
             detail: { file },
             bubbles: true,
@@ -748,10 +770,13 @@ export class GnMergeEditor extends CodeRenderMixin(LitElement) {
           }));
         }
       } else {
-        showToast(result.data?.message ?? result.error?.message ?? 'Merge tool failed', 'error');
+        showToast(
+          result.data?.message ?? result.error?.message ?? msg('Merge tool failed'),
+          'error',
+        );
       }
     } catch {
-      showToast('Failed to launch merge tool', 'error');
+      showToast(msg('Failed to launch merge tool'), 'error');
     } finally {
       this.launchingExternalTool = false;
       this.dispatchEvent(
@@ -1585,8 +1610,8 @@ export class GnMergeEditor extends CodeRenderMixin(LitElement) {
   private async confirmDiscardOpenEdit(): Promise<boolean> {
     if (this.editingSegmentId === null) return true;
     return showConfirm(
-      'Discard the open edit?',
-      'This section has an edit that was not applied — continuing discards the typed text.',
+      msg('Discard the open edit?'),
+      msg('This section has an edit that was not applied — continuing discards the typed text.'),
       'warning',
     );
   }
@@ -1655,8 +1680,10 @@ export class GnMergeEditor extends CodeRenderMixin(LitElement) {
     // `=======`), so unlike the AI path this confirms instead of blocking.
     if (this.markerEchoPattern().test(this.editDraft)) {
       const proceed = await showConfirm(
-        'Keep conflict-marker-like text?',
-        'Your edit contains lines that look like git conflict markers. If you pasted raw conflict text, cancel and remove the marker lines; if the text is intentional it will be kept as-is.',
+        msg('Keep conflict-marker-like text?'),
+        msg(
+          'Your edit contains lines that look like git conflict markers. If you pasted raw conflict text, cancel and remove the marker lines; if the text is intentional it will be kept as-is.'
+        ),
         'warning',
       );
       if (!proceed) return;
@@ -1751,17 +1778,19 @@ export class GnMergeEditor extends CodeRenderMixin(LitElement) {
     if (this.editingSegmentId !== null) parts.push(openDraft);
     // Never empty: every caller gates on hasUnsavedResolutions(), which is
     // exactly outputHasUnsavedWork || an open draft.
-    return parts.join(' and ');
+    return parts.join(msg(' and '));
   }
 
   private async confirmWholeFileOverwrite(): Promise<boolean> {
     if (!this.hasUnsavedResolutions()) return true;
     return this.confirmOverwrite(
-      'Replace in-progress resolution?',
-      `Using one whole-file version ${this.overwriteLossText(
-        'replaces the picks, edits and whole-file choice currently in the output',
-        'discards the edit that was typed but not applied',
-      )}. This cannot be undone.`,
+      msg('Replace in-progress resolution?'),
+      msg(
+        str`Using one whole-file version ${this.overwriteLossText(
+          msg('replaces the picks, edits and whole-file choice currently in the output'),
+          msg('discards the edit that was typed but not applied'),
+        )}. This cannot be undone.`,
+      ),
     );
   }
 
@@ -1833,8 +1862,8 @@ export class GnMergeEditor extends CodeRenderMixin(LitElement) {
     // Reload discards exactly like a file switch does — same confirm.
     if (this.hasUnsavedResolutions()) {
       const proceed = await showConfirm(
-        'Discard in-progress resolution?',
-        'Reloading re-reads the file from disk and discards your unsaved picks and edits.',
+        msg('Discard in-progress resolution?'),
+        msg('Reloading re-reads the file from disk and discards your unsaved picks and edits.'),
         'warning',
       );
       if (!proceed) return;
@@ -1890,7 +1919,10 @@ export class GnMergeEditor extends CodeRenderMixin(LitElement) {
         // untrusted, and being overly conservative just leaves the block
         // unresolved, which is safe.
         if (this.markerEchoPattern().test(result.data.resolvedContent)) {
-          showToast('AI suggestion contained conflict markers — block left unresolved', 'error');
+          showToast(
+            msg('AI suggestion contained conflict markers — block left unresolved'),
+            'error',
+          );
           return false;
         }
         this.userTouched = true;
@@ -1908,10 +1940,10 @@ export class GnMergeEditor extends CodeRenderMixin(LitElement) {
         }
         return true;
       }
-      showToast(result.error?.message ?? 'AI suggestion failed', 'error');
+      showToast(result.error?.message ?? msg('AI suggestion failed'), 'error');
       return false;
     } catch {
-      showToast('Failed to get AI suggestion', 'error');
+      showToast(msg('Failed to get AI suggestion'), 'error');
       return false;
     } finally {
       // Only clear the in-flight flag if it still tracks THIS call — a file
@@ -1967,17 +1999,23 @@ export class GnMergeEditor extends CodeRenderMixin(LitElement) {
     // be written out (it would re-serialize markers), and a failed load has
     // no trustworthy content to write (it would truncate the file to empty).
     if (this.loadFailed) {
-      showToast('The merged file could not be read — retry loading it before resolving', 'warning');
+      showToast(
+        msg('The merged file could not be read — retry loading it before resolving'),
+        'warning',
+      );
       return;
     }
     if (this.conflictCount > 0) {
-      showToast('Resolve all conflict blocks before marking the file resolved', 'warning');
+      showToast(msg('Resolve all conflict blocks before marking the file resolved'), 'warning');
       return;
     }
     // An open inline edit holds an unapplied draft — writing now would stage
     // the PRE-edit text while the screen shows the draft, silently losing it.
     if (this.editingSegmentId !== null) {
-      showToast('Apply or cancel the open edit before marking the file resolved', 'warning');
+      showToast(
+        msg('Apply or cancel the open edit before marking the file resolved'),
+        'warning',
+      );
       return;
     }
 
@@ -1998,8 +2036,10 @@ export class GnMergeEditor extends CodeRenderMixin(LitElement) {
     );
     if (hasOrphanMarker) {
       const proceed = await showConfirm(
-        'Write conflict-marker-like text?',
-        'The resolved content contains lines shaped like git conflict markers that are not part of either version. If a hand edit left real markers behind, cancel and remove them; if the text is intentional it will be written as-is.',
+        msg('Write conflict-marker-like text?'),
+        msg(
+          'The resolved content contains lines shaped like git conflict markers that are not part of either version. If a hand edit left real markers behind, cancel and remove them; if the text is intentional it will be written as-is.'
+        ),
         'warning',
       );
       if (!proceed) return;
@@ -2044,14 +2084,17 @@ export class GnMergeEditor extends CodeRenderMixin(LitElement) {
         }));
       } else {
         console.error('Failed to resolve conflict:', result.error);
-        showToast(`Failed to mark file as resolved: ${result.error?.message ?? 'Unknown error'}`, 'error');
+        showToast(
+          msg(str`Failed to mark file as resolved: ${result.error?.message ?? msg('Unknown error')}`),
+          'error',
+        );
       }
     } catch (err) {
       // invokeCommand is designed not to throw, but a silent failure here
       // would strand the user with no feedback — same catch as the
       // external-tool sibling.
       console.error('Failed to resolve conflict:', err);
-      showToast('Failed to mark file as resolved', 'error');
+      showToast(msg('Failed to mark file as resolved'), 'error');
     } finally {
       // Only the call that owns the flag may clear it — a file switch resets
       // it and a newer call may own it by now.
@@ -2098,14 +2141,16 @@ export class GnMergeEditor extends CodeRenderMixin(LitElement) {
       // in-editor swap while hiding the on-disk consequence that is real.
       const deletesFile = side === 'ours' ? !startFile.ours : !startFile.theirs;
       const lead = deletesFile
-        ? 'Taking this side deletes the file and stages the deletion'
-        : 'Taking this side writes it to disk and stages the file';
+        ? msg('Taking this side deletes the file and stages the deletion')
+        : msg('Taking this side writes it to disk and stages the file');
       const proceed = await this.confirmOverwrite(
-        'Take this whole side?',
-        `${lead}, discarding ${this.overwriteLossText(
-          'the picks, edits and whole-file choice currently in the output',
-          'the edit that was typed but not applied',
-        )}. This cannot be undone.`,
+        msg('Take this whole side?'),
+        msg(
+          str`${lead}, discarding ${this.overwriteLossText(
+            msg('the picks, edits and whole-file choice currently in the output'),
+            msg('the edit that was typed but not applied'),
+          )}. This cannot be undone.`,
+        ),
       );
       if (!proceed) return;
       // Re-check identity too: a file switch during the overwrite confirm
@@ -2179,11 +2224,14 @@ export class GnMergeEditor extends CodeRenderMixin(LitElement) {
         }));
       } else {
         console.error('Failed to resolve conflict:', result.error);
-        showToast(`Failed to resolve conflict: ${result.error?.message ?? 'Unknown error'}`, 'error');
+        showToast(
+          msg(str`Failed to resolve conflict: ${result.error?.message ?? msg('Unknown error')}`),
+          'error',
+        );
       }
     } catch (err) {
       console.error('Failed to resolve conflict:', err);
-      showToast('Failed to resolve conflict', 'error');
+      showToast(msg('Failed to resolve conflict'), 'error');
     } finally {
       if (token === this.resolveToken) {
         this.resolving = false;
@@ -2264,7 +2312,9 @@ export class GnMergeEditor extends CodeRenderMixin(LitElement) {
   }
 
   private formatChangeCount(count: number): string {
-    return `${count} change${count === 1 ? '' : 's'} from base`;
+    return count === 1
+      ? msg(str`${count} change from base`)
+      : msg(str`${count} changes from base`);
   }
 
   // ── Rendering ─────────────────────────────────────────────────────────
@@ -2274,7 +2324,7 @@ export class GnMergeEditor extends CodeRenderMixin(LitElement) {
     if (this.sideReadErrors[side]) {
       return html`
         <div class="output-error">
-          <div>Could not read this version.</div>
+          <div>${msg('Could not read this version.')}</div>
         </div>
       `;
     }
@@ -2343,9 +2393,9 @@ export class GnMergeEditor extends CodeRenderMixin(LitElement) {
           spellcheck="false"
         ></textarea>
         <div class="segment-editor-actions">
-          <button class="btn" @click=${this.cancelEditSegment}>Cancel</button>
+          <button class="btn" @click=${this.cancelEditSegment}>${msg('Cancel')}</button>
           <button class="btn btn-primary" @click=${this.applyEditSegment} ?disabled=${this.actionsBlocked}>
-            Apply
+            ${msg('Apply')}
           </button>
         </div>
       </div>
@@ -2364,15 +2414,15 @@ export class GnMergeEditor extends CodeRenderMixin(LitElement) {
       <div class="output-segment ${originClass}">
         <div class="segment-actions">
           ${segment.origin && segment.fromConflict
-            ? html`<span class="segment-origin-chip">${ORIGIN_LABELS[segment.origin]}</span>`
+            ? html`<span class="segment-origin-chip">${getOriginLabels()[segment.origin]}</span>`
             : nothing}
           <button
             class="segment-btn"
             @click=${() => this.startEditSegment(segment)}
             ?disabled=${this.actionsBlocked}
-            title="Edit this section"
+            title=${msg('Edit this section')}
           >
-            Edit
+            ${msg('Edit')}
           </button>
           ${segment.fromConflict
             ? html`
@@ -2380,9 +2430,9 @@ export class GnMergeEditor extends CodeRenderMixin(LitElement) {
                   class="segment-btn"
                   @click=${() => this.resetSegment(segment.id)}
                   ?disabled=${this.actionsBlocked}
-                  title="Undo this resolution and reopen the conflict"
+                  title=${msg('Undo this resolution and reopen the conflict')}
                 >
-                  Reset
+                  ${msg('Reset')}
                 </button>
               `
             : nothing}
@@ -2391,7 +2441,7 @@ export class GnMergeEditor extends CodeRenderMixin(LitElement) {
           ? html`
               <div class="code-line">
                 <span class="line-number"></span>
-                <span class="line-content segment-empty-note">(this resolution removed the section)</span>
+                <span class="line-content segment-empty-note">${msg('(this resolution removed the section)')}</span>
               </div>
             `
           : segment.lines.map(
@@ -2412,22 +2462,24 @@ export class GnMergeEditor extends CodeRenderMixin(LitElement) {
       return this.renderSegmentEditor();
     }
 
-    const labels = SIDE_LABELS[this.operationType] ?? SIDE_LABELS.merge;
+    const labels = this.sideLabels;
     const isSuggesting = this.suggestingSegment === segment.id;
     // Surface the labels git recorded (branch names, commit refs) alongside
     // the generic role — they disambiguate the sides better than roles alone.
-    const oursSideLabel = segment.oursLabel && segment.oursLabel !== 'OURS'
-      ? `${labels.ours} · ${segment.oursLabel}`
-      : labels.ours;
-    const theirsSideLabel = segment.theirsLabel && segment.theirsLabel !== 'THEIRS'
-      ? `${labels.theirs} · ${segment.theirsLabel}`
-      : labels.theirs;
+    const oursSideLabel =
+      segment.oursLabel && segment.oursLabel !== 'OURS'
+        ? msg(str`${labels.ours} · ${segment.oursLabel}`)
+        : labels.ours;
+    const theirsSideLabel =
+      segment.theirsLabel && segment.theirsLabel !== 'THEIRS'
+        ? msg(str`${labels.theirs} · ${segment.theirsLabel}`)
+        : labels.theirs;
 
     // A side with a single empty string is one blank line, NOT empty —
     // choosing it inserts a blank line, so it must render as one.
     const renderSide = (lines: string[]) =>
       lines.length === 0
-        ? html`<div class="conflict-side-empty">(no lines on this side)</div>`
+        ? html`<div class="conflict-side-empty">${msg('(no lines on this side)')}</div>`
         : lines.map(
             (line) => html`
               <div class="code-line">
@@ -2440,36 +2492,36 @@ export class GnMergeEditor extends CodeRenderMixin(LitElement) {
     return html`
       <div class="code-conflict-block">
         <div class="code-conflict-header">
-          <span>Conflict</span>
+          <span>${msg('Conflict')}</span>
           <div class="code-conflict-header-actions">
             <button
               class="btn btn-ours conflict-pick-btn"
               @click=${() => this.resolveConflictSegment(segment.id, 'ours')}
               ?disabled=${this.actionsBlocked}
             >
-              Use Ours
+              ${msg('Use Ours')}
             </button>
             <button
               class="btn btn-theirs conflict-pick-btn"
               @click=${() => this.resolveConflictSegment(segment.id, 'theirs')}
               ?disabled=${this.actionsBlocked}
             >
-              Use Theirs
+              ${msg('Use Theirs')}
             </button>
             <button
               class="btn btn-both conflict-pick-btn"
               @click=${() => this.resolveConflictSegment(segment.id, 'both')}
               ?disabled=${this.actionsBlocked}
             >
-              Use Both
+              ${msg('Use Both')}
             </button>
             <button
               class="btn conflict-pick-btn"
               @click=${() => this.startEditSegment(segment)}
               ?disabled=${this.actionsBlocked}
-              title="Write this section by hand (starts from both sides)"
+              title=${msg('Write this section by hand (starts from both sides)')}
             >
-              Edit
+              ${msg('Edit')}
             </button>
             ${this.aiAvailable || this.aiBlockedReason
               ? html`
@@ -2480,9 +2532,9 @@ export class GnMergeEditor extends CodeRenderMixin(LitElement) {
                     this.suggestingSegment !== null ||
                     this.suggestingAll ||
                     this.actionsBlocked}
-                    title=${this.aiBlockedReason || 'Use AI to resolve this conflict'}
+                    title=${this.aiBlockedReason || msg('Use AI to resolve this conflict')}
                   >
-                    ${isSuggesting ? 'AI...' : 'AI Suggest'}
+                    ${isSuggesting ? msg('AI...') : msg('AI Suggest')}
                   </button>
                 `
               : nothing}
@@ -2509,7 +2561,7 @@ export class GnMergeEditor extends CodeRenderMixin(LitElement) {
       // Retry/verbatim escape hatch here would resurrect the deletion.
       return html`
         <div class="loading">
-          Resolved — this file was deleted by the resolution. Nothing further to do here.
+          ${msg('Resolved — this file was deleted by the resolution. Nothing further to do here.')}
         </div>
       `;
     }
@@ -2520,7 +2572,7 @@ export class GnMergeEditor extends CodeRenderMixin(LitElement) {
       // "No conflict found" on the already-resolved file.
       return html`
         <div class="loading">
-          Resolved — the chosen version was staged. Nothing further to do here.
+          ${msg('Resolved — the chosen version was staged. Nothing further to do here.')}
         </div>
       `;
     }
@@ -2529,15 +2581,15 @@ export class GnMergeEditor extends CodeRenderMixin(LitElement) {
       // only a side blob was unreadable would be wrong and alarming.
       const sideFailed =
         this.sideReadErrors.base || this.sideReadErrors.ours || this.sideReadErrors.theirs;
-      const labels = SIDE_LABELS[this.operationType] ?? SIDE_LABELS.merge;
+      const labels = this.sideLabels;
       return html`
         <div class="output-error">
           <div>
             ${sideFailed
-              ? 'Could not read all of this file’s versions.'
-              : 'Could not read the merged file from the working directory.'}
+              ? msg('Could not read all of this file’s versions.')
+              : msg('Could not read the merged file from the working directory.')}
           </div>
-          <button class="btn btn-primary" @click=${this.handleReload} ?disabled=${this.actionsBlocked}>Retry</button>
+          <button class="btn btn-primary" @click=${this.handleReload} ?disabled=${this.actionsBlocked}>${msg('Retry')}</button>
           ${
             // Take-side writes one side's blob verbatim — it never touches the
             // BASE blob or the workdir text, so each side is offerable
@@ -2548,9 +2600,9 @@ export class GnMergeEditor extends CodeRenderMixin(LitElement) {
             (this.conflictFile?.theirs && !this.sideReadErrors.theirs)
               ? html`
                   <div>
-                    This can happen for text files in a legacy (non-UTF-8) encoding or a
-                    missing version object. You can still resolve the conflict by taking one
-                    side verbatim:
+                    ${msg(
+                      'This can happen for text files in a legacy (non-UTF-8) encoding or a missing version object. You can still resolve the conflict by taking one side verbatim:'
+                    )}
                   </div>
                   <div>
                     ${this.conflictFile?.ours && !this.sideReadErrors.ours
@@ -2559,7 +2611,7 @@ export class GnMergeEditor extends CodeRenderMixin(LitElement) {
                           @click=${() => this.handleTakeSide('ours')}
                           ?disabled=${this.actionsBlocked}
                         >
-                          Use ${labels.ours} (verbatim)
+                          ${msg(str`Use ${labels.ours} (verbatim)`)}
                         </button>`
                       : nothing}
                     ${this.conflictFile?.theirs && !this.sideReadErrors.theirs
@@ -2568,7 +2620,7 @@ export class GnMergeEditor extends CodeRenderMixin(LitElement) {
                           @click=${() => this.handleTakeSide('theirs')}
                           ?disabled=${this.actionsBlocked}
                         >
-                          Use ${labels.theirs} (verbatim)
+                          ${msg(str`Use ${labels.theirs} (verbatim)`)}
                         </button>`
                       : nothing}
                   </div>
@@ -2596,7 +2648,7 @@ export class GnMergeEditor extends CodeRenderMixin(LitElement) {
 
   private renderBinaryConflict(): ReturnType<typeof html> {
     if (!this.conflictFile) {
-      return html`<div class="empty">Select a file to resolve</div>`;
+      return html`<div class="empty">${msg('Select a file to resolve')}</div>`;
     }
     // Same terminal notice as the text path — without it, a binary
     // deletion take on the last file leaves the "Choose which version to
@@ -2604,14 +2656,14 @@ export class GnMergeEditor extends CodeRenderMixin(LitElement) {
     if (this.resolvedAsDeleted) {
       return html`
         <div class="loading">
-          Resolved — this file was deleted by the resolution. Nothing further to do here.
+          ${msg('Resolved — this file was deleted by the resolution. Nothing further to do here.')}
         </div>
       `;
     }
     if (this.resolvedInPlace) {
       return html`
         <div class="loading">
-          Resolved — the chosen version was staged. Nothing further to do here.
+          ${msg('Resolved — the chosen version was staged. Nothing further to do here.')}
         </div>
       `;
     }
@@ -2619,7 +2671,7 @@ export class GnMergeEditor extends CodeRenderMixin(LitElement) {
     const oursDeleted = !this.conflictFile.ours;
     const theirsDeleted = !this.conflictFile.theirs;
     const isLink = this.isSymlinkConflict;
-    const labels = SIDE_LABELS[this.operationType] ?? SIDE_LABELS.merge;
+    const labels = this.sideLabels;
 
     // For a link side the blob IS its target path (tiny text) — showing it
     // turns a blind "Use Ours/Theirs" guess into an informed choice.
@@ -2628,11 +2680,13 @@ export class GnMergeEditor extends CodeRenderMixin(LitElement) {
       content: string,
       readFailed: boolean,
     ): string => {
-      if (!entry) return 'deleted';
+      if (!entry) return msg('deleted');
       if (entry.mode === 0o120000) {
-        return readFailed ? 'a symbolic link (target unreadable)' : `a link → ${content.trim()}`;
+        return readFailed
+          ? msg('a symbolic link (target unreadable)')
+          : msg(str`a link → ${content.trim()}`);
       }
-      return 'a regular file';
+      return msg('a regular file');
     };
 
     return html`
@@ -2641,12 +2695,14 @@ export class GnMergeEditor extends CodeRenderMixin(LitElement) {
       </div>
       <div class="empty" style="flex-direction: column; gap: var(--spacing-md);">
         <div>
-          <strong>${isLink ? 'Symbolic link conflict' : 'Binary file conflict'}</strong>
+          <strong>${isLink ? msg('Symbolic link conflict') : msg('Binary file conflict')}</strong>
         </div>
         <div style="font-style: normal; text-align: center; max-width: 420px;">
           ${isLink
-            ? 'The sides disagree about this symbolic link. Choose which version to keep.'
-            : 'This file is binary and cannot be merged as text. Choose which version to keep.'}
+            ? msg('The sides disagree about this symbolic link. Choose which version to keep.')
+            : msg(
+                'This file is binary and cannot be merged as text. Choose which version to keep.'
+              )}
         </div>
         ${isLink
           ? html`<div style="font-style: normal; text-align: center; max-width: 420px;">
@@ -2656,10 +2712,10 @@ export class GnMergeEditor extends CodeRenderMixin(LitElement) {
           : nothing}
         <div class="toolbar-actions">
           <button class="btn btn-ours" @click=${() => this.handleTakeSide('ours')} ?disabled=${this.actionsBlocked}>
-            ${oursDeleted ? 'Use Ours (delete file)' : 'Use Ours'}
+            ${oursDeleted ? msg('Use Ours (delete file)') : msg('Use Ours')}
           </button>
           <button class="btn btn-theirs" @click=${() => this.handleTakeSide('theirs')} ?disabled=${this.actionsBlocked}>
-            ${theirsDeleted ? 'Use Theirs (delete file)' : 'Use Theirs'}
+            ${theirsDeleted ? msg('Use Theirs (delete file)') : msg('Use Theirs')}
           </button>
         </div>
       </div>
@@ -2668,14 +2724,16 @@ export class GnMergeEditor extends CodeRenderMixin(LitElement) {
 
   private renderSubmoduleConflict(): ReturnType<typeof html> {
     if (!this.conflictFile) {
-      return html`<div class="empty">Select a file to resolve</div>`;
+      return html`<div class="empty">${msg('Select a file to resolve')}</div>`;
     }
     // Same terminal notice as the binary path — a pointer-removal take on
     // the last file must not leave dead chooser buttons on screen.
     if (this.resolvedAsDeleted) {
       return html`
         <div class="loading">
-          Resolved — this submodule was removed by the resolution. Nothing further to do here.
+          ${msg(
+            'Resolved — this submodule was removed by the resolution. Nothing further to do here.'
+          )}
         </div>
       `;
     }
@@ -2686,15 +2744,16 @@ export class GnMergeEditor extends CodeRenderMixin(LitElement) {
       // still-changed submodule path in the status pane.
       return html`
         <div class="loading">
-          Resolved — the chosen commit is staged. Run <code>git submodule update</code> to
-          check out its files.
+          ${msg(
+            html`Resolved — the chosen commit is staged. Run <code>git submodule update</code> to check out its files.`
+          )}
         </div>
       `;
     }
 
     const ours = this.conflictFile.ours;
     const theirs = this.conflictFile.theirs;
-    const labels = SIDE_LABELS[this.operationType] ?? SIDE_LABELS.merge;
+    const labels = this.sideLabels;
     const short = (oid?: string): string => (oid ? oid.slice(0, 7) : '');
     // A submodule↔file TYPE conflict routes here too (any side being a
     // gitlink does) — the non-gitlink side's OID is a BLOB, and formatting
@@ -2702,16 +2761,16 @@ export class GnMergeEditor extends CodeRenderMixin(LitElement) {
     const isLinkSide = (e: typeof ours): boolean => e?.mode === 0o160000;
     const sideDesc = (e: typeof ours): ReturnType<typeof html> | string =>
       !e
-        ? 'submodule removed'
+        ? msg('submodule removed')
         : isLinkSide(e)
-          ? html`commit <code>${short(e.oid)}</code>`
-          : 'a regular file';
+          ? html`${msg('commit')} <code>${short(e.oid)}</code>`
+          : msg('a regular file');
     const buttonLabel = (e: typeof ours, name: string): string =>
       !e
-        ? `Use ${name} (remove submodule)`
+        ? msg(str`Use ${name} (remove submodule)`)
         : isLinkSide(e)
-          ? `Use ${name} (${short(e.oid)})`
-          : `Use ${name} (file)`;
+          ? msg(str`Use ${name} (${short(e.oid)})`)
+          : msg(str`Use ${name} (file)`);
 
     return html`
       <div class="toolbar">
@@ -2719,12 +2778,12 @@ export class GnMergeEditor extends CodeRenderMixin(LitElement) {
       </div>
       <div class="empty" style="flex-direction: column; gap: var(--spacing-md);">
         <div>
-          <strong>Submodule conflict</strong>
+          <strong>${msg('Submodule conflict')}</strong>
         </div>
         <div style="font-style: normal; text-align: center; max-width: 420px;">
-          The sides disagree about this submodule. Choose which version to keep — the
-          submodule's own files are not changed here (update the submodule afterwards to
-          check a chosen commit out).
+          ${msg(
+            "The sides disagree about this submodule. Choose which version to keep — the submodule's own files are not changed here (update the submodule afterwards to check a chosen commit out)."
+          )}
         </div>
         <div style="font-style: normal; text-align: center; max-width: 420px;">
           ${labels.ours}: ${sideDesc(ours)}<br />
@@ -2732,10 +2791,10 @@ export class GnMergeEditor extends CodeRenderMixin(LitElement) {
         </div>
         <div class="toolbar-actions">
           <button class="btn btn-ours" @click=${() => this.handleTakeSide('ours')} ?disabled=${this.actionsBlocked}>
-            ${buttonLabel(ours, 'Ours')}
+            ${buttonLabel(ours, msg('Ours'))}
           </button>
           <button class="btn btn-theirs" @click=${() => this.handleTakeSide('theirs')} ?disabled=${this.actionsBlocked}>
-            ${buttonLabel(theirs, 'Theirs')}
+            ${buttonLabel(theirs, msg('Theirs'))}
           </button>
         </div>
       </div>
@@ -2744,11 +2803,11 @@ export class GnMergeEditor extends CodeRenderMixin(LitElement) {
 
   render() {
     if (!this.conflictFile) {
-      return html`<div class="empty">Select a file to resolve</div>`;
+      return html`<div class="empty">${msg('Select a file to resolve')}</div>`;
     }
 
     if (this.loading) {
-      return html`<div class="loading">Loading file contents...</div>`;
+      return html`<div class="loading">${msg('Loading file contents...')}</div>`;
     }
 
     // Submodule conflicts have no content at all (commit pointers, not
@@ -2763,7 +2822,7 @@ export class GnMergeEditor extends CodeRenderMixin(LitElement) {
       return this.renderBinaryConflict();
     }
 
-    const labels = SIDE_LABELS[this.operationType] ?? SIDE_LABELS.merge;
+    const labels = this.sideLabels;
     const conflictCount = this.conflictCount;
 
     return html`
@@ -2780,18 +2839,18 @@ export class GnMergeEditor extends CodeRenderMixin(LitElement) {
               this.resolving ||
               this.resolvedAsDeleted ||
               this.resolvedInPlace}
-              title="Open in external merge tool"
+              title=${msg('Open in external merge tool')}
             >
-              ${this.launchingExternalTool ? 'Waiting for tool...' : 'External Tool'}
+              ${this.launchingExternalTool ? msg('Waiting for tool...') : msg('External Tool')}
             </button>
           ` : nothing}
           <button
             class="btn"
             @click=${this.handleReload}
             ?disabled=${this.actionsBlocked}
-            title="Reload the file from disk, discarding resolutions made here"
+            title=${msg('Reload the file from disk, discarding resolutions made here')}
           >
-            Reload
+            ${msg('Reload')}
           </button>
           ${this.conflictFile.ancestor
             ? html`<button
@@ -2799,25 +2858,25 @@ export class GnMergeEditor extends CodeRenderMixin(LitElement) {
                 @click=${this.handleAcceptBase}
                 ?disabled=${this.loadFailed || this.actionsBlocked || this.sideReadErrors.base}
                 title=${this.sideReadErrors.base
-                  ? 'The base version could not be read'
-                  : 'Reset to common ancestor'}
+                  ? msg('The base version could not be read')
+                  : msg('Reset to common ancestor')}
               >
-                Use Base
+                ${msg('Use Base')}
               </button>`
             : nothing}
           ${this.conflictFile && !this.conflictFile.ours
-            ? html`<button class="btn btn-ours" @click=${() => this.handleTakeSide('ours')} ?disabled=${this.actionsBlocked} title="Ours deleted this file — keep it deleted">
-                Use Ours (delete file)
+            ? html`<button class="btn btn-ours" @click=${() => this.handleTakeSide('ours')} ?disabled=${this.actionsBlocked} title=${msg('Ours deleted this file — keep it deleted')}>
+                ${msg('Use Ours (delete file)')}
               </button>`
-            : html`<button class="btn btn-ours" @click=${this.handleAcceptOurs} ?disabled=${this.loadFailed || this.actionsBlocked} title="Use entire file from ${labels.ours}">
-                Use Ours
+            : html`<button class="btn btn-ours" @click=${this.handleAcceptOurs} ?disabled=${this.loadFailed || this.actionsBlocked} title=${msg(str`Use entire file from ${labels.ours}`)}>
+                ${msg('Use Ours')}
               </button>`}
           ${this.conflictFile && !this.conflictFile.theirs
-            ? html`<button class="btn btn-theirs" @click=${() => this.handleTakeSide('theirs')} ?disabled=${this.actionsBlocked} title="Theirs deleted this file — delete it">
-                Use Theirs (delete file)
+            ? html`<button class="btn btn-theirs" @click=${() => this.handleTakeSide('theirs')} ?disabled=${this.actionsBlocked} title=${msg('Theirs deleted this file — delete it')}>
+                ${msg('Use Theirs (delete file)')}
               </button>`
-            : html`<button class="btn btn-theirs" @click=${this.handleAcceptTheirs} ?disabled=${this.loadFailed || this.actionsBlocked} title="Use entire file from ${labels.theirs}">
-                Use Theirs
+            : html`<button class="btn btn-theirs" @click=${this.handleAcceptTheirs} ?disabled=${this.loadFailed || this.actionsBlocked} title=${msg(str`Use entire file from ${labels.theirs}`)}>
+                ${msg('Use Theirs')}
               </button>`}
           ${(this.aiAvailable || this.aiBlockedReason) && conflictCount > 0 ? html`
             <button
@@ -2827,9 +2886,9 @@ export class GnMergeEditor extends CodeRenderMixin(LitElement) {
               this.suggestingAll ||
               this.suggestingSegment !== null ||
               this.actionsBlocked}
-              title=${this.aiBlockedReason || 'Use AI to resolve all remaining conflicts'}
+              title=${this.aiBlockedReason || msg('Use AI to resolve all remaining conflicts')}
             >
-              ${this.suggestingAll ? 'AI Resolving...' : 'AI Resolve All'}
+              ${this.suggestingAll ? msg('AI Resolving...') : msg('AI Resolve All')}
             </button>
           ` : nothing}
           <button
@@ -2840,12 +2899,14 @@ export class GnMergeEditor extends CodeRenderMixin(LitElement) {
               this.editingSegmentId !== null ||
               this.actionsBlocked}
             title=${conflictCount > 0
-              ? `Resolve the remaining ${conflictCount} conflict${conflictCount === 1 ? '' : 's'} first`
+              ? conflictCount === 1
+                ? msg(str`Resolve the remaining ${conflictCount} conflict first`)
+                : msg(str`Resolve the remaining ${conflictCount} conflicts first`)
               : this.editingSegmentId !== null
-                ? 'Apply or cancel the open edit first'
-                : 'Stage this file as resolved'}
+                ? msg('Apply or cancel the open edit first')
+                : msg('Stage this file as resolved')}
           >
-            Mark Resolved
+            ${msg('Mark Resolved')}
           </button>
         </div>
       </div>
@@ -2857,18 +2918,20 @@ export class GnMergeEditor extends CodeRenderMixin(LitElement) {
               ${labels.ours}
               <span class="panel-stats">
                 ${this.sideReadErrors.ours
-                  ? 'read failed'
+                  ? msg('read failed')
                   : this.sideReadErrors.base
-                    ? 'base unavailable'
+                    ? msg('base unavailable')
                     : this.formatChangeCount(this.getChangeCount('ours'))}
               </span>
               <button
                 class="panel-header-btn"
                 @click=${this.conflictFile.ours ? this.handleAcceptOurs : () => this.handleTakeSide('ours')}
                 ?disabled=${this.actionsBlocked || (this.conflictFile.ours ? this.loadFailed : false)}
-                title=${this.conflictFile.ours ? 'Use this version' : 'This side deleted the file — stage the deletion'}
+                title=${this.conflictFile.ours
+                  ? msg('Use this version')
+                  : msg('This side deleted the file — stage the deletion')}
               >
-                ${this.conflictFile.ours ? 'Use' : 'Use (delete)'}
+                ${this.conflictFile.ours ? msg('Use') : msg('Use (delete)')}
               </button>
             </div>
             <div class="panel-content readonly" id="panel-ours" @scroll=${this.handleSourceScroll}>
@@ -2878,9 +2941,11 @@ export class GnMergeEditor extends CodeRenderMixin(LitElement) {
 
           <div class="editor-panel">
             <div class="panel-header base">
-              Base (Common Ancestor)
+              ${msg('Base (Common Ancestor)')}
               <span class="panel-stats">
-                ${this.sideReadErrors.base ? 'read failed' : `${this.getLineCount(this.baseContent)} lines`}
+                ${this.sideReadErrors.base
+                  ? msg('read failed')
+                  : msg(str`${this.getLineCount(this.baseContent)} lines`)}
               </span>
             </div>
             <div class="panel-content readonly" id="panel-base" @scroll=${this.handleSourceScroll}>
@@ -2893,18 +2958,20 @@ export class GnMergeEditor extends CodeRenderMixin(LitElement) {
               ${labels.theirs}
               <span class="panel-stats">
                 ${this.sideReadErrors.theirs
-                  ? 'read failed'
+                  ? msg('read failed')
                   : this.sideReadErrors.base
-                    ? 'base unavailable'
+                    ? msg('base unavailable')
                     : this.formatChangeCount(this.getChangeCount('theirs'))}
               </span>
               <button
                 class="panel-header-btn"
                 @click=${this.conflictFile.theirs ? this.handleAcceptTheirs : () => this.handleTakeSide('theirs')}
                 ?disabled=${this.actionsBlocked || (this.conflictFile.theirs ? this.loadFailed : false)}
-                title=${this.conflictFile.theirs ? 'Use this version' : 'This side deleted the file — stage the deletion'}
+                title=${this.conflictFile.theirs
+                  ? msg('Use this version')
+                  : msg('This side deleted the file — stage the deletion')}
               >
-                ${this.conflictFile.theirs ? 'Use' : 'Use (delete)'}
+                ${this.conflictFile.theirs ? msg('Use') : msg('Use (delete)')}
               </button>
             </div>
             <div class="panel-content readonly" id="panel-theirs" @scroll=${this.handleSourceScroll}>
@@ -2915,12 +2982,14 @@ export class GnMergeEditor extends CodeRenderMixin(LitElement) {
 
         <div class="output-panel">
           <div class="panel-header output">
-            Output
+            ${msg('Output')}
             ${this.loadFailed
-              ? html`<span class="conflict-count">load failed</span>`
+              ? html`<span class="conflict-count">${msg('load failed')}</span>`
               : conflictCount > 0
-                ? html`<span class="conflict-count">${conflictCount} conflict${conflictCount === 1 ? '' : 's'} remaining</span>`
-                : html`<span class="conflict-count">No conflicts</span>`}
+                ? html`<span class="conflict-count">${conflictCount === 1
+                  ? msg(str`${conflictCount} conflict remaining`)
+                  : msg(str`${conflictCount} conflicts remaining`)}</span>`
+                : html`<span class="conflict-count">${msg('No conflicts')}</span>`}
           </div>
           <div class="panel-content" id="panel-output" @scroll=${this.handleOutputScroll}>
             ${this.renderOutput()}

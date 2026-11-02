@@ -60,6 +60,7 @@ import '../gn-settings-dialog.ts';
 import type { GnSettingsDialog } from '../gn-settings-dialog.ts';
 import { settingsStore } from '../../../stores/settings.store.ts';
 
+import { setAppLocale } from '../../../i18n/index.ts';
 describe('gn-settings-dialog graph color scheme under forced colors', () => {
   let el: GnSettingsDialog;
 
@@ -76,6 +77,9 @@ describe('gn-settings-dialog graph color scheme under forced colors', () => {
 
   beforeEach(async () => {
     settingsStore.getState().resetToDefaults();
+    // resetToDefaults() re-applies the fresh-install default, which is Chinese.
+    await setAppLocale('en');
+    settingsStore.setState({ language: 'en' });
     settingsStore.getState().applySystemContrast(false);
     el = await fixture<GnSettingsDialog>(html`<gn-settings-dialog></gn-settings-dialog>`);
     await el.updateComplete;

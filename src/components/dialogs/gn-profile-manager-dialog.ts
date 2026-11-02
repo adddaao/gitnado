@@ -5,6 +5,7 @@
 
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
+import { localized, msg, str } from '@lit/localize';
 import { sharedStyles } from '../../styles/shared-styles.ts';
 import { unifiedProfileStore, type AccountConnectionStatus, type ConnectionStatus } from '../../stores/unified-profile.store.ts';
 import { repositoryStore, type RecentRepository } from '../../stores/repository.store.ts';
@@ -19,6 +20,7 @@ import { pushOverlay, removeOverlay, isTopOverlay } from '../../utils/overlay-st
 type ViewMode = 'list' | 'edit' | 'create' | 'select-account' | 'edit-account' | 'assign-repos' | 'accounts';
 
 @customElement('gn-profile-manager-dialog')
+@localized()
 export class GnProfileManagerDialog extends LitElement {
   static styles = [
     sharedStyles,
@@ -796,8 +798,10 @@ export class GnProfileManagerDialog extends LitElement {
 
   private async handleRestoreBackup(): Promise<void> {
     const confirmed = await showConfirm(
-      'Restore Backup',
-      'Are you sure you want to restore from backup? This will remove your current unified profiles and restore the pre-migration data. You will need to run migration again.',
+      msg('Restore Backup'),
+      msg(
+        'Are you sure you want to restore from backup? This will remove your current unified profiles and restore the pre-migration data. You will need to run migration again.'
+      ),
       'warning'
     );
     if (!confirmed) {
@@ -807,7 +811,9 @@ export class GnProfileManagerDialog extends LitElement {
     try {
       const result = await unifiedProfileService.restoreMigrationBackup();
       showToast(
-        `Restored ${result.profilesCount ?? 0} profiles and ${result.accountsCount ?? 0} accounts from backup`,
+        msg(
+          str`Restored ${result.profilesCount ?? 0} profiles and ${result.accountsCount ?? 0} accounts from backup`
+        ),
         'success'
       );
       // D4: Dispatch `migration-needed` BEFORE closing so the parent can open
@@ -822,7 +828,9 @@ export class GnProfileManagerDialog extends LitElement {
       this.handleClose();
     } catch (error) {
       showToast(
-        `Failed to restore backup: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        msg(
+          str`Failed to restore backup: ${error instanceof Error ? error.message : msg('Unknown error')}`
+        ),
         'error'
       );
     } finally {
@@ -832,8 +840,8 @@ export class GnProfileManagerDialog extends LitElement {
 
   private async handleDeleteBackup(): Promise<void> {
     const confirmed = await showConfirm(
-      'Delete Backup',
-      'Are you sure you want to delete the migration backup? This action cannot be undone.',
+      msg('Delete Backup'),
+      msg('Are you sure you want to delete the migration backup? This action cannot be undone.'),
       'warning'
     );
     if (!confirmed) {
@@ -841,12 +849,14 @@ export class GnProfileManagerDialog extends LitElement {
     }
     try {
       await unifiedProfileService.deleteMigrationBackup();
-      showToast('Migration backup deleted', 'success');
+      showToast(msg('Migration backup deleted'), 'success');
       this.backupInfo = null;
       this.showBackupSection = false;
     } catch (error) {
       showToast(
-        `Failed to delete backup: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        msg(
+          str`Failed to delete backup: ${error instanceof Error ? error.message : msg('Unknown error')}`
+        ),
         'error'
       );
     }
@@ -867,8 +877,8 @@ export class GnProfileManagerDialog extends LitElement {
   private handleClose(): void {
     if (this.isFormDirty()) {
       void showConfirm(
-        'Discard changes?',
-        'You have unsaved changes. Are you sure you want to discard them?',
+        msg('Discard changes?'),
+        msg('You have unsaved changes. Are you sure you want to discard them?'),
         'warning'
       ).then((confirmed) => {
         if (confirmed) this.performClose();
@@ -1002,7 +1012,12 @@ export class GnProfileManagerDialog extends LitElement {
       await unifiedProfileService.loadUnifiedProfiles();
 
       if (failedRepos.length === 0) {
-        showToast(`Assigned ${successCount} ${successCount === 1 ? 'repository' : 'repositories'}`, 'success');
+        showToast(
+          successCount === 1
+            ? msg(str`Assigned ${successCount} repository`)
+            : msg(str`Assigned ${successCount} repositories`),
+          'success'
+        );
         // Only clear selection and leave the view on full success.
         this.selectedReposForAssignment = new Set();
         this.viewMode = 'edit';
@@ -1013,13 +1028,18 @@ export class GnProfileManagerDialog extends LitElement {
           .map((p) => p.split(/[\\/]/).filter(Boolean).pop() ?? p)
           .join(', ');
         showToast(
-          `Assigned ${successCount}, failed ${failedRepos.length}: ${names}`,
+          msg(str`Assigned ${successCount}, failed ${failedRepos.length}: ${names}`),
           'warning'
         );
         this.selectedReposForAssignment = new Set(failedRepos);
       }
     } catch (error) {
-      showToast(`Failed to assign repositories: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
+      showToast(
+        msg(
+          str`Failed to assign repositories: ${error instanceof Error ? error.message : msg('Unknown error')}`
+        ),
+        'error'
+      );
     } finally {
       this.isSaving = false;
     }
@@ -1038,10 +1058,12 @@ export class GnProfileManagerDialog extends LitElement {
       await unifiedProfileService.unassignUnifiedProfileFromRepository(repoPath);
       // Reload profiles to update repositoryAssignments in the store.
       await unifiedProfileService.loadUnifiedProfiles();
-      showToast(`Unassigned ${this.formatRepoPath(repoPath)}`, 'success');
+      showToast(msg(str`Unassigned ${this.formatRepoPath(repoPath)}`), 'success');
     } catch (error) {
       showToast(
-        `Failed to unassign repository: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        msg(
+          str`Failed to unassign repository: ${error instanceof Error ? error.message : msg('Unknown error')}`
+        ),
         'error'
       );
     }
@@ -1052,8 +1074,10 @@ export class GnProfileManagerDialog extends LitElement {
   private async handleDelete(profile: UnifiedProfile, e: Event): Promise<void> {
     e.stopPropagation();
     const confirmed = await showConfirm(
-      'Delete Profile',
-      `Delete profile "${profile.name}"? This removes the profile and its repository assignments. Your integration accounts remain available globally.`,
+      msg('Delete Profile'),
+      msg(
+        str`Delete profile "${profile.name}"? This removes the profile and its repository assignments. Your integration accounts remain available globally.`
+      ),
       'warning'
     );
     if (!confirmed) {
@@ -1062,29 +1086,39 @@ export class GnProfileManagerDialog extends LitElement {
 
     try {
       await unifiedProfileService.deleteUnifiedProfile(profile.id);
-      showToast('Profile deleted', 'success');
+      showToast(msg('Profile deleted'), 'success');
     } catch (error) {
-      showToast(`Failed to delete profile: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
+      showToast(
+        msg(
+          str`Failed to delete profile: ${error instanceof Error ? error.message : msg('Unknown error')}`
+        ),
+        'error'
+      );
     }
   }
 
   private async handleApply(profile: UnifiedProfile, e: Event): Promise<void> {
     e.stopPropagation();
     if (!this.repoPath) {
-      showToast('No repository open', 'error');
+      showToast(msg('No repository open'), 'error');
       return;
     }
 
     try {
       await unifiedProfileService.applyUnifiedProfile(this.repoPath, profile.id);
-      showToast(`Applied profile "${profile.name}"`, 'success');
+      showToast(msg(str`Applied profile "${profile.name}"`), 'success');
       // Applying a profile rewrites the repo's local git identity/signing
       // config. Refresh so listeners re-read it now (e.g. the commit panel
       // reloads the author used for the {{author}} template placeholder)
       // instead of only after the tab is re-switched.
       window.dispatchEvent(new CustomEvent('repository-refresh'));
     } catch (error) {
-      showToast(`Failed to apply profile: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
+      showToast(
+        msg(
+          str`Failed to apply profile: ${error instanceof Error ? error.message : msg('Unknown error')}`
+        ),
+        'error'
+      );
     }
   }
 
@@ -1110,15 +1144,15 @@ export class GnProfileManagerDialog extends LitElement {
 
     // Validation
     if (!this.editingProfile.name?.trim()) {
-      showToast('Profile name is required', 'error');
+      showToast(msg('Profile name is required'), 'error');
       return;
     }
     if (!this.editingProfile.gitName?.trim()) {
-      showToast('Git name is required', 'error');
+      showToast(msg('Git name is required'), 'error');
       return;
     }
     if (!this.editingProfile.gitEmail?.trim()) {
-      showToast('Git email is required', 'error');
+      showToast(msg('Git email is required'), 'error');
       return;
     }
 
@@ -1146,11 +1180,17 @@ export class GnProfileManagerDialog extends LitElement {
         // was before this edit.
         const names = failedRepositories.map((p) => this.formatRepoPath(p)).join(', ');
         showToast(
-          `Profile saved, but ${failedRepositories.length} ${failedRepositories.length === 1 ? 'repository' : 'repositories'} kept the old identity: ${names}`,
+          failedRepositories.length === 1
+            ? msg(
+                str`Profile saved, but ${failedRepositories.length} repository kept the old identity: ${names}`
+              )
+            : msg(
+                str`Profile saved, but ${failedRepositories.length} repositories kept the old identity: ${names}`
+              ),
           'warning'
         );
       } else {
-        showToast(wasCreate ? 'Profile created' : 'Profile saved', 'success');
+        showToast(wasCreate ? msg('Profile created') : msg('Profile saved'), 'success');
       }
       // After creating a new profile, re-evaluate which profile applies to the
       // current repo. Without this, a freshly-created default profile sits in
@@ -1170,7 +1210,12 @@ export class GnProfileManagerDialog extends LitElement {
       this.justAttachedAccountName = null;
       this.handleBack();
     } catch (error) {
-      showToast(`Failed to save profile: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
+      showToast(
+        msg(
+          str`Failed to save profile: ${error instanceof Error ? error.message : msg('Unknown error')}`
+        ),
+        'error'
+      );
     } finally {
       this.isSaving = false;
     }
@@ -1249,7 +1294,9 @@ export class GnProfileManagerDialog extends LitElement {
     this.setEditingProfileAccount(account.integrationType, account.id);
     if (previous && previous !== account.id) {
       showToast(
-        `Replaced the previously attached ${INTEGRATION_TYPE_NAMES[account.integrationType]} account`,
+        msg(
+          str`Replaced the previously attached ${INTEGRATION_TYPE_NAMES[account.integrationType]} account`
+        ),
         'info'
       );
     }
@@ -1282,8 +1329,8 @@ export class GnProfileManagerDialog extends LitElement {
    */
   private async handleDeleteGlobalAccount(accountId: string): Promise<void> {
     const confirmed = await showConfirm(
-      'Delete Account',
-      'Delete this account? This will remove the account for all profiles.',
+      msg('Delete Account'),
+      msg('Delete this account? This will remove the account for all profiles.'),
       'warning'
     );
     if (!confirmed) return;
@@ -1315,7 +1362,7 @@ export class GnProfileManagerDialog extends LitElement {
       if (attachedType) {
         this.removeEditingProfileAccount(attachedType);
       }
-      showToast('Account deleted', 'success');
+      showToast(msg('Account deleted'), 'success');
       // Deletion is intentional — skip the unsaved-changes guard and return to
       // wherever the edit form was opened from. When deleting from the Accounts
       // view, stay there; the store subscription re-renders the trimmed list.
@@ -1325,7 +1372,12 @@ export class GnProfileManagerDialog extends LitElement {
         this.viewMode = this.accountReturnView;
       }
     } catch (error) {
-      showToast(`Failed to delete account: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
+      showToast(
+        msg(
+          str`Failed to delete account: ${error instanceof Error ? error.message : msg('Unknown error')}`
+        ),
+        'error'
+      );
     }
   }
 
@@ -1353,7 +1405,7 @@ export class GnProfileManagerDialog extends LitElement {
 
     // Validation
     if (!this.editingAccount.name?.trim()) {
-      showToast('Account name is required', 'error');
+      showToast(msg('Account name is required'), 'error');
       return;
     }
 
@@ -1372,12 +1424,17 @@ export class GnProfileManagerDialog extends LitElement {
     try {
       // Save to global accounts
       await unifiedProfileService.saveGlobalAccount(account);
-      showToast('Account saved', 'success');
+      showToast(msg('Account saved'), 'success');
       // Persisted — clear the dirty flag so navigating back doesn't prompt.
       this.accountFormDirty = false;
       this.handleBack();
     } catch (error) {
-      showToast(`Failed to save account: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
+      showToast(
+        msg(
+          str`Failed to save account: ${error instanceof Error ? error.message : msg('Unknown error')}`
+        ),
+        'error'
+      );
     }
   }
 
@@ -1391,7 +1448,7 @@ export class GnProfileManagerDialog extends LitElement {
             <div class="dialog-title">
               ${this.viewMode !== 'list'
                 ? html`
-                    <button class="back-btn" @click=${this.handleBack} title="Back">
+                    <button class="back-btn" @click=${this.handleBack} title=${msg('Back')}>
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <polyline points="15 18 9 12 15 6"></polyline>
                       </svg>
@@ -1425,21 +1482,21 @@ export class GnProfileManagerDialog extends LitElement {
   private getDialogTitle(): string {
     switch (this.viewMode) {
       case 'list':
-        return 'Profiles & Accounts';
+        return msg('Profiles & Accounts');
       case 'create':
-        return 'New Profile';
+        return msg('New Profile');
       case 'edit':
-        return 'Edit Profile';
+        return msg('Edit Profile');
       case 'select-account':
-        return 'Attach Account';
+        return msg('Attach Account');
       case 'edit-account':
-        return 'Edit Account';
+        return msg('Edit Account');
       case 'assign-repos':
-        return 'Assign Repositories';
+        return msg('Assign Repositories');
       case 'accounts':
-        return 'Accounts';
+        return msg('Accounts');
       default:
-        return 'Profiles & Accounts';
+        return msg('Profiles & Accounts');
     }
   }
 
@@ -1474,7 +1531,7 @@ export class GnProfileManagerDialog extends LitElement {
               <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
               <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
             </svg>
-            Accounts
+            ${msg('Accounts')}
           </button>
           <div style="flex: 1;"></div>
           <button class="btn btn-primary" @click=${this.handleCreateNew}>
@@ -1482,20 +1539,22 @@ export class GnProfileManagerDialog extends LitElement {
               <line x1="12" y1="5" x2="12" y2="19"></line>
               <line x1="5" y1="12" x2="19" y2="12"></line>
             </svg>
-            New Profile
+            ${msg('New Profile')}
           </button>
         `;
       case 'accounts':
         return html`
-          <button class="btn btn-secondary" @click=${this.handleBack}>Back</button>
+          <button class="btn btn-secondary" @click=${this.handleBack}>${msg('Back')}</button>
         `;
       case 'create':
       case 'edit':
         return html`
-          <button class="btn btn-secondary" @click=${this.handleBack}>Cancel</button>
+          <button class="btn btn-secondary" @click=${this.handleBack}>${msg('Cancel')}</button>
           ${this.justAttachedAccountName
             ? html`<span class="attach-hint" data-testid="attach-keep-hint">
-                Save Profile to keep <strong>${this.justAttachedAccountName}</strong> attached
+                ${msg(
+                  html`Save Profile to keep <strong>${this.justAttachedAccountName}</strong> attached`
+                )}
               </span>`
             : html`<div style="flex: 1;"></div>`}
           <button
@@ -1503,33 +1562,37 @@ export class GnProfileManagerDialog extends LitElement {
             @click=${this.handleSave}
             ?disabled=${this.isSaving}
           >
-            ${this.isSaving ? 'Saving...' : 'Save Profile'}
+            ${this.isSaving ? msg('Saving...') : msg('Save Profile')}
           </button>
         `;
       case 'select-account':
         // Picker rows are click-to-attach, so only a back button is needed.
         return html`
-          <button class="btn btn-secondary" @click=${this.handleBack}>Back</button>
+          <button class="btn btn-secondary" @click=${this.handleBack}>${msg('Back')}</button>
         `;
       case 'edit-account':
         return html`
           <button
             class="btn btn-danger"
             ?disabled=${!this.editingAccount?.id}
-            title="Permanently delete this account for all profiles"
+            title=${msg('Permanently delete this account for all profiles')}
             @click=${() => this.editingAccount?.id && this.handleDeleteGlobalAccount(this.editingAccount.id)}
           >
-            Delete Account
+            ${msg('Delete Account')}
           </button>
           <div style="flex: 1;"></div>
-          <button class="btn btn-secondary" @click=${this.handleBack}>Cancel</button>
-          <button class="btn btn-primary" @click=${this.handleSaveAccount}>Save Account</button>
+          <button class="btn btn-secondary" @click=${this.handleBack}>${msg('Cancel')}</button>
+          <button class="btn btn-primary" @click=${this.handleSaveAccount}>${msg('Save Account')}</button>
         `;
       case 'assign-repos':
         return html`
-          <button class="btn btn-secondary" @click=${this.handleBack}>Cancel</button>
+          <button class="btn btn-secondary" @click=${this.handleBack}>${msg('Cancel')}</button>
           <button class="btn btn-primary" @click=${this.handleBulkAssign} ?disabled=${this.selectedReposForAssignment.size === 0 || this.isSaving}>
-            ${this.isSaving ? 'Assigning...' : `Assign ${this.selectedReposForAssignment.size} Repository${this.selectedReposForAssignment.size !== 1 ? 'ies' : ''}`}
+            ${this.isSaving
+              ? msg('Assigning...')
+              : this.selectedReposForAssignment.size === 1
+                ? msg(str`Assign ${this.selectedReposForAssignment.size} Repository`)
+                : msg(str`Assign ${this.selectedReposForAssignment.size} Repositories`)}
           </button>
         `;
       default:
@@ -1539,12 +1602,14 @@ export class GnProfileManagerDialog extends LitElement {
 
   private renderProfileList() {
     if (this.isLoading) {
-      return html`<div class="empty-state">Loading profiles...</div>`;
+      return html`<div class="empty-state">${msg('Loading profiles...')}</div>`;
     }
 
     const explainer = html`
       <p class="view-explainer">
-        Profiles set your git identity per repository. Accounts are shared logins you assign to profiles.
+        ${msg(
+          'Profiles set your git identity per repository. Accounts are shared logins you assign to profiles.'
+        )}
       </p>
     `;
 
@@ -1556,9 +1621,9 @@ export class GnProfileManagerDialog extends LitElement {
             <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
             <circle cx="12" cy="7" r="4"></circle>
           </svg>
-          <div>No profiles yet</div>
+          <div>${msg('No profiles yet')}</div>
           <p style="font-size: var(--font-size-sm); margin-top: var(--spacing-sm);">
-            Create profiles to manage git identities and integration accounts together
+            ${msg('Create profiles to manage git identities and integration accounts together')}
           </p>
         </div>
       `;
@@ -1577,15 +1642,21 @@ export class GnProfileManagerDialog extends LitElement {
               <div class="profile-info">
                 <div class="profile-name">
                   ${profile.name}
-                  ${profile.isDefault ? html`<span class="default-badge">Default</span>` : nothing}
+                  ${profile.isDefault ? html`<span class="default-badge">${msg('Default')}</span>` : nothing}
                 </div>
                 <div class="profile-email">${profile.gitName} &lt;${profile.gitEmail}&gt;</div>
                 <div class="profile-meta">
                   ${Object.keys(profile.defaultAccounts).length > 0
-                    ? html`<span>${Object.keys(profile.defaultAccounts).length} default account${Object.keys(profile.defaultAccounts).length > 1 ? 's' : ''}</span>`
+                    ? html`<span>${Object.keys(profile.defaultAccounts).length === 1
+                        ? msg(str`${Object.keys(profile.defaultAccounts).length} default account`)
+                        : msg(
+                            str`${Object.keys(profile.defaultAccounts).length} default accounts`
+                          )}</span>`
                     : nothing}
                   ${profile.urlPatterns.length > 0
-                    ? html`<span>· ${profile.urlPatterns.length} pattern${profile.urlPatterns.length > 1 ? 's' : ''}</span>`
+                    ? html`<span>${profile.urlPatterns.length === 1
+                        ? msg(str`· ${profile.urlPatterns.length} pattern`)
+                        : msg(str`· ${profile.urlPatterns.length} patterns`)}</span>`
                     : nothing}
                 </div>
               </div>
@@ -1595,7 +1666,7 @@ export class GnProfileManagerDialog extends LitElement {
                       <button
                         class="action-btn"
                         @click=${(e: Event) => this.handleApply(profile, e)}
-                        title="Apply to current repository"
+                        title=${msg('Apply to current repository')}
                       >
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                           <polyline points="20 6 9 17 4 12"></polyline>
@@ -1606,7 +1677,7 @@ export class GnProfileManagerDialog extends LitElement {
                 <button
                   class="action-btn"
                   @click=${(e: Event) => this.handleDuplicate(profile, e)}
-                  title="Duplicate profile"
+                  title=${msg('Duplicate profile')}
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
@@ -1616,7 +1687,7 @@ export class GnProfileManagerDialog extends LitElement {
                 <button
                   class="action-btn delete"
                   @click=${(e: Event) => this.handleDelete(profile, e)}
-                  title="Delete profile"
+                  title=${msg('Delete profile')}
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <polyline points="3 6 5 6 21 6"></polyline>
@@ -1647,20 +1718,20 @@ export class GnProfileManagerDialog extends LitElement {
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="9 18 15 12 9 6"></polyline>
           </svg>
-          Migration Backup Available
+          ${msg('Migration Backup Available')}
         </button>
         ${this.showBackupSection
           ? html`
               <div class="backup-content">
                 <div class="backup-info">
                   <div class="backup-info-row">
-                    <span class="backup-info-label">Backup Date</span>
-                    <span>${this.backupInfo.backupDate ?? 'Unknown'}</span>
+                    <span class="backup-info-label">${msg('Backup Date')}</span>
+                    <span>${this.backupInfo.backupDate ?? msg('Unknown')}</span>
                   </div>
                   ${this.backupInfo.profilesCount !== null
                     ? html`
                         <div class="backup-info-row">
-                          <span class="backup-info-label">Profiles</span>
+                          <span class="backup-info-label">${msg('Profiles')}</span>
                           <span>${this.backupInfo.profilesCount}</span>
                         </div>
                       `
@@ -1668,14 +1739,16 @@ export class GnProfileManagerDialog extends LitElement {
                   ${this.backupInfo.accountsCount !== null
                     ? html`
                         <div class="backup-info-row">
-                          <span class="backup-info-label">Accounts</span>
+                          <span class="backup-info-label">${msg('Accounts')}</span>
                           <span>${this.backupInfo.accountsCount}</span>
                         </div>
                       `
                     : nothing}
                 </div>
                 <p style="font-size: var(--font-size-sm); color: var(--color-text-secondary); margin-bottom: var(--spacing-md);">
-                  A backup of your pre-migration data exists. You can restore it to undo the migration, or delete it if you're satisfied with the current setup.
+                  ${msg(
+                    "A backup of your pre-migration data exists. You can restore it to undo the migration, or delete it if you're satisfied with the current setup."
+                  )}
                 </p>
                 <div class="backup-actions">
                   <button
@@ -1683,14 +1756,14 @@ export class GnProfileManagerDialog extends LitElement {
                     @click=${this.handleRestoreBackup}
                     ?disabled=${this.isRestoringBackup}
                   >
-                    ${this.isRestoringBackup ? 'Restoring...' : 'Restore Backup'}
+                    ${this.isRestoringBackup ? msg('Restoring...') : msg('Restore Backup')}
                   </button>
                   <button
                     class="btn btn-secondary"
                     @click=${this.handleDeleteBackup}
                     ?disabled=${this.isRestoringBackup}
                   >
-                    Delete Backup
+                    ${msg('Delete Backup')}
                   </button>
                 </div>
               </div>
@@ -1710,14 +1783,14 @@ export class GnProfileManagerDialog extends LitElement {
             <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
             <circle cx="12" cy="7" r="4"></circle>
           </svg>
-          Profile Settings
+          ${msg('Profile Settings')}
         </div>
 
         <div class="form-group">
-          <label>Profile Name</label>
+          <label>${msg('Profile Name')}</label>
           <input
             type="text"
-            placeholder="e.g., Work, Personal, Open Source"
+            placeholder=${msg('e.g., Work, Personal, Open Source')}
             autofocus
             .value=${this.editingProfile.name ?? ''}
             @input=${(e: Event) => this.updateEditingProfile('name', (e.target as HTMLInputElement).value)}
@@ -1726,7 +1799,7 @@ export class GnProfileManagerDialog extends LitElement {
 
         <div class="form-row">
           <div class="form-group">
-            <label>Git Name</label>
+            <label>${msg('Git Name')}</label>
             <input
               type="text"
               placeholder="John Doe"
@@ -1735,7 +1808,7 @@ export class GnProfileManagerDialog extends LitElement {
             />
           </div>
           <div class="form-group">
-            <label>Git Email</label>
+            <label>${msg('Git Email')}</label>
             <input
               type="email"
               placeholder="john@example.com"
@@ -1746,29 +1819,29 @@ export class GnProfileManagerDialog extends LitElement {
         </div>
 
         <div class="form-group">
-          <label>GPG Signing Key (optional)</label>
+          <label>${msg('GPG Signing Key (optional)')}</label>
           <input
             type="text"
-            placeholder="Key ID or fingerprint"
+            placeholder=${msg('Key ID or fingerprint')}
             .value=${this.editingProfile.signingKey ?? ''}
             @input=${(e: Event) => this.updateEditingProfile('signingKey', (e.target as HTMLInputElement).value)}
           />
         </div>
 
         <div class="form-group">
-          <label>URL Patterns (one per line)</label>
+          <label>${msg('URL Patterns (one per line)')}</label>
           <textarea
             placeholder="github.com/mycompany/*&#10;gitlab.com/work-projects/*"
             .value=${(this.editingProfile.urlPatterns ?? []).join('\n')}
             @input=${this.handlePatternsChange}
           ></textarea>
           <div class="form-hint">
-            Auto-detect which profile to use based on repository URL. Supports wildcards (*).
+            ${msg('Auto-detect which profile to use based on repository URL. Supports wildcards (*).')}
           </div>
         </div>
 
         <div class="form-group">
-          <label>Color</label>
+          <label>${msg('Color')}</label>
           <div class="color-picker">
             ${PROFILE_COLORS.map(
               (color) => html`
@@ -1789,7 +1862,7 @@ export class GnProfileManagerDialog extends LitElement {
             .checked=${this.editingProfile.isDefault ?? false}
             @change=${(e: Event) => this.updateEditingProfile('isDefault', (e.target as HTMLInputElement).checked)}
           />
-          <label for="isDefault">Set as default profile</label>
+          <label for="isDefault">${msg('Set as default profile')}</label>
         </div>
       </div>
 
@@ -1803,23 +1876,23 @@ export class GnProfileManagerDialog extends LitElement {
               <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
               <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
             </svg>
-            Integration Accounts
+            ${msg('Integration Accounts')}
           </div>
           <button class="btn btn-sm" @click=${this.handleOpenAccountPicker}>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <line x1="12" y1="5" x2="12" y2="19"></line>
               <line x1="5" y1="12" x2="19" y2="12"></line>
             </svg>
-            Add
+            ${msg('Add')}
           </button>
         </div>
 
         ${this.getAttachedAccounts().length === 0
           ? html`
               <div class="empty-accounts">
-                No accounts attached to this profile.
+                ${msg('No accounts attached to this profile.')}
                 <br />
-                Click "Add" to attach an integration account.
+                ${msg('Click "Add" to attach an integration account.')}
               </div>
             `
           : html`
@@ -1846,23 +1919,23 @@ export class GnProfileManagerDialog extends LitElement {
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
             </svg>
-            Assigned Repositories
+            ${msg('Assigned Repositories')}
           </div>
           <button class="btn btn-secondary btn-sm" @click=${this.handleOpenRepoAssignment}>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <line x1="12" y1="5" x2="12" y2="19"></line>
               <line x1="5" y1="12" x2="19" y2="12"></line>
             </svg>
-            Assign
+            ${msg('Assign')}
           </button>
         </div>
 
         ${assignedRepos.length === 0
           ? html`
               <div class="empty-accounts">
-                No repositories are using this profile.
+                ${msg('No repositories are using this profile.')}
                 <br />
-                Click "Assign" to add repositories from your recent list.
+                ${msg('Click "Assign" to add repositories from your recent list.')}
               </div>
             `
           : html`
@@ -1881,7 +1954,7 @@ export class GnProfileManagerDialog extends LitElement {
                         <button
                           class="action-btn delete"
                           @click=${() => this.handleUnassignRepository(repoPath)}
-                          title="Unassign repository from this profile"
+                          title=${msg('Unassign repository from this profile')}
                         >
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -1908,7 +1981,9 @@ export class GnProfileManagerDialog extends LitElement {
       <div class="form-content">
         <div class="form-section">
           <p style="color: var(--color-text-secondary); margin-bottom: var(--spacing-md);">
-            Select repositories to assign to <strong>${this.editingProfile?.name}</strong>:
+            ${msg(
+              html`Select repositories to assign to <strong>${this.editingProfile?.name}</strong>:`
+            )}
           </p>
 
           ${availableRepos.length === 0
@@ -1917,9 +1992,9 @@ export class GnProfileManagerDialog extends LitElement {
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width: 48px; height: 48px; opacity: 0.5; margin-bottom: var(--spacing-sm);">
                     <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
                   </svg>
-                  <p>No unassigned repositories available.</p>
+                  <p>${msg('No unassigned repositories available.')}</p>
                   <p style="font-size: var(--font-size-sm); color: var(--color-text-tertiary);">
-                    Open some repositories first to add them here.
+                    ${msg('Open some repositories first to add them here.')}
                   </p>
                 </div>
               `
@@ -1964,10 +2039,10 @@ export class GnProfileManagerDialog extends LitElement {
     const details = this.getAccountDetails(account);
     const connectionStatus = this.getAccountConnectionStatus(account.id);
     const statusTitle = {
-      connected: 'Connected',
-      disconnected: 'Disconnected - token may be invalid',
-      checking: 'Checking connection...',
-      unknown: 'Connection status unknown',
+      connected: msg('Connected'),
+      disconnected: msg('Disconnected - token may be invalid'),
+      checking: msg('Checking connection...'),
+      unknown: msg('Connection status unknown'),
     }[connectionStatus];
 
     return html`
@@ -1989,7 +2064,7 @@ export class GnProfileManagerDialog extends LitElement {
         <div class="account-info">
           <div class="account-name">
             ${account.name}
-            ${account.isDefault ? html`<span class="default-badge">Default</span>` : nothing}
+            ${account.isDefault ? html`<span class="default-badge">${msg('Default')}</span>` : nothing}
             <span class="type-badge">${account.integrationType}</span>
           </div>
           ${details ? html`<div class="account-detail">${details}</div>` : nothing}
@@ -2010,13 +2085,13 @@ export class GnProfileManagerDialog extends LitElement {
       account,
       html`
         <div class="account-actions">
-          <button class="action-btn" @click=${() => this.handleEditAccount(account)} title="Edit account">
+          <button class="action-btn" @click=${() => this.handleEditAccount(account)} title=${msg('Edit account')}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
               <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
             </svg>
           </button>
-          <button class="action-btn delete" @click=${() => this.handleDetachAccount(type)} title="Detach from profile">
+          <button class="action-btn delete" @click=${() => this.handleDetachAccount(type)} title=${msg('Detach from profile')}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <line x1="18" y1="6" x2="6" y2="18"></line>
               <line x1="6" y1="6" x2="18" y2="18"></line>
@@ -2039,20 +2114,23 @@ export class GnProfileManagerDialog extends LitElement {
       <div class="form-content">
         <div class="form-section">
           <div class="attach-breadcrumb" data-testid="attach-breadcrumb">
-            Adding to <strong>${this.editingProfile?.name || 'this profile'}</strong>
+            ${msg(
+              html`Adding to <strong>${this.editingProfile?.name || msg('this profile')}</strong>`
+            )}
           </div>
           ${accounts.length === 0
             ? html`
                 <div class="empty-accounts">
-                  No integration accounts yet. Connect one below — once you return, it'll be
-                  attached to this profile automatically.
+                  ${msg(
+                    "No integration accounts yet. Connect one below — once you return, it'll be attached to this profile automatically."
+                  )}
                 </div>
               `
             : html`
                 <p style="color: var(--color-text-secondary); margin-bottom: var(--spacing-md);">
-                  Select an account to attach to <strong>${this.editingProfile?.name || 'this profile'}</strong>.
-                  A profile uses one account per provider, so choosing a provider you already have
-                  attached will replace it.
+                  ${msg(
+                    html`Select an account to attach to <strong>${this.editingProfile?.name || msg('this profile')}</strong>. A profile uses one account per provider, so choosing a provider you already have attached will replace it.`
+                  )}
                 </p>
                 <div class="accounts-list">
                   ${accounts.map((account) =>
@@ -2075,7 +2153,7 @@ export class GnProfileManagerDialog extends LitElement {
     const providers: IntegrationType[] = ['github', 'gitlab', 'bitbucket', 'azure-devops', 'oidc'];
     return html`
       <div class="form-section-title" style="margin-top: var(--spacing-lg);">
-        Connect a new account
+        ${msg('Connect a new account')}
       </div>
       <div style="display: flex; gap: var(--spacing-sm); flex-wrap: wrap; margin-top: var(--spacing-sm);">
         ${providers.map(
@@ -2106,7 +2184,7 @@ export class GnProfileManagerDialog extends LitElement {
           ${accounts.length === 0
             ? html`
                 <div class="empty-accounts">
-                  No integration accounts yet. Connect one below.
+                  ${msg('No integration accounts yet. Connect one below.')}
                 </div>
               `
             : html`
@@ -2129,7 +2207,7 @@ export class GnProfileManagerDialog extends LitElement {
       account,
       html`
         <div class="account-actions">
-          <button class="action-btn" @click=${() => this.handleEditAccount(account)} title="Edit account">
+          <button class="action-btn" @click=${() => this.handleEditAccount(account)} title=${msg('Edit account')}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
               <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
@@ -2138,7 +2216,7 @@ export class GnProfileManagerDialog extends LitElement {
           <button
             class="action-btn delete"
             @click=${() => this.handleDeleteGlobalAccount(account.id)}
-            title="Delete account (all profiles)"
+            title=${msg('Delete account (all profiles)')}
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="3 6 5 6 21 6"></polyline>
@@ -2248,17 +2326,17 @@ export class GnProfileManagerDialog extends LitElement {
     // Edit mode - show form for editing existing account metadata
     return html`
       <div class="form-group">
-        <label>Account Name</label>
+        <label>${msg('Account Name')}</label>
         <input
           type="text"
-          placeholder="e.g., Work GitHub, Personal GitLab"
+          placeholder=${msg('e.g., Work GitHub, Personal GitLab')}
           .value=${this.editingAccount.name ?? ''}
           @input=${(e: Event) => this.updateEditingAccount('name', (e.target as HTMLInputElement).value)}
         />
       </div>
 
       <div class="form-group">
-        <label>Integration Type</label>
+        <label>${msg('Integration Type')}</label>
         <select
           .value=${this.editingAccount.integrationType ?? 'github'}
           disabled
@@ -2269,33 +2347,33 @@ export class GnProfileManagerDialog extends LitElement {
           <option value="bitbucket" ?selected=${this.editingAccount.integrationType === 'bitbucket'}>Bitbucket</option>
           <option value="oidc" ?selected=${this.editingAccount.integrationType === 'oidc'}>Enterprise SSO (OIDC)</option>
         </select>
-        <div class="form-hint">Integration type cannot be changed</div>
+        <div class="form-hint">${msg('Integration type cannot be changed')}</div>
       </div>
 
       ${this.renderAccountConfigFields()}
 
       <div class="form-group">
-        <label>URL Patterns (one per line)</label>
+        <label>${msg('URL Patterns (one per line)')}</label>
         <textarea
           placeholder="github.com/mycompany/*&#10;github.com/another-org/*"
           .value=${(this.editingAccount.urlPatterns ?? []).join('\n')}
           @input=${this.handleAccountPatternsChange}
         ></textarea>
         <div class="form-hint">
-          Auto-select this account for repositories whose remote URL matches. Supports wildcards
-          (*). Account patterns take precedence over the profile's default account, so use them when
-          one repo needs a specific account of this type.
+          ${msg(
+            "Auto-select this account for repositories whose remote URL matches. Supports wildcards (*). Account patterns take precedence over the profile's default account, so use them when one repo needs a specific account of this type."
+          )}
         </div>
       </div>
 
       <div class="form-group">
-        <label>Color (optional)</label>
+        <label>${msg('Color (optional)')}</label>
         <div class="color-picker">
           <div
             class="color-option ${!this.editingAccount.color ? 'selected' : ''}"
             style="background: var(--color-bg-tertiary); border: 1px dashed var(--color-border);"
             @click=${() => this.updateEditingAccount('color', null)}
-            title="Inherit from profile"
+            title=${msg('Inherit from profile')}
           ></div>
           ${ACCOUNT_COLORS.map(
             (color) => html`
@@ -2307,7 +2385,7 @@ export class GnProfileManagerDialog extends LitElement {
             `
           )}
         </div>
-        <div class="form-hint">Leave unset to inherit the profile color</div>
+        <div class="form-hint">${msg('Leave unset to inherit the profile color')}</div>
       </div>
 
       <div class="checkbox-row">
@@ -2317,7 +2395,9 @@ export class GnProfileManagerDialog extends LitElement {
           .checked=${this.editingAccount.isDefault ?? false}
           @change=${(e: Event) => this.updateEditingAccount('isDefault', (e.target as HTMLInputElement).checked)}
         />
-        <label for="isDefault">Set as default ${INTEGRATION_TYPE_NAMES[this.editingAccount.integrationType ?? 'github']} account globally</label>
+        <label for="isDefault">${msg(
+          str`Set as default ${INTEGRATION_TYPE_NAMES[this.editingAccount.integrationType ?? 'github']} account globally`
+        )}</label>
       </div>
     `;
   }
@@ -2420,7 +2500,10 @@ export class GnProfileManagerDialog extends LitElement {
       // profile — honor that intent even if another account was already
       // attached for this provider (a profile holds one account per provider).
       if (previous && previous !== newlyConnected.id) {
-        showToast(`Replaced the previously attached ${INTEGRATION_TYPE_NAMES[type]} account`, 'info');
+        showToast(
+          msg(str`Replaced the previously attached ${INTEGRATION_TYPE_NAMES[type]} account`),
+          'info'
+        );
       }
       this.setEditingProfileAccount(type, newlyConnected.id);
       // Surface a hint near Save: the account is attached to the in-memory draft
@@ -2443,7 +2526,7 @@ export class GnProfileManagerDialog extends LitElement {
       const instanceUrl = config?.type === 'gitlab' ? config.instanceUrl : '';
       return html`
         <div class="form-group">
-          <label>GitLab Instance URL (optional)</label>
+          <label>${msg('GitLab Instance URL (optional)')}</label>
           <input
             type="url"
             placeholder="https://gitlab.com"
@@ -2453,7 +2536,7 @@ export class GnProfileManagerDialog extends LitElement {
               instanceUrl: (e.target as HTMLInputElement).value || 'https://gitlab.com',
             })}
           />
-          <div class="form-hint">Leave empty for gitlab.com, or enter your self-hosted GitLab URL</div>
+          <div class="form-hint">${msg('Leave empty for gitlab.com, or enter your self-hosted GitLab URL')}</div>
         </div>
       `;
     }
@@ -2462,7 +2545,7 @@ export class GnProfileManagerDialog extends LitElement {
       const organization = config?.type === 'azure-devops' ? config.organization : '';
       return html`
         <div class="form-group">
-          <label>Organization</label>
+          <label>${msg('Organization')}</label>
           <input
             type="text"
             placeholder="my-organization"
@@ -2472,7 +2555,7 @@ export class GnProfileManagerDialog extends LitElement {
               organization: (e.target as HTMLInputElement).value || '',
             })}
           />
-          <div class="form-hint">Your Azure DevOps organization name</div>
+          <div class="form-hint">${msg('Your Azure DevOps organization name')}</div>
         </div>
       `;
     }
@@ -2481,7 +2564,7 @@ export class GnProfileManagerDialog extends LitElement {
       const workspace = config?.type === 'bitbucket' ? config.workspace : '';
       return html`
         <div class="form-group">
-          <label>Workspace (optional)</label>
+          <label>${msg('Workspace (optional)')}</label>
           <input
             type="text"
             placeholder="my-workspace"
@@ -2491,7 +2574,7 @@ export class GnProfileManagerDialog extends LitElement {
               workspace: (e.target as HTMLInputElement).value || '',
             })}
           />
-          <div class="form-hint">Your Bitbucket workspace (usually your username or organization)</div>
+          <div class="form-hint">${msg('Your Bitbucket workspace (usually your username or organization)')}</div>
         </div>
       `;
     }
@@ -2501,7 +2584,7 @@ export class GnProfileManagerDialog extends LitElement {
       const clientId = config?.type === 'oidc' ? config.clientId : '';
       return html`
         <div class="form-group">
-          <label>Issuer URL</label>
+          <label>${msg('Issuer URL')}</label>
           <input
             type="url"
             placeholder="https://auth.example.com"
@@ -2512,10 +2595,10 @@ export class GnProfileManagerDialog extends LitElement {
               clientId,
             })}
           />
-          <div class="form-hint">Your OpenID Connect issuer URL (Enterprise SSO).</div>
+          <div class="form-hint">${msg('Your OpenID Connect issuer URL (Enterprise SSO).')}</div>
         </div>
         <div class="form-group">
-          <label>Client ID</label>
+          <label>${msg('Client ID')}</label>
           <input
             type="text"
             placeholder="your-client-id"
@@ -2526,7 +2609,7 @@ export class GnProfileManagerDialog extends LitElement {
               clientId: (e.target as HTMLInputElement).value || '',
             })}
           />
-          <div class="form-hint">The OAuth client ID registered with your IdP.</div>
+          <div class="form-hint">${msg('The OAuth client ID registered with your IdP.')}</div>
         </div>
       `;
     }

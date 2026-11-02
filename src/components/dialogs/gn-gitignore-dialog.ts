@@ -1,5 +1,6 @@
 import { LitElement, html, css, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
+import { localized, msg, str } from '@lit/localize';
 import { sharedStyles } from '../../styles/shared-styles.ts';
 import * as gitService from '../../services/git.service.ts';
 import { showConfirm } from '../../services/dialog.service.ts';
@@ -38,6 +39,7 @@ export function formatAttributeToken(attr: AttributeEntry): string {
  * for the repository the dialog was opened on.
  */
 @customElement('gn-gitignore-dialog')
+@localized()
 export class GnGitignoreDialog extends LitElement {
   static styles = [
     sharedStyles,
@@ -368,7 +370,7 @@ export class GnGitignoreDialog extends LitElement {
         this.entries = ignoreResult.data;
       } else if (!ignoreResult.success) {
         this.entries = [];
-        this.error = ignoreResult.error?.message || 'Failed to read .gitignore';
+        this.error = ignoreResult.error?.message || msg('Failed to read .gitignore');
       }
 
       if (templatesResult.success && templatesResult.data) {
@@ -383,7 +385,7 @@ export class GnGitignoreDialog extends LitElement {
         this.attributeRules = [];
         if (!this.error) {
           this.error =
-            attrsResult.error?.message || 'Failed to read .gitattributes';
+            attrsResult.error?.message || msg('Failed to read .gitattributes');
         }
       }
 
@@ -394,7 +396,7 @@ export class GnGitignoreDialog extends LitElement {
       }
     } catch (e) {
       if (targetRepo === this.pinnedRepoPath) {
-        this.error = e instanceof Error ? e.message : 'Failed to load ignore rules';
+        this.error = e instanceof Error ? e.message : msg('Failed to load ignore rules');
       }
     } finally {
       if (targetRepo === this.pinnedRepoPath) {
@@ -411,14 +413,14 @@ export class GnGitignoreDialog extends LitElement {
       if (result.success && result.data) {
         this.entries = result.data;
       } else if (!result.success) {
-        this.error = result.error?.message || 'Failed to read .gitignore';
+        this.error = result.error?.message || msg('Failed to read .gitignore');
       }
       // The rule set just moved, so any "why is this ignored?" answer on screen
       // describes a file state that no longer exists.
       this.checkResult = null;
     } catch (e) {
       if (targetRepo === this.pinnedRepoPath) {
-        this.error = e instanceof Error ? e.message : 'Failed to read .gitignore';
+        this.error = e instanceof Error ? e.message : msg('Failed to read .gitignore');
       }
     }
   }
@@ -454,13 +456,13 @@ export class GnGitignoreDialog extends LitElement {
       if (result.success) {
         this.newPattern = '';
         await this.reloadGitignore();
-        showToast(`Added "${pattern}" to .gitignore`, 'success');
+        showToast(msg(str`Added "${pattern}" to .gitignore`), 'success');
         this.notifyChanged();
       } else {
-        this.error = result.error?.message || 'Failed to add ignore rule';
+        this.error = result.error?.message || msg('Failed to add ignore rule');
       }
     } catch (e) {
-      this.error = e instanceof Error ? e.message : 'Failed to add ignore rule';
+      this.error = e instanceof Error ? e.message : msg('Failed to add ignore rule');
     } finally {
       this.saving = false;
     }
@@ -479,13 +481,13 @@ export class GnGitignoreDialog extends LitElement {
       );
       if (result.success) {
         await this.reloadGitignore();
-        showToast(`Applied the ${template.name} template`, 'success');
+        showToast(msg(str`Applied the ${template.name} template`), 'success');
         this.notifyChanged();
       } else {
-        this.error = result.error?.message || 'Failed to apply template';
+        this.error = result.error?.message || msg('Failed to apply template');
       }
     } catch (e) {
-      this.error = e instanceof Error ? e.message : 'Failed to apply template';
+      this.error = e instanceof Error ? e.message : msg('Failed to apply template');
     } finally {
       this.saving = false;
     }
@@ -493,8 +495,8 @@ export class GnGitignoreDialog extends LitElement {
 
   private async handleRemovePattern(entry: GitignoreEntry): Promise<void> {
     const confirmed = await showConfirm(
-      'Remove Ignore Rule',
-      `Remove "${entry.pattern.trim()}" from .gitignore?`,
+      msg('Remove Ignore Rule'),
+      msg(str`Remove "${entry.pattern.trim()}" from .gitignore?`),
       'warning',
     );
     if (!confirmed) return;
@@ -511,14 +513,14 @@ export class GnGitignoreDialog extends LitElement {
       );
       if (result.success) {
         await this.reloadGitignore();
-        showToast('Ignore rule removed', 'success');
+        showToast(msg('Ignore rule removed'), 'success');
         this.notifyChanged();
       } else {
-        this.error = result.error?.message || 'Failed to remove ignore rule';
+        this.error = result.error?.message || msg('Failed to remove ignore rule');
       }
     } catch (e) {
       this.error =
-        e instanceof Error ? e.message : 'Failed to remove ignore rule';
+        e instanceof Error ? e.message : msg('Failed to remove ignore rule');
     } finally {
       this.saving = false;
     }
@@ -538,11 +540,11 @@ export class GnGitignoreDialog extends LitElement {
       if (result.success && result.data) {
         this.checkResult = result.data[0] ?? null;
       } else {
-        this.error = result.error?.message || 'Failed to check path';
+        this.error = result.error?.message || msg('Failed to check path');
       }
     } catch (e) {
       if (targetRepo !== this.pinnedRepoPath) return;
-      this.error = e instanceof Error ? e.message : 'Failed to check path';
+      this.error = e instanceof Error ? e.message : msg('Failed to check path');
     }
   }
 
@@ -566,13 +568,13 @@ export class GnGitignoreDialog extends LitElement {
         this.attributeRules = result.data;
         this.newAttrPattern = '';
         this.newAttrValue = '';
-        showToast(`Added attributes for ${pattern}`, 'success');
+        showToast(msg(str`Added attributes for ${pattern}`), 'success');
         this.notifyChanged();
       } else {
-        this.error = result.error?.message || 'Failed to add attribute';
+        this.error = result.error?.message || msg('Failed to add attribute');
       }
     } catch (e) {
-      this.error = e instanceof Error ? e.message : 'Failed to add attribute';
+      this.error = e instanceof Error ? e.message : msg('Failed to add attribute');
     } finally {
       this.saving = false;
     }
@@ -607,13 +609,13 @@ export class GnGitignoreDialog extends LitElement {
       if (result.success && result.data) {
         this.attributeRules = result.data;
         this.cancelEditingAttribute();
-        showToast('Attributes updated', 'success');
+        showToast(msg('Attributes updated'), 'success');
         this.notifyChanged();
       } else {
-        this.error = result.error?.message || 'Failed to update attribute';
+        this.error = result.error?.message || msg('Failed to update attribute');
       }
     } catch (e) {
-      this.error = e instanceof Error ? e.message : 'Failed to update attribute';
+      this.error = e instanceof Error ? e.message : msg('Failed to update attribute');
     } finally {
       this.saving = false;
     }
@@ -621,8 +623,8 @@ export class GnGitignoreDialog extends LitElement {
 
   private async handleRemoveAttribute(attr: GitAttribute): Promise<void> {
     const confirmed = await showConfirm(
-      'Remove Attributes',
-      `Remove the .gitattributes rule for "${attr.pattern}"?`,
+      msg('Remove Attributes'),
+      msg(str`Remove the .gitattributes rule for "${attr.pattern}"?`),
       'warning',
     );
     if (!confirmed) return;
@@ -637,13 +639,13 @@ export class GnGitignoreDialog extends LitElement {
       if (result.success && result.data) {
         this.attributeRules = result.data;
         if (this.editingLine === attr.lineNumber) this.cancelEditingAttribute();
-        showToast('Attributes removed', 'success');
+        showToast(msg('Attributes removed'), 'success');
         this.notifyChanged();
       } else {
-        this.error = result.error?.message || 'Failed to remove attribute';
+        this.error = result.error?.message || msg('Failed to remove attribute');
       }
     } catch (e) {
-      this.error = e instanceof Error ? e.message : 'Failed to remove attribute';
+      this.error = e instanceof Error ? e.message : msg('Failed to remove attribute');
     } finally {
       this.saving = false;
     }
@@ -657,7 +659,7 @@ export class GnGitignoreDialog extends LitElement {
 
     if (!result.isIgnored) {
       return html`<div class="check-result">
-        <code>${result.path}</code> — Not ignored.
+        <code>${result.path}</code> — ${msg('Not ignored.')}
       </div>`;
     }
 
@@ -669,21 +671,23 @@ export class GnGitignoreDialog extends LitElement {
           : nothing;
 
     return html`<div class="check-result">
-      <code>${result.path}</code> is
-      ${result.isNegated ? 'explicitly NOT ignored' : 'ignored'} by
-      <code>${result.pattern ?? '(unknown rule)'}</code>${source}
+      <code>${result.path}</code>
+      ${result.isNegated
+        ? msg('is explicitly NOT ignored by')
+        : msg('is ignored by')}
+      <code>${result.pattern ?? msg('(unknown rule)')}</code>${source}
     </div>`;
   }
 
   private renderIgnoreTab() {
     if (this.loading) {
-      return html`<div class="loading-indicator">Loading...</div>`;
+      return html`<div class="loading-indicator">${msg('Loading...')}</div>`;
     }
 
     return html`
       ${this.entries.length === 0
         ? html`<div class="empty-state">
-            No ignore rules yet — add a pattern below, or start from a template.
+            ${msg('No ignore rules yet — add a pattern below, or start from a template.')}
           </div>`
         : html`
             <div class="rule-list">
@@ -695,8 +699,8 @@ export class GnGitignoreDialog extends LitElement {
                         <span class="rule-text">${entry.pattern}</span>
                         <button
                           class="btn-icon danger"
-                          title="Remove"
-                          aria-label="Remove ${entry.pattern.trim()}"
+                          title=${msg('Remove')}
+                          aria-label=${msg(str`Remove ${entry.pattern.trim()}`)}
                           ?disabled=${this.saving}
                           @click=${() => this.handleRemovePattern(entry)}
                         >
@@ -712,13 +716,13 @@ export class GnGitignoreDialog extends LitElement {
           `}
 
       <div class="section">
-        <h4>Add a rule</h4>
+        <h4>${msg('Add a rule')}</h4>
         <div class="inline-form">
           <input
             type="text"
-            placeholder="e.g. *.log or /build/"
+            placeholder=${msg('e.g. *.log or /build/')}
             .value=${this.newPattern}
-            aria-label="Ignore pattern"
+            aria-label=${msg('Ignore pattern')}
             @input=${(e: Event) =>
               (this.newPattern = (e.target as HTMLInputElement).value)}
             @keydown=${(e: KeyboardEvent) => {
@@ -730,21 +734,21 @@ export class GnGitignoreDialog extends LitElement {
             ?disabled=${this.saving || this.newPattern.trim().length === 0}
             @click=${this.handleAddPattern}
           >
-            Add
+            ${msg('Add')}
           </button>
         </div>
       </div>
 
       <div class="section">
-        <h4>Start from a template</h4>
+        <h4>${msg('Start from a template')}</h4>
         <div class="inline-form">
           <select
-            aria-label="Gitignore template"
+            aria-label=${msg('Gitignore template')}
             .value=${this.selectedTemplate}
             @change=${(e: Event) =>
               (this.selectedTemplate = (e.target as HTMLSelectElement).value)}
           >
-            <option value="">Select a template…</option>
+            <option value="">${msg('Select a template…')}</option>
             ${this.templates.map(
               (t) => html`<option value=${t.name}>${t.name}</option>`,
             )}
@@ -754,22 +758,22 @@ export class GnGitignoreDialog extends LitElement {
             ?disabled=${this.saving || !this.selectedTemplate}
             @click=${this.handleApplyTemplate}
           >
-            Apply
+            ${msg('Apply')}
           </button>
         </div>
         <div class="hint">
-          Patterns already present in .gitignore are left untouched.
+          ${msg('Patterns already present in .gitignore are left untouched.')}
         </div>
       </div>
 
       <div class="section">
-        <h4>Why is this ignored?</h4>
+        <h4>${msg('Why is this ignored?')}</h4>
         <div class="inline-form">
           <input
             type="text"
-            placeholder="e.g. build/output.js"
+            placeholder=${msg('e.g. build/output.js')}
             .value=${this.checkPath}
-            aria-label="Path to check"
+            aria-label=${msg('Path to check')}
             @input=${(e: Event) =>
               (this.checkPath = (e.target as HTMLInputElement).value)}
             @keydown=${(e: KeyboardEvent) => {
@@ -781,7 +785,7 @@ export class GnGitignoreDialog extends LitElement {
             ?disabled=${this.checkPath.trim().length === 0}
             @click=${this.handleCheckPath}
           >
-            Check
+            ${msg('Check')}
           </button>
         </div>
         ${this.renderCheckResult()}
@@ -796,14 +800,14 @@ export class GnGitignoreDialog extends LitElement {
           <div class="inline-form">
             <input
               type="text"
-              aria-label="Edit pattern"
+              aria-label=${msg('Edit pattern')}
               .value=${this.editPattern}
               @input=${(e: Event) =>
                 (this.editPattern = (e.target as HTMLInputElement).value)}
             />
             <input
               type="text"
-              aria-label="Edit attributes"
+              aria-label=${msg('Edit attributes')}
               .value=${this.editValue}
               @input=${(e: Event) =>
                 (this.editValue = (e.target as HTMLInputElement).value)}
@@ -817,10 +821,10 @@ export class GnGitignoreDialog extends LitElement {
               this.editValue.trim().length === 0}
               @click=${() => this.handleUpdateAttribute(attr.lineNumber)}
             >
-              Save
+              ${msg('Save')}
             </button>
             <button class="btn btn-secondary" @click=${this.cancelEditingAttribute}>
-              Cancel
+              ${msg('Cancel')}
             </button>
           </div>
         </div>
@@ -834,8 +838,8 @@ export class GnGitignoreDialog extends LitElement {
           <span>
             <button
               class="btn-icon"
-              title="Edit"
-              aria-label="Edit ${attr.pattern}"
+              title=${msg('Edit')}
+              aria-label=${msg(str`Edit ${attr.pattern}`)}
               ?disabled=${this.saving}
               @click=${() => this.startEditingAttribute(attr)}
             >
@@ -846,8 +850,8 @@ export class GnGitignoreDialog extends LitElement {
             </button>
             <button
               class="btn-icon danger"
-              title="Remove"
-              aria-label="Remove ${attr.pattern}"
+              title=${msg('Remove')}
+              aria-label=${msg(str`Remove ${attr.pattern}`)}
               ?disabled=${this.saving}
               @click=${() => this.handleRemoveAttribute(attr)}
             >
@@ -869,7 +873,7 @@ export class GnGitignoreDialog extends LitElement {
 
   private renderAttributesTab() {
     if (this.loading) {
-      return html`<div class="loading-indicator">Loading...</div>`;
+      return html`<div class="loading-indicator">${msg('Loading...')}</div>`;
     }
 
     // Hint for the attribute the user is currently typing: the last
@@ -883,19 +887,19 @@ export class GnGitignoreDialog extends LitElement {
     return html`
       ${this.attributeRules.length === 0
         ? html`<div class="empty-state">
-            No .gitattributes rules yet — add one below.
+            ${msg('No .gitattributes rules yet — add one below.')}
           </div>`
         : html`<div class="attr-list">
             ${this.attributeRules.map((attr) => this.renderAttributeItem(attr))}
           </div>`}
 
       <div class="section">
-        <h4>Add a rule</h4>
+        <h4>${msg('Add a rule')}</h4>
         <div class="inline-form">
           <input
             type="text"
-            placeholder="Pattern, e.g. *.psd"
-            aria-label="Attribute pattern"
+            placeholder=${msg('Pattern, e.g. *.psd')}
+            aria-label=${msg('Attribute pattern')}
             .value=${this.newAttrPattern}
             @input=${(e: Event) =>
               (this.newAttrPattern = (e.target as HTMLInputElement).value)}
@@ -903,8 +907,8 @@ export class GnGitignoreDialog extends LitElement {
           <input
             type="text"
             list="gn-common-attributes"
-            placeholder="Attributes, e.g. binary"
-            aria-label="Attributes"
+            placeholder=${msg('Attributes, e.g. binary')}
+            aria-label=${msg('Attributes')}
             .value=${this.newAttrValue}
             @input=${(e: Event) =>
               (this.newAttrValue = (e.target as HTMLInputElement).value)}
@@ -924,14 +928,14 @@ export class GnGitignoreDialog extends LitElement {
             this.newAttrValue.trim().length === 0}
             @click=${this.handleAddAttribute}
           >
-            Add
+            ${msg('Add')}
           </button>
         </div>
         <div class="hint">
           ${selected
-            ? html`${selected.name}: ${selected.description} — e.g.
+            ? html`${selected.name}: ${selected.description} — ${msg('e.g.')}
               <code>${selected.example}</code>`
-            : html`Common attributes:
+            : html`${msg('Common attributes:')}
               ${this.commonAttributes.map((c) => c.name).join(', ')}`}
         </div>
       </div>
@@ -942,7 +946,7 @@ export class GnGitignoreDialog extends LitElement {
     if (!this.open) return null;
 
     return html`
-      <gn-modal modalTitle="Ignore Rules & Attributes" open @close=${this.handleClose}>
+      <gn-modal modalTitle=${msg('Ignore Rules & Attributes')} open @close=${this.handleClose}>
         <div class="content">
           ${this.error
             ? html`

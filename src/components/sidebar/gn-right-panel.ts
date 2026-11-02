@@ -1,7 +1,14 @@
 import { LitElement, html, css, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
+import { localized, msg } from '@lit/localize';
 import { sharedStyles } from '../../styles/shared-styles.ts';
 import { repositoryStore } from '../../stores/index.ts';
+import {
+  settingsStore,
+  clampCommitPanelHeight,
+  MIN_COMMIT_PANEL_HEIGHT,
+  MAX_COMMIT_PANEL_HEIGHT,
+} from '../../stores/settings.store.ts';
 import * as gitService from '../../services/git.service.ts';
 import './gn-file-status.ts';
 import './gn-commit-panel.ts';
@@ -16,6 +23,7 @@ type TabType = 'changes' | 'details' | 'analytics';
  * Contains file status, commit panel, and commit details in a unified tabbed interface
  */
 @customElement('gn-right-panel')
+@localized()
 export class GnRightPanel extends LitElement {
   static styles = [
     sharedStyles,
@@ -115,6 +123,7 @@ export class GnRightPanel extends LitElement {
         flex-direction: column;
         flex: 1;
         overflow: hidden;
+        min-height: 0;
       }
 
       .file-status-container {
@@ -123,9 +132,48 @@ export class GnRightPanel extends LitElement {
         min-height: 100px;
       }
 
+      /* Vertical drag handle between the staged-file list and the commit
+         panel. The visible rule is a 2px pseudo-element inside a taller grab
+         area, so the divider is easy to hit without looking heavy. */
+      .resize-handle-v {
+        flex: 0 0 7px;
+        position: relative;
+        cursor: row-resize;
+        background: transparent;
+        touch-action: none;
+        z-index: 5;
+      }
+
+      .resize-handle-v::after {
+        content: '';
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 3px;
+        height: 1px;
+        background: var(--color-border);
+        transition: background-color 0.15s ease;
+      }
+
+      .resize-handle-v:hover::after,
+      .resize-handle-v.dragging::after,
+      .resize-handle-v:focus-visible::after {
+        background: var(--color-primary);
+      }
+
+      .resize-handle-v:focus-visible {
+        outline: none;
+      }
+
+      :host(.resizing-v),
+      :host(.resizing-v) * {
+        cursor: row-resize !important;
+        user-select: none;
+      }
+
       .commit-panel-container {
         flex-shrink: 0;
-        border-top: 1px solid var(--color-border);
+        overflow-y: auto;
       }
 
       /* Details panel layout */
@@ -181,9 +229,19 @@ export class GnRightPanel extends LitElement {
   @state() private githubOwner: string = '';
   @state() private githubRepo: string = '';
   @state() private hasUnseenChanges: boolean = false;
+  /** Height of the commit panel, in CSS px — user-resizable, persisted. */
+  @state() private commitPanelHeight: number = settingsStore.getState().commitPanelHeight;
+  @state() private resizingCommitPanel = false;
 
   private unsubscribe?: () => void;
   private previousCommitOid: string | null = null;
+
+  /** Pointer position and panel height captured at drag start. */
+  private resizeStartY = 0;
+  private resizeStartHeight = 0;
+  /** Latest coalesced pointer position while dragging the divider. */
+  private resizePendingClientY: number | null = null;
+  private resizeRafId: number | null = null;
 
   connectedCallback(): void {
     super.connectedCallback();
@@ -192,6 +250,11 @@ export class GnRightPanel extends LitElement {
     if (this.repositoryPath) {
       this.detectGitHubRepo();
     }
+
+    // The store is the persisted authority for the divider position; read it
+    // once here (declaration defaults run before persistence rehydrates in a
+    // fresh session) and keep a reset-to-defaults in Settings in step.
+    this.commitPanelHeight = settingsStore.getState().commitPanelHeight;
 
     this.unsubscribe = repositoryStore.subscribe((state) => {
       const activeRepo = state.getActiveRepository();
@@ -232,6 +295,9 @@ export class GnRightPanel extends LitElement {
   disconnectedCallback(): void {
     super.disconnectedCallback();
     this.unsubscribe?.();
+    this.cancelPendingCommitPanelResizeFrame();
+    this.resizePendingClientY = null;
+    this.removeCommitPanelResizeListeners();
     this.removeEventListener('keydown', this.handleKeyDown);
   }
 
@@ -262,6 +328,121 @@ export class GnRightPanel extends LitElement {
       e.preventDefault();
       this.switchTab('analytics');
     }
+  };
+
+  // ========================================================================
+  // Commit panel divider (drag to resize the panel vertically)
+  // ========================================================================
+
+  /**
+   * The tallest the commit panel may be while still leaving the staged-file
+   * list usable. Measured from this element's own height, because the tab bar
+   * and the divider live outside the two panes the store's bounds describe.
+   */
+  private commitPanelMaxHeight(): number {
+    const total = this.clientHeight;
+    if (!total) return MAX_COMMIT_PANEL_HEIGHT;
+    // The tab bar plus the divider row live outside both panes; keep at least
+    // the file list's own 100px min-height plus a little breathing room.
+    const available = total - 34 - 120;
+    return Math.max(MIN_COMMIT_PANEL_HEIGHT, Math.min(MAX_COMMIT_PANEL_HEIGHT, available));
+  }
+
+  private clampCommitPanelToViewport(value: number): number {
+    return Math.min(this.commitPanelMaxHeight(), clampCommitPanelHeight(value));
+  }
+
+  private handleCommitPanelResizeStart = (e: MouseEvent): void => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+
+    this.resizingCommitPanel = true;
+    this.resizeStartY = e.clientY;
+    this.resizeStartHeight = this.commitPanelHeight;
+    this.classList.add('resizing-v');
+
+    document.addEventListener('mousemove', this.handleCommitPanelResizeMove);
+    document.addEventListener('mouseup', this.handleCommitPanelResizeEnd);
+  };
+
+  private handleCommitPanelResizeMove = (e: MouseEvent): void => {
+    if (!this.resizingCommitPanel) return;
+
+    // Only remember where the pointer is; the height is assigned once per frame
+    // below. Writing it here re-renders the whole sidebar at pointer-event rate
+    // for a value the user can only ever see once per frame.
+    this.resizePendingClientY = e.clientY;
+    if (this.resizeRafId !== null) return;
+    this.resizeRafId = requestAnimationFrame(() => {
+      this.resizeRafId = null;
+      this.applyPendingCommitPanelResize();
+    });
+  };
+
+  private applyPendingCommitPanelResize(): void {
+    const clientY = this.resizePendingClientY;
+    if (clientY === null || !this.resizingCommitPanel) return;
+    this.resizePendingClientY = null;
+
+    // Dragging UP grows the commit panel: clientY decreases, so invert.
+    const delta = this.resizeStartY - clientY;
+    this.commitPanelHeight = this.clampCommitPanelToViewport(this.resizeStartHeight + delta);
+  }
+
+  private handleCommitPanelResizeEnd = (): void => {
+    // Flush the last coalesced move BEFORE clearing `resizingCommitPanel`
+    // (which applyPendingCommitPanelResize checks): mouseup usually lands in
+    // the same frame as the final mousemove, and dropping that frame would
+    // persist a height a few pixels from where the user released the divider.
+    this.cancelPendingCommitPanelResizeFrame();
+    this.applyPendingCommitPanelResize();
+    this.resizingCommitPanel = false;
+    this.classList.remove('resizing-v');
+    this.removeCommitPanelResizeListeners();
+
+    settingsStore.getState().setCommitPanelHeight(this.commitPanelHeight);
+  };
+
+  private removeCommitPanelResizeListeners(): void {
+    document.removeEventListener('mousemove', this.handleCommitPanelResizeMove);
+    document.removeEventListener('mouseup', this.handleCommitPanelResizeEnd);
+  }
+
+  private cancelPendingCommitPanelResizeFrame(): void {
+    if (this.resizeRafId !== null) {
+      cancelAnimationFrame(this.resizeRafId);
+      this.resizeRafId = null;
+    }
+  }
+
+  /** Keyboard resizing for the divider: arrows adjust, Home/End go to bounds. */
+  private handleCommitPanelResizeKeyDown = (e: KeyboardEvent): void => {
+    const step = e.shiftKey ? 40 : 10;
+    let next: number;
+    switch (e.key) {
+      case 'ArrowUp':
+        next = this.commitPanelHeight + step;
+        break;
+      case 'ArrowDown':
+        next = this.commitPanelHeight - step;
+        break;
+      case 'Home':
+        next = MIN_COMMIT_PANEL_HEIGHT;
+        break;
+      case 'End':
+        next = this.commitPanelMaxHeight();
+        break;
+      default:
+        return;
+    }
+    e.preventDefault();
+    // Arrow/Home/End are global shortcuts too (previous/next commit, first/last
+    // row), and the document-level keyboard service would also act on them,
+    // switching the panel to Details and hiding the divider mid-resize. While
+    // the divider has focus, these keys belong to the divider.
+    e.stopPropagation();
+    this.commitPanelHeight = this.clampCommitPanelToViewport(next);
+    settingsStore.getState().setCommitPanelHeight(this.commitPanelHeight);
   };
 
   private switchTab(tab: TabType): void {
@@ -301,7 +482,7 @@ export class GnRightPanel extends LitElement {
 
   render() {
     if (!this.repositoryPath) {
-      return html`<div class="placeholder">No repository open</div>`;
+      return html`<div class="placeholder">${msg('No repository open')}</div>`;
     }
 
     return html`
@@ -309,26 +490,26 @@ export class GnRightPanel extends LitElement {
         <button
           class="tab ${this.activeTab === 'changes' ? 'active' : ''}"
           @click=${() => this.switchTab('changes')}
-          title="Working Changes (Ctrl+Shift+1)"
+          title=${msg('Working Changes (Ctrl+Shift+1)')}
         >
-          <span>Changes</span>
+          <span>${msg('Changes')}</span>
           ${this.changesCount > 0 ? html`<span class="badge">${this.changesCount}</span>` : nothing}
           ${this.hasUnseenChanges && this.activeTab !== 'changes' ? html`<span class="indicator"></span>` : nothing}
         </button>
         <button
           class="tab ${this.activeTab === 'details' ? 'active' : ''}"
           @click=${() => this.switchTab('details')}
-          title="Commit Details (Ctrl+Shift+2)"
+          title=${msg('Commit Details (Ctrl+Shift+2)')}
         >
-          <span>Details</span>
+          <span>${msg('Details')}</span>
           ${this.commit ? html`<span class="badge">${this.commit.oid.slice(0, 7)}</span>` : nothing}
         </button>
         <button
           class="tab ${this.activeTab === 'analytics' ? 'active' : ''}"
           @click=${() => this.switchTab('analytics')}
-          title="Repository Analytics (Ctrl+Shift+3)"
+          title=${msg('Repository Analytics (Ctrl+Shift+3)')}
         >
-          <span>Analytics</span>
+          <span>${msg('Analytics')}</span>
         </button>
       </div>
 
@@ -342,7 +523,23 @@ export class GnRightPanel extends LitElement {
                 @status-changed=${this.handleStatusChanged}
               ></gn-file-status>
             </div>
-            <div class="commit-panel-container">
+            <div
+              class="resize-handle-v ${this.resizingCommitPanel ? 'dragging' : ''}"
+              role="separator"
+              aria-orientation="horizontal"
+              aria-label=${msg('Resize commit panel')}
+              aria-valuenow=${this.commitPanelHeight}
+              aria-valuemin=${MIN_COMMIT_PANEL_HEIGHT}
+              aria-valuemax=${this.commitPanelMaxHeight()}
+              tabindex="0"
+              title=${msg('Drag to resize the commit panel')}
+              @mousedown=${this.handleCommitPanelResizeStart}
+              @keydown=${this.handleCommitPanelResizeKeyDown}
+            ></div>
+            <div
+              class="commit-panel-container"
+              style="height: ${this.commitPanelHeight}px"
+            >
               <gn-commit-panel
                 .repositoryPath=${this.repositoryPath}
                 .stagedCount=${this.stagedCount}

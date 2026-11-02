@@ -2,11 +2,19 @@
  * Formatting utilities
  */
 
+import { msg, str } from '@lit/localize';
+
 /**
- * Format a date relative to now
+ * Format a date relative to now.
+ *
+ * Every branch is its own message rather than a number plus an English unit
+ * suffix: a suffix cannot be translated (and `msg()` at module scope would
+ * freeze at the startup locale), so the whole phrase carries the wording.
+ * The compact `2m ago`/`3d ago` shape is deliberate — blame rows are narrow —
+ * which is why the translations use short forms too.
  */
 export function formatRelativeTime(timestamp: number): string {
-  if (typeof timestamp !== 'number' || !isFinite(timestamp)) return 'unknown';
+  if (typeof timestamp !== 'number' || !isFinite(timestamp)) return msg('unknown');
   const now = Date.now();
   const diff = now - timestamp * 1000;
   const seconds = Math.floor(diff / 1000);
@@ -17,13 +25,13 @@ export function formatRelativeTime(timestamp: number): string {
   const months = Math.floor(days / 30);
   const years = Math.floor(days / 365);
 
-  if (seconds < 60) return 'just now';
-  if (minutes < 60) return `${minutes}m ago`;
-  if (hours < 24) return `${hours}h ago`;
-  if (days < 7) return `${days}d ago`;
-  if (weeks < 4) return `${weeks}w ago`;
-  if (months < 12) return `${months}mo ago`;
-  return `${years}y ago`;
+  if (seconds < 60) return msg('just now');
+  if (minutes < 60) return msg(str`${minutes}m ago`);
+  if (hours < 24) return msg(str`${hours}h ago`);
+  if (days < 7) return msg(str`${days}d ago`);
+  if (weeks < 4) return msg(str`${weeks}w ago`);
+  if (months < 12) return msg(str`${months}mo ago`);
+  return msg(str`${years}y ago`);
 }
 
 /**

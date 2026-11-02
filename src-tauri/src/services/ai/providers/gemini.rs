@@ -1,7 +1,7 @@
 //! Google Gemini AI provider
 
 use crate::services::ai::{
-    AiProvider, AiProviderType, GeneratedCommitMessage, COMMIT_MESSAGE_PROMPT,
+    commit_message_prompt, AiProvider, AiProviderType, GeneratedCommitMessage, PromptLanguage,
 };
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -128,13 +128,14 @@ impl AiProvider for GeminiProvider {
         &self,
         diff: &str,
         model: Option<&str>,
+        language: PromptLanguage,
     ) -> Result<GeneratedCommitMessage, String> {
         let model_name = model.unwrap_or(AiProviderType::GoogleGemini.default_model());
 
         let request_body = GenerateContentRequest {
             contents: vec![Content {
                 parts: vec![Part {
-                    text: format!("{}{}", COMMIT_MESSAGE_PROMPT, diff),
+                    text: format!("{}{}", commit_message_prompt(language), diff),
                 }],
             }],
             system_instruction: None,

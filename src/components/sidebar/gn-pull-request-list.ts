@@ -15,6 +15,7 @@
 
 import { LitElement, html, css, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
+import { localized, msg, str } from '@lit/localize';
 import { repeat } from 'lit/directives/repeat.js';
 import { sharedStyles, buttonStyles } from '../../styles/shared-styles.ts';
 import { settingsStore } from '../../stores/settings.store.ts';
@@ -53,6 +54,7 @@ interface CacheEntry {
 }
 
 @customElement('gn-pull-request-list')
+@localized()
 export class GnPullRequestList extends LitElement {
   static styles = [
     sharedStyles,
@@ -461,7 +463,8 @@ export class GnPullRequestList extends LitElement {
         state: 'error',
         target,
         pullRequests: [],
-        errorMessage: result.error?.message ?? `Failed to load ${target.itemNounPlural}`,
+        errorMessage:
+          result.error?.message ?? msg(str`Failed to load ${target.itemNounPlural}`),
       });
     } catch (err) {
       if (!isFresh()) return;
@@ -469,7 +472,8 @@ export class GnPullRequestList extends LitElement {
         state: 'error',
         target: this.target,
         pullRequests: [],
-        errorMessage: err instanceof Error ? err.message : 'Failed to load pull requests',
+        errorMessage:
+          err instanceof Error ? err.message : msg('Failed to load pull requests'),
       });
     }
   }
@@ -512,7 +516,7 @@ export class GnPullRequestList extends LitElement {
     );
   }
 
-  private renderRetry(label = 'Retry') {
+  private renderRetry(label = msg('Retry')) {
     return html`
       <button class="btn btn-secondary btn-sm" @click=${() => void this.refresh()}>
         ${label}
@@ -521,7 +525,7 @@ export class GnPullRequestList extends LitElement {
   }
 
   private renderBody() {
-    const noun = this.target?.itemNounPlural ?? 'pull requests';
+    const noun = this.target?.itemNounPlural ?? msg('pull requests');
 
     switch (this.listState) {
       case 'idle':
@@ -530,69 +534,81 @@ export class GnPullRequestList extends LitElement {
         return nothing;
 
       case 'loading':
-        return html`<div class="loading">Loading ${noun}...</div>`;
+        return html`<div class="loading">${msg(str`Loading ${noun}...`)}</div>`;
 
       case 'no-provider':
         return html`
           <div class="notice">
             <span class="notice-message">
-              No GitHub, GitLab, Bitbucket or Azure DevOps remote was detected for this
-              repository.
+              ${msg(
+                'No GitHub, GitLab, Bitbucket or Azure DevOps remote was detected for this repository.'
+              )}
             </span>
           </div>
         `;
 
-      case 'offline':
+      case 'offline': {
+        const offlineNoun = this.target?.itemNounTitle ?? msg('Pull requests');
         return html`
           <div class="notice">
             <span class="notice-message">
-              ${this.target?.itemNounTitle ?? 'Pull requests'} are unavailable while offline
-              mode is enabled. Disable it in Settings &gt; Security.
+              ${msg(
+                str`${offlineNoun} are unavailable while offline mode is enabled. Disable it in Settings > Security.`
+              )}
             </span>
-            ${this.renderRetry('Try again')}
+            ${this.renderRetry(msg('Try again'))}
           </div>
         `;
+      }
 
-      case 'blocked':
+      case 'blocked': {
+        const blockedProvider = this.target?.providerName ?? msg('This provider');
         return html`
           <div class="notice">
             <span class="notice-message">
-              ${this.target?.providerName ?? 'This provider'} is not in your remote allowlist,
-              so its ${noun} cannot be loaded. Update the allowlist in Settings &gt; Security.
+              ${msg(
+                str`${blockedProvider} is not in your remote allowlist, so its ${noun} cannot be loaded. Update the allowlist in Settings > Security.`
+              )}
             </span>
-            ${this.renderRetry('Try again')}
+            ${this.renderRetry(msg('Try again'))}
           </div>
         `;
+      }
 
-      case 'unauthenticated':
+      case 'unauthenticated': {
+        const connectedProvider = this.target?.providerName ?? msg('this provider');
         return html`
           <div class="notice">
             <span class="notice-message">
-              Not connected to ${this.target?.providerName ?? 'this provider'}. Connect an
-              account to see this repository's ${noun}.
+              ${msg(
+                str`Not connected to ${connectedProvider}. Connect an account to see this repository's ${noun}.`
+              )}
             </span>
             <button class="btn btn-primary btn-sm" @click=${this.handleConnect}>
-              Connect to ${this.target?.providerName ?? 'provider'}
+              ${this.target
+                ? msg(str`Connect to ${this.target.providerName}`)
+                : msg('Connect to provider')}
             </button>
             <!-- The sign-in happens in a dialog this element never hears back
                  from, so the user always keeps a way to say "I have connected
                  now" — the store subscription covers the cases it can see,
                  this covers the rest. -->
-            ${this.renderRetry('Try again')}
+            ${this.renderRetry(msg('Try again'))}
           </div>
         `;
+      }
 
       case 'error':
         return html`
           <div class="notice error-notice">
-            <span class="notice-message">${this.errorMessage ?? `Failed to load ${noun}`}</span>
+            <span class="notice-message">${this.errorMessage ?? msg(str`Failed to load ${noun}`)}</span>
             ${this.renderRetry()}
           </div>
         `;
 
       case 'ready':
         if (this.pullRequests.length === 0) {
-          return html`<div class="empty">No open ${noun}</div>`;
+          return html`<div class="empty">${msg(str`No open ${noun}`)}</div>`;
         }
         return html`
           ${this.target
@@ -610,8 +626,8 @@ export class GnPullRequestList extends LitElement {
                     class="pr-item"
                     href=${pr.url}
                     rel="noreferrer noopener"
-                    aria-label="${pr.title}, #${pr.number}, opens in browser"
-                    title="${pr.title} (${pr.sourceBranch} → ${pr.targetBranch}) - opens in your browser"
+                    aria-label=${msg(str`${pr.title}, #${pr.number}, opens in browser`)}
+                    title=${msg(str`${pr.title} (${pr.sourceBranch} → ${pr.targetBranch}) - opens in your browser`)}
                     @click=${(e: MouseEvent) => this.handleItemClick(e, pr)}
                     @keydown=${(e: KeyboardEvent) => this.handleItemKeydown(e, pr)}
                   >
@@ -636,7 +652,7 @@ export class GnPullRequestList extends LitElement {
                         <span>${pr.sourceBranch} → ${pr.targetBranch}</span>
                       </div>
                     </div>
-                    ${pr.draft ? html`<span class="pr-badge">Draft</span>` : nothing}
+                    ${pr.draft ? html`<span class="pr-badge">${msg('Draft')}</span>` : nothing}
                     ${pr.status
                       ? html`<span class="pr-badge conflicts">${pr.status}</span>`
                       : nothing}

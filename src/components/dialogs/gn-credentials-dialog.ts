@@ -1,5 +1,6 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
+import { localized, msg, str } from '@lit/localize';
 import { sharedStyles } from '../../styles/shared-styles.ts';
 import * as gitService from '../../services/git.service.ts';
 import { showConfirm } from '../../services/dialog.service.ts';
@@ -19,6 +20,7 @@ type TabId = 'helpers' | 'test';
  * Manage git credential helpers and test credentials
  */
 @customElement('gn-credentials-dialog')
+@localized()
 export class GnCredentialsDialog extends LitElement {
   static styles = [
     sharedStyles,
@@ -482,7 +484,7 @@ export class GnCredentialsDialog extends LitElement {
         this.helpers = helpersResult.data;
       } else if (!helpersResult.success) {
         this.helpers = [];
-        this.error = helpersResult.error?.message || 'Failed to load credential helpers';
+        this.error = helpersResult.error?.message || msg('Failed to load credential helpers');
       }
 
       if (availableResult.success && availableResult.data) {
@@ -505,7 +507,7 @@ export class GnCredentialsDialog extends LitElement {
         this.remotes = [];
         this.selectedRemote = null;
         if (!this.error) {
-          this.error = remotesResult.error?.message || 'Failed to load remotes';
+          this.error = remotesResult.error?.message || msg('Failed to load remotes');
         }
       }
 
@@ -524,7 +526,7 @@ export class GnCredentialsDialog extends LitElement {
       }
     } catch (e) {
       if (targetRepo === this.pinnedRepoPath) {
-        this.error = e instanceof Error ? e.message : 'Failed to load data';
+        this.error = e instanceof Error ? e.message : msg('Failed to load data');
       }
     } finally {
       if (targetRepo === this.pinnedRepoPath) {
@@ -551,13 +553,13 @@ export class GnCredentialsDialog extends LitElement {
 
       if (result.success) {
         this.newHelper = '';
-        showToast('Credential helper configured', 'success');
+        showToast(msg('Credential helper configured'), 'success');
         await this.loadData();
       } else {
-        this.error = result.error?.message || 'Failed to set helper';
+        this.error = result.error?.message || msg('Failed to set helper');
       }
     } catch (e) {
-      this.error = e instanceof Error ? e.message : 'Failed to set helper';
+      this.error = e instanceof Error ? e.message : msg('Failed to set helper');
     }
   }
 
@@ -576,11 +578,17 @@ export class GnCredentialsDialog extends LitElement {
   private async handleRemoveHelper(helper: CredentialHelper): Promise<void> {
     const target = this.removalTarget(helper);
     if (!target) {
-      this.error = `"${helper.name}" is configured in the ${helper.configScope} git config, which this dialog cannot change.`;
+      this.error = msg(
+        str`"${helper.name}" is configured in the ${helper.configScope} git config, which this dialog cannot change.`,
+      );
       return;
     }
 
-    const confirmed = await showConfirm('Remove Helper', `Remove credential helper "${helper.name}"?`, 'warning');
+    const confirmed = await showConfirm(
+      msg('Remove Helper'),
+      msg(str`Remove credential helper "${helper.name}"?`),
+      'warning',
+    );
     if (!confirmed) return;
 
     this.error = null;
@@ -593,13 +601,13 @@ export class GnCredentialsDialog extends LitElement {
       );
 
       if (result.success) {
-        showToast('Credential helper removed', 'success');
+        showToast(msg('Credential helper removed'), 'success');
         await this.loadData();
       } else {
-        this.error = result.error?.message || 'Failed to remove helper';
+        this.error = result.error?.message || msg('Failed to remove helper');
       }
     } catch (e) {
-      this.error = e instanceof Error ? e.message : 'Failed to remove helper';
+      this.error = e instanceof Error ? e.message : msg('Failed to remove helper');
     }
   }
 
@@ -621,10 +629,10 @@ export class GnCredentialsDialog extends LitElement {
       } else if (!gitService.isNetworkGateRefusal(result.error)) {
         // A gate refusal has already been toasted with its own reason;
         // repeating it inline would say the same thing twice.
-        this.error = result.error?.message || 'Failed to test credentials';
+        this.error = result.error?.message || msg('Failed to test credentials');
       }
     } catch (e) {
-      this.error = e instanceof Error ? e.message : 'Failed to test credentials';
+      this.error = e instanceof Error ? e.message : msg('Failed to test credentials');
     } finally {
       this.testing = false;
     }
@@ -672,10 +680,10 @@ export class GnCredentialsDialog extends LitElement {
    * holding a username whose token was revoked, is in exactly that state.
    */
   private testResultHeadline(result: CredentialTestResult, tone: string): string {
-    if (tone === 'success') return 'Credentials Working';
-    if (tone === 'info') return 'No Credentials Needed';
-    if (result.protocol === 'ssh') return 'SSH Authentication Failed';
-    return result.username ? 'Password Not Stored' : 'No Credentials Found';
+    if (tone === 'success') return msg('Credentials Working');
+    if (tone === 'info') return msg('No Credentials Needed');
+    if (result.protocol === 'ssh') return msg('SSH Authentication Failed');
+    return result.username ? msg('Password Not Stored') : msg('No Credentials Found');
   }
 
   /**
@@ -715,9 +723,11 @@ export class GnCredentialsDialog extends LitElement {
       // Not "a local repository": a UNC share lands here too, and it is not on
       // this machine — git simply opens it as a path and asks no helper about
       // it, which is the whole of what this sentence has to say.
-      return 'Git opens this remote as a filesystem path, so there is no credential to store for it.';
+      return msg('Git opens this remote as a filesystem path, so there is no credential to store for it.');
     }
-    return `${result.protocol}:// remotes do not authenticate, so nothing is stored for ${result.host}.`;
+    return msg(
+      str`${result.protocol}:// remotes do not authenticate, so nothing is stored for ${result.host}.`,
+    );
   }
 
   /**
@@ -731,8 +741,10 @@ export class GnCredentialsDialog extends LitElement {
     if (!this.testResult) return;
 
     const confirmed = await showConfirm(
-      'Erase Credentials',
-      `Erase stored credentials for ${this.testResult.host}?\n\nYou will need to re-authenticate on your next push/pull.`,
+      msg('Erase Credentials'),
+      msg(
+        str`Erase stored credentials for ${this.testResult.host}?\n\nYou will need to re-authenticate on your next push/pull.`
+      ),
       'warning'
     );
     if (!confirmed) return;
@@ -750,16 +762,16 @@ export class GnCredentialsDialog extends LitElement {
         this.testResult = null;
         await this.handleTestCredentials();
       } else {
-        this.error = result.error?.message || 'Failed to erase credentials';
+        this.error = result.error?.message || msg('Failed to erase credentials');
       }
     } catch (e) {
-      this.error = e instanceof Error ? e.message : 'Failed to erase credentials';
+      this.error = e instanceof Error ? e.message : msg('Failed to erase credentials');
     }
   }
 
   private renderHelpersTab() {
     if (this.loading) {
-      return html`<div class="loading-indicator">Loading...</div>`;
+      return html`<div class="loading-indicator">${msg('Loading...')}</div>`;
     }
 
     return html`
@@ -786,8 +798,10 @@ export class GnCredentialsDialog extends LitElement {
                       class="btn-icon danger"
                       ?disabled=${this.removalTarget(helper) === null}
                       title=${this.removalTarget(helper) === null
-                        ? `Configured in the ${helper.configScope} git config — remove it there`
-                        : 'Remove helper'}
+                        ? msg(
+                            str`Configured in the ${helper.configScope} git config — remove it there`,
+                          )
+                        : msg('Remove helper')}
                       @click=${() => this.handleRemoveHelper(helper)}
                     >
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -802,34 +816,34 @@ export class GnCredentialsDialog extends LitElement {
           `
         : html`
             <div class="empty-state" style="padding: var(--spacing-md)">
-              <p>No credential helpers configured</p>
+              <p>${msg('No credential helpers configured')}</p>
             </div>
           `}
 
       <div class="add-helper-form">
-        <h4>Configure Credential Helper</h4>
+        <h4>${msg('Configure Credential Helper')}</h4>
         <div class="scope-toggle">
           <button
             class="scope-btn ${this.newHelperScope === 'global' ? 'active' : ''}"
             @click=${() => (this.newHelperScope = 'global')}
           >
-            Global
+            ${msg('Global')}
           </button>
           <button
             class="scope-btn ${this.newHelperScope === 'local' ? 'active' : ''}"
             @click=${() => (this.newHelperScope = 'local')}
           >
-            Repository
+            ${msg('Repository')}
           </button>
         </div>
 
         <div class="form-group">
-          <label>Helper</label>
+          <label>${msg('Helper')}</label>
           <select
             .value=${this.newHelper}
             @change=${(e: Event) => (this.newHelper = (e.target as HTMLSelectElement).value)}
           >
-            <option value="">Select a helper...</option>
+            <option value="">${msg('Select a helper...')}</option>
             ${this.availableHelpers
               .filter((h) => h.available)
               .map(
@@ -839,7 +853,7 @@ export class GnCredentialsDialog extends LitElement {
               )}
           </select>
           <div class="hint">
-            Credential helpers securely store your Git passwords and tokens
+            ${msg('Credential helpers securely store your Git passwords and tokens')}
           </div>
         </div>
 
@@ -849,7 +863,7 @@ export class GnCredentialsDialog extends LitElement {
             ?disabled=${!this.newHelper}
             @click=${this.handleAddHelper}
           >
-            Set Helper
+            ${msg('Set Helper')}
           </button>
         </div>
       </div>
@@ -858,15 +872,15 @@ export class GnCredentialsDialog extends LitElement {
 
   private renderTestTab() {
     if (this.loading) {
-      return html`<div class="loading-indicator">Loading...</div>`;
+      return html`<div class="loading-indicator">${msg('Loading...')}</div>`;
     }
 
     if (this.remotes.length === 0) {
       return html`
         <div class="empty-state">
-          <p>No remotes configured</p>
+          <p>${msg('No remotes configured')}</p>
           <p style="font-size: var(--font-size-xs); margin-top: var(--spacing-sm)">
-            Add a remote to test credentials
+            ${msg('Add a remote to test credentials')}
           </p>
         </div>
       `;
@@ -874,7 +888,7 @@ export class GnCredentialsDialog extends LitElement {
 
     return html`
       <div class="form-group">
-        <label>Select Remote</label>
+        <label>${msg('Select Remote')}</label>
       </div>
       <div class="remote-list">
         ${this.remotes.map(
@@ -901,7 +915,7 @@ export class GnCredentialsDialog extends LitElement {
           ?disabled=${!this.selectedRemote || this.testing}
           @click=${this.handleTestCredentials}
         >
-          ${this.testing ? 'Testing...' : 'Test Credentials'}
+          ${this.testing ? msg('Testing...') : msg('Test Credentials')}
         </button>
       </div>
 
@@ -940,16 +954,16 @@ export class GnCredentialsDialog extends LitElement {
           ${this.testResultHeadline(result, tone)}
         </div>
         <div class="test-result-details">
-          <div>${this.isPathTarget(result) ? 'Path' : 'Host'}: ${result.host}</div>
-          <div>Protocol: ${result.protocol}</div>
-          ${result.username ? html`<div>Username: ${result.username}</div>` : ''}
+          <div>${this.isPathTarget(result) ? msg('Path') : msg('Host')}: ${result.host}</div>
+          <div>${msg(str`Protocol: ${result.protocol}`)}</div>
+          ${result.username ? html`<div>${msg(str`Username: ${result.username}`)}</div>` : ''}
         </div>
         ${message ? html`<div class="test-result-message">${message}</div>` : ''}
         ${result.success && this.usesStoredCredentials(result.protocol)
           ? html`
               <div class="form-actions" style="margin-top: var(--spacing-sm)">
                 <button class="btn btn-secondary" @click=${this.handleEraseCredentials}>
-                  Erase Credentials
+                  ${msg('Erase Credentials')}
                 </button>
               </div>
             `
@@ -962,7 +976,7 @@ export class GnCredentialsDialog extends LitElement {
     if (!this.open) return null;
 
     return html`
-      <gn-modal modalTitle="Credential Management" open @close=${this.handleClose}>
+      <gn-modal modalTitle=${msg('Credential Management')} open @close=${this.handleClose}>
         <div class="content">
           ${this.error
             ? html`
@@ -983,10 +997,12 @@ export class GnCredentialsDialog extends LitElement {
               border: 1px solid ${this.gcmStatus.gcmAvailable || this.gcmStatus.configuredHelper ? 'var(--color-success, #2ea043)' : 'var(--color-border)'};
               color: ${this.gcmStatus.gcmAvailable || this.gcmStatus.configuredHelper ? 'var(--color-success, #2ea043)' : 'var(--color-text-secondary)'};">
               ${this.gcmStatus.gcmAvailable
-                ? html`<strong>Git Credential Manager</strong> detected${this.gcmStatus.gcmVersion ? html` (${this.gcmStatus.gcmVersion})` : ''} — credentials managed by GCM`
+                ? html`<strong>Git Credential Manager</strong> ${this.gcmStatus.gcmVersion
+                    ? msg(str`detected (${this.gcmStatus.gcmVersion}) — credentials managed by GCM`)
+                    : msg('detected — credentials managed by GCM')}`
                 : this.gcmStatus.configuredHelper
-                  ? html`<strong>Credential helper</strong>: <code>${this.gcmStatus.configuredHelper}</code> — credentials managed by system`
-                  : html`No credential manager detected — using Gitnado's built-in credential storage`}
+                  ? html`<strong>${msg('Credential helper')}</strong>: <code>${this.gcmStatus.configuredHelper}</code> — ${msg('credentials managed by system')}`
+                  : html`${msg('No credential manager detected — using Gitnado\'s built-in credential storage')}`}
             </div>
           ` : ''}
 
@@ -995,13 +1011,13 @@ export class GnCredentialsDialog extends LitElement {
               class="tab ${this.activeTab === 'helpers' ? 'active' : ''}"
               @click=${() => (this.activeTab = 'helpers')}
             >
-              Credential Helpers
+              ${msg('Credential Helpers')}
             </button>
             <button
               class="tab ${this.activeTab === 'test' ? 'active' : ''}"
               @click=${() => (this.activeTab = 'test')}
             >
-              Test Credentials
+              ${msg('Test Credentials')}
             </button>
           </div>
 

@@ -5,11 +5,13 @@
 
 import { LitElement, html, css, type PropertyValues } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
+import { localized, msg } from '@lit/localize';
 import { sharedStyles } from '../../styles/shared-styles.ts';
 import { pushOverlay, removeOverlay, isTopOverlay } from '../../utils/overlay-stack.ts';
 import { containsDeepActiveElement, deepActiveElement } from '../../utils/focus.ts';
 
 @customElement('gn-modal')
+@localized()
 export class GnModal extends LitElement {
   static styles = [
     sharedStyles,
@@ -265,7 +267,7 @@ export class GnModal extends LitElement {
           <div class="header-left">
             ${this.backButton
               ? html`
-                  <button class="close-btn" @click=${this.close} aria-label="Back" title="Back">
+                  <button class="close-btn" @click=${this.close} aria-label=${msg('Back')} title=${msg('Back')}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                       <polyline points="15 18 9 12 15 6"></polyline>
                     </svg>
@@ -276,7 +278,7 @@ export class GnModal extends LitElement {
           </div>
           ${this.showClose && !this.backButton
             ? html`
-                <button class="close-btn" @click=${this.close} aria-label="Close">
+                <button class="close-btn" @click=${this.close} aria-label=${msg('Close')}>
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <line x1="18" y1="6" x2="6" y2="18"></line>
                     <line x1="6" y1="6" x2="18" y2="18"></line>

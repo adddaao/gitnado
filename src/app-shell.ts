@@ -1,6 +1,6 @@
 import { LitElement, html, css, nothing } from 'lit';
 import { customElement, state, query } from 'lit/decorators.js';
-import { localized, msg } from '@lit/localize';
+import { localized, msg, str } from '@lit/localize';
 import { sharedStyles } from './styles/shared-styles.ts';
 import { repositoryStore, uiStore, type OpenRepository } from './stores/index.ts';
 import {
@@ -15,6 +15,7 @@ import {
   shouldSuppressMenuAction,
   startAcceleratorWatch,
   syncAppMenu,
+  syncAppMenuLabels,
   type MenuShellHandlers,
 } from './services/app-menu.service.ts';
 import { loggers } from './utils/logger.ts';
@@ -58,10 +59,15 @@ const SKIPPABLE_STATES: readonly RepositoryState[] = ['cherrypick', 'revert'];
  * The palette query that turns the command palette into a branch switcher.
  *
  * Matches the label gn-command-palette gives every branch entry
- * ("Switch to <branch>"), so a prefix match puts them all above every other
- * command. Kept as a constant so the two cannot drift silently.
+ * (`msg('Switch to ')` followed by the branch name), so a prefix match puts
+ * them all above every other command. A function rather than a constant: the
+ * prefix is a localised message, and evaluating it at module load would freeze
+ * it at the startup locale. Both sides derive it from the SAME message id, so
+ * the pre-filtered palette still matches after a language change.
  */
-const SWITCH_BRANCH_PALETTE_QUERY = 'Switch to ';
+function switchBranchPaletteQuery(): string {
+  return msg('Switch to ');
+}
 
 /**
  * How a repository state reads in user-facing prose.
@@ -71,9 +77,35 @@ const SWITCH_BRANCH_PALETTE_QUERY = 'Switch to ';
  * app. The banner beside these controls already says "Cherry-pick in progress",
  * and the conflict dialog's own Skip/Abort toasts say "cherry-pick"; this keeps
  * the banner's confirms and toasts consistent with both.
+ *
+ * Localised, because this word is substituted INTO translated sentences
+ * ("Abort {label}?", "Skipped {label}"). A placeholder's value is not run
+ * through the catalogue, so leaving it English would produce a half-translated
+ * sentence under fr/zh. A function rather than a table so the label resolves
+ * against the locale active when the sentence is built.
  */
 function operationLabel(state: RepositoryState): string {
-  return state === 'cherrypick' ? 'cherry-pick' : state;
+  switch (state) {
+    case 'cherrypick':
+      return msg('cherry-pick');
+    case 'merge':
+      return msg('merge');
+    case 'revert':
+      return msg('revert');
+    case 'rebase':
+    case 'rebase-merge':
+      return msg('rebase');
+    case 'rebase-interactive':
+      return msg('interactive rebase');
+    case 'bisect':
+      return msg('bisect');
+    case 'apply-mailbox':
+      return msg('apply mailbox');
+    case 'apply-mailbox-or-rebase':
+      return msg('apply mailbox or rebase');
+    default:
+      return state;
+  }
 }
 import './components/toolbar/gn-toolbar.ts';
 import './components/welcome/gn-welcome.ts';
@@ -160,6 +192,7 @@ import * as gitService from './services/git.service.ts';
 import * as updateService from './services/update.service.ts';
 import * as unifiedProfileService from './services/unified-profile.service.ts';
 import { settingsStore } from './stores/settings.store.ts';
+import { getAppLocale, getLocale } from './i18n/index.ts';
 import { workspaceStore } from './stores/workspace.store.ts';
 import * as workspaceService from './services/workspace.service.ts';
 import { listenToEvent, safeUnlisten } from './services/tauri-api.ts';
@@ -214,14 +247,19 @@ import {
   REPOSITORY_SCAN_RESOLVED_EVENT,
 } from './services/window-drop.service.ts';
 
+import {
+  backendErrorDisplayText,
+  backendErrorMatchText,
+} from './services/backend-error.service.ts';
 /**
  * Main application shell component
  * Provides the top-level layout and routing
  */
 @customElement('gn-app-shell')
-// Only the Settings modal's own title is localised here so far — but the shell
-// still has to re-render on a locale change, or that title would go stale while
-// the dialog inside it switches language.
+// The shell renders localised text of its own (banners, menus, confirms and
+// toasts), and it hosts dialogs that are localised separately — so it must
+// re-render on a locale change or its own text would stay in the previous
+// language while the dialogs inside it switch.
 @localized()
 export class AppShell extends LitElement {
   static styles = [
@@ -1080,6 +1118,8 @@ export class AppShell extends LitElement {
   private appMenuWatchDispose?: () => void;
   /** Last repository-open state pushed to the native menu, to skip no-op IPC. */
   private appMenuHasRepository?: boolean;
+  /** Locale whose labels are currently on the native menu. */
+  private appMenuLocale = getAppLocale();
   /** Teardown for the keyboard-settings subscription that refreshes the menu. */
   private appMenuShortcutUnsubscribe?: () => void;
   private shownIntegrationSuggestions: Set<string> = new Set();
@@ -1543,14 +1583,14 @@ export class AppShell extends LitElement {
       !repositoryStore.getState().openRepositories.some((r) => r.repository.path === repoPath)
     ) {
       showToast(
-        'Conflicts were detected in a repository whose tab was closed — reopen it to resolve them',
+        msg('Conflicts were detected in a repository whose tab was closed — reopen it to resolve them'),
         'warning',
       );
       return;
     }
     if (dialogs.isOpen('conflict')) {
       showToast(
-        'A conflict resolution is already in progress — finish or close it first',
+        msg('A conflict resolution is already in progress — finish or close it first'),
         'warning',
       );
       return;
@@ -1634,6 +1674,26 @@ export class AppShell extends LitElement {
     this.requestUpdate();
   };
 
+  /**
+   * Re-label the native menu after the UI language changed.
+   *
+   * The menu's text does not live in this component's template, so the
+   * `@localized()` re-render leaves it in the previous language. Rust rebuilds
+   * the menu from the new labels, and a rebuild resets every item's enabled
+   * state and accelerator — so those are pushed again immediately after.
+   */
+  private handleAppLanguageChanged = (): void => {
+    const locale = getAppLocale();
+    if (locale === this.appMenuLocale) return;
+    this.appMenuLocale = locale;
+    void syncAppMenuLabels().then((result) => {
+      if (!result.success) {
+        log.warn('Failed to localise the application menu:', result.error?.message);
+      }
+      this.syncAppMenuState(this.hasOpenRepository(), true);
+    });
+  };
+
   connectedCallback(): void {
     super.connectedCallback();
     // The ref lock is module state shared with the sidebar lists, so a claim
@@ -1697,7 +1757,7 @@ export class AppShell extends LitElement {
       ) {
         this.closeConflictDialog();
         showToast(
-          'The repository tab was closed — reopen it to continue resolving its conflicts',
+          msg('The repository tab was closed — reopen it to continue resolving its conflicts'),
           'warning',
         );
       }
@@ -1725,110 +1785,110 @@ export class AppShell extends LitElement {
         hostHasRepositories: state.openRepositories.length > 0,
         entries: {
           'gn-cherry-pick-dialog': {
-            dismissed: 'cherry-pick cancelled',
-            running: 'cherry-pick',
+            dismissed: msg('cherry-pick cancelled'),
+            running: msg('cherry-pick'),
           },
           'gn-interactive-rebase-dialog': {
-            dismissed: 'interactive rebase cancelled',
-            running: 'interactive rebase',
+            dismissed: msg('interactive rebase cancelled'),
+            running: msg('interactive rebase'),
           },
           // create-branch even moves HEAD via checkout, so a "cancelled" it did
           // not honour is a silent mutation of a repo not in the tab bar.
           'gn-create-tag-dialog': {
-            dismissed: 'tag creation cancelled',
-            running: 'tag creation',
+            dismissed: msg('tag creation cancelled'),
+            running: msg('tag creation'),
           },
           'gn-create-branch-dialog': {
-            dismissed: 'branch creation cancelled',
-            running: 'branch creation',
+            dismissed: msg('branch creation cancelled'),
+            running: msg('branch creation'),
           },
           'gn-clean-dialog': {
-            dismissed: 'clean cancelled',
-            running: 'clean',
+            dismissed: msg('clean cancelled'),
+            running: msg('clean'),
             clearFlag: () => { dialogs.close('clean'); },
           },
           // No clearFlag: this dialog owns its own open state via open()/close(),
           // like gn-create-branch-dialog.
           'gn-export-import-dialog': {
-            dismissed: 'export/import cancelled',
-            running: 'patch/bundle operation',
+            dismissed: msg('export/import cancelled'),
+            running: msg('patch/bundle operation'),
           },
           'gn-reflog-dialog': {
-            dismissed: 'undo history closed',
-            running: 'reset',
+            dismissed: msg('undo history closed'),
+            running: msg('reset'),
             clearFlag: () => { dialogs.close('reflog'); },
           },
           // Read-only: it never reports work in flight, so the sweep always
           // takes the dismissal branch here.
           'gn-describe-dialog': {
-            dismissed: 'describe closed',
-            running: 'describe',
+            dismissed: msg('describe closed'),
+            running: msg('describe'),
           },
           'gn-compare-branches-dialog': {
-            dismissed: 'branch comparison closed',
-            running: 'branch comparison',
+            dismissed: msg('branch comparison closed'),
+            running: msg('branch comparison'),
           },
           'gn-search-dialog': {
-            dismissed: 'search closed',
-            running: 'search',
+            dismissed: msg('search closed'),
+            running: msg('search'),
             clearFlag: () => { dialogs.close('search'); },
           },
           'gn-remote-dialog': {
-            dismissed: 'remote management closed',
-            running: 'remote update',
+            dismissed: msg('remote management closed'),
+            running: msg('remote update'),
             clearFlag: () => { dialogs.close('remotes'); },
           },
           // Closing this one DESTROYS the element (its render block is gated on
           // the repositoryHealth dialog), so it implements closeWhenIdle() and the
           // sweep hands the close over rather than orphaning a running gc.
           'gn-repository-health-dialog': {
-            dismissed: 'repository health closed',
-            running: 'maintenance operation',
+            dismissed: msg('repository health closed'),
+            running: msg('maintenance operation'),
             clearFlag: () => { dialogs.close('repositoryHealth'); },
           },
           'gn-worktree-dialog': {
-            dismissed: 'worktrees closed',
-            running: 'worktree removal',
+            dismissed: msg('worktrees closed'),
+            running: msg('worktree removal'),
             clearFlag: () => { dialogs.close('worktrees'); },
           },
           'gn-submodule-dialog': {
-            dismissed: 'submodules closed',
-            running: 'submodule removal',
+            dismissed: msg('submodules closed'),
+            running: msg('submodule removal'),
             clearFlag: () => { dialogs.close('submodules'); },
           },
           'gn-lfs-dialog': {
-            dismissed: 'Git LFS closed',
-            running: 'LFS prune',
+            dismissed: msg('Git LFS closed'),
+            running: msg('LFS prune'),
             clearFlag: () => { dialogs.close('lfs'); },
           },
           'gn-gpg-dialog': {
-            dismissed: 'signing settings closed',
-            running: 'signing update',
+            dismissed: msg('signing settings closed'),
+            running: msg('signing update'),
             clearFlag: () => { dialogs.close('gpg'); },
           },
           'gn-config-dialog': {
-            dismissed: 'configuration closed',
-            running: 'configuration save',
+            dismissed: msg('configuration closed'),
+            running: msg('configuration save'),
             clearFlag: () => { dialogs.close('config'); },
           },
           'gn-credentials-dialog': {
-            dismissed: 'credentials closed',
-            running: 'credential test',
+            dismissed: msg('credentials closed'),
+            running: msg('credential test'),
             clearFlag: () => { dialogs.close('credentials'); },
           },
           'gn-hooks-dialog': {
-            dismissed: 'hooks closed',
-            running: 'hook save',
+            dismissed: msg('hooks closed'),
+            running: msg('hook save'),
             clearFlag: () => { dialogs.close('hooks'); },
           },
           'gn-gitignore-dialog': {
-            dismissed: 'ignore rules closed',
-            running: 'ignore rule update',
+            dismissed: msg('ignore rules closed'),
+            running: msg('ignore rule update'),
             clearFlag: () => { dialogs.close('gitignore'); },
           },
           'gn-changelog-dialog': {
-            dismissed: 'changelog closed',
-            running: 'changelog generation',
+            dismissed: msg('changelog closed'),
+            running: msg('changelog generation'),
           },
         },
       });
@@ -1968,6 +2028,7 @@ export class AppShell extends LitElement {
     window.addEventListener('remote-operation-refresh', this.handleRemoteOperationRefresh);
     window.addEventListener('trigger-pull', this.handleTriggerPull);
     window.addEventListener('force-delete-branch', this.handleForceDeleteBranch as EventListener);
+    window.addEventListener('app-language-changed', this.handleAppLanguageChanged);
     window.addEventListener('open-settings', this.handleOpenSettings);
     window.addEventListener('open-git-config', this.handleOpenGitConfig);
     window.addEventListener('trigger-abort', this.handleTriggerAbort);
@@ -2152,6 +2213,7 @@ export class AppShell extends LitElement {
     window.removeEventListener('remote-operation-refresh', this.handleRemoteOperationRefresh);
     window.removeEventListener('trigger-pull', this.handleTriggerPull);
     window.removeEventListener('force-delete-branch', this.handleForceDeleteBranch as EventListener);
+    window.removeEventListener('app-language-changed', this.handleAppLanguageChanged);
     window.removeEventListener('open-settings', this.handleOpenSettings);
     window.removeEventListener('open-git-config', this.handleOpenGitConfig);
     window.removeEventListener('trigger-abort', this.handleTriggerAbort);
@@ -2214,7 +2276,7 @@ export class AppShell extends LitElement {
     // Update available - show notification
     const unlistenAvailable = await updateService.onUpdateAvailable((event) => {
       showToast(
-        `Update available: v${event.latestVersion}`,
+        msg(str`Update available: v${event.latestVersion}`),
         'info',
         10000
       );
@@ -2223,19 +2285,19 @@ export class AppShell extends LitElement {
 
     // Update downloading
     const unlistenDownloading = await updateService.onUpdateDownloading(() => {
-      showToast('Downloading update...', 'info', 5000);
+      showToast(msg('Downloading update...'), 'info', 5000);
     });
     this.updateUnlisteners.push(unlistenDownloading);
 
     // Update ready - will restart
     const unlistenReady = await updateService.onUpdateReady(() => {
-      showToast('Update installed - restarting...', 'success', 3000);
+      showToast(msg('Update installed - restarting...'), 'success', 3000);
     });
     this.updateUnlisteners.push(unlistenReady);
 
     // Update error
     const unlistenError = await updateService.onUpdateError((error) => {
-      showToast(`Update failed: ${error.message}`, 'error', 8000);
+      showToast(msg(str`Update failed: ${error.message}`), 'error', 8000);
     });
     this.updateUnlisteners.push(unlistenError);
   }
@@ -2265,11 +2327,13 @@ export class AppShell extends LitElement {
       if (suggestion && !suggestion.isConfigured) {
         const features = suggestion.features.slice(0, 2).join(', ');
         showToast(
-          `${suggestion.providerName} repository detected. Connect to enable ${features}.`,
+          msg(
+            str`${suggestion.providerName} repository detected. Connect to enable ${features}.`,
+          ),
           'info',
           12000,
           {
-            label: 'Configure',
+            label: msg('Configure'),
             callback: () => this.openIntegrationDialog(suggestion.provider),
           }
         );
@@ -2372,7 +2436,7 @@ export class AppShell extends LitElement {
    */
   toggleLeftPanel(): void {
     if (this.leftPanelVisible && this.hasSidebarDialogOpen()) {
-      showToast('Close the open dialog before hiding the sidebar', 'info');
+      showToast(msg('Close the open dialog before hiding the sidebar'), 'info');
       return;
     }
     uiStore.getState().togglePanel('left');
@@ -2387,7 +2451,10 @@ export class AppShell extends LitElement {
    */
   private handleRepositoryHealthClose = (): void => {
     if (this.repositoryHealthDialog?.isRunning) {
-      const modal = this.renderRoot.querySelector('gn-modal[modalTitle="Repository Health"]');
+      // Queried by a stable data attribute, not the now-translated title: a
+      // locale-specific selector stopped matching the moment the app was not
+      // in English, and this guard silently stopped re-asserting the modal.
+      const modal = this.renderRoot.querySelector('gn-modal[data-role="repository-health"]');
       if (modal) (modal as HTMLElement & { open: boolean }).open = true;
       return;
     }
@@ -2479,7 +2546,7 @@ export class AppShell extends LitElement {
     // and the direct graph-label click both refuse it; this menu item and the
     // palette's "Switch to <branch>" were never folded into that guard.
     if (this.refContextMenu.refType === 'localBranch' && this.refContextMenu.isHead) {
-      showToast('Already on this branch', 'info');
+      showToast(msg('Already on this branch'), 'info');
       this.refContextMenu = { ...this.refContextMenu, visible: false };
       return;
     }
@@ -2504,8 +2571,10 @@ export class AppShell extends LitElement {
     // reachable from no ref.
     if (refType === 'tag') {
       const confirmed = await showConfirm(
-        'Checkout Tag',
-        `Checking out tag "${refName}" will put you in 'detached HEAD' state. Any new commits won't belong to any branch. Continue?`,
+        msg('Checkout Tag'),
+        msg(
+          str`Checking out tag "${refName}" will put you in 'detached HEAD' state. Any new commits won't belong to any branch. Continue?`,
+        ),
         'warning',
       );
       if (!confirmed) {
@@ -2525,8 +2594,8 @@ export class AppShell extends LitElement {
       } else {
         log.error('Checkout failed:', result.data?.message || result.error);
         showErrorWithSuggestion(
-          result.data?.message || result.error?.message || '',
-          'Checkout failed',
+          result.data?.message || result.error,
+          msg('Checkout failed'),
         );
       }
     } finally {
@@ -2540,7 +2609,7 @@ export class AppShell extends LitElement {
     repoPath: string,
   ): void {
     if (data.stashed && data.stashConflict) {
-      showToast(`Switched to ${refName} — stash conflicts need resolution`, 'warning');
+      showToast(msg(str`Switched to ${refName} — stash conflicts need resolution`), 'warning');
       // Open the conflict dialog so the user can resolve the failed stash pop.
       // Auto-stash is pop semantics: the entry must be dropped once its changes
       // are applied and resolved. Identified by oid rather than assumed to sit
@@ -2582,8 +2651,8 @@ export class AppShell extends LitElement {
     // cannot be computed; it must never be the reason a merge is unavailable.
     const prediction = await mergePreviewSummary(repoPath, refName);
     if (!await showConfirm(
-      'Merge Branch',
-      `Merge "${refName}" into the current branch?${prediction}`,
+      msg('Merge Branch'),
+      msg(str`Merge "${refName}" into the current branch?${prediction}`),
       'info',
     )) {
       this.releaseRefOperation(repoPath);
@@ -2598,20 +2667,20 @@ export class AppShell extends LitElement {
 
     if (result.success) {
       this.refreshConflictDialogRepo(repoPath);
-      showToast(`Merged ${refName}`, 'success');
+      showToast(msg(str`Merged ${refName}`), 'success');
     } else if (result.error?.code === 'MERGE_CONFLICT') {
       this.conflictOperationType = 'merge';
       this.resetConflictDetailState();
       this.openConflictDialogPinned(repoPath);
       this.refreshConflictDialogRepo(repoPath);
       notifyWarning(
-        'Merge Conflict',
-        `Conflicts detected while merging ${refName}. Please resolve conflicts to continue.`,
+        msg('Merge Conflict'),
+        msg(str`Conflicts detected while merging ${refName}. Please resolve conflicts to continue.`),
         !settingsStore.getState().showNativeNotifications
       );
     } else {
       log.error('Merge failed:', result.error);
-      showErrorWithSuggestion(result.error?.message || '', 'Merge failed');
+      showErrorWithSuggestion(result.error, msg('Merge failed'));
     }
     } finally {
       this.releaseRefOperation(repoPath);
@@ -2628,8 +2697,10 @@ export class AppShell extends LitElement {
     // Claimed BEFORE the confirm — see handleRefMerge.
     if (!this.claimRefOperation(repoPath)) return;
     if (!await showConfirm(
-      'Rebase Branch',
-      `Rebase current branch onto "${refName}"?\n\nThis will rewrite commit history.`,
+      msg('Rebase Branch'),
+      msg(
+        str`Rebase current branch onto "${refName}"?\n\nThis will rewrite commit history.`,
+      ),
       'warning',
     )) {
       this.releaseRefOperation(repoPath);
@@ -2651,13 +2722,15 @@ export class AppShell extends LitElement {
       this.openConflictDialogPinned(repoPath);
       this.refreshConflictDialogRepo(repoPath);
       notifyWarning(
-        'Rebase Conflict',
-        `Conflicts detected while rebasing onto ${refName}. Please resolve conflicts to continue.`,
+        msg('Rebase Conflict'),
+        msg(
+          str`Conflicts detected while rebasing onto ${refName}. Please resolve conflicts to continue.`,
+        ),
         !settingsStore.getState().showNativeNotifications
       );
     } else {
       log.error('Rebase failed:', result.error);
-      showErrorWithSuggestion(result.error?.message || '', 'Rebase failed');
+      showErrorWithSuggestion(result.error, msg('Rebase failed'));
     }
     } finally {
       this.releaseRefOperation(repoPath);
@@ -2684,12 +2757,13 @@ export class AppShell extends LitElement {
     // sidebar's delete, so it must be gated the same way (gn-branch-list.ts
     // handleDeleteBranch). Without this, one click on a graph label is enough.
     const confirmed = await showConfirm(
-      'Delete Branch',
+      msg('Delete Branch'),
       // Same stakes, same words as the sidebar's delete. Two surfaces for
       // one irreversible operation must not state them differently — and
       // the graph route is the faster gesture.
-      `Are you sure you want to delete the branch "${branchName}"?\n\n` +
-        `This action cannot be undone.`,
+      msg(
+        str`Are you sure you want to delete the branch "${branchName}"?\n\nThis action cannot be undone.`,
+      ),
       'warning'
     );
 
@@ -2703,10 +2777,10 @@ export class AppShell extends LitElement {
 
       if (result.success) {
         this.refreshConflictDialogRepo(repoPath);
-        showToast(`Deleted branch ${branchName}`, 'success');
+        showToast(msg(str`Deleted branch ${branchName}`), 'success');
       } else {
         log.error('Delete branch failed:', result.error);
-        showErrorWithSuggestion(result.error?.message || '', 'Delete branch failed', {
+        showErrorWithSuggestion(result.error, msg('Delete branch failed'), {
           branchName,
           repoPath,
         });
@@ -2741,14 +2815,14 @@ export class AppShell extends LitElement {
 
       if (result.success) {
         this.refreshConflictDialogRepo(repoPath);
-        showToast(`Deleted tag ${tagName}`, 'success');
+        showToast(msg(str`Deleted tag ${tagName}`), 'success');
         // The local ref is gone; the remote copy is not, and the tag fetch
         // refspec would restore it. Asked here, inside the claim, so the
         // follow-up push is serialized with the rest of this repo's ref ops.
         await offerRemoteTagDelete(repoPath, tagName);
       } else {
         log.error('Delete tag failed:', result.error);
-        showToast(result.error?.message || 'Delete tag failed', 'error');
+        showToast(result.error?.message || msg('Delete tag failed'), 'error');
       }
     } finally {
       this.releaseRefOperation(repoPath);
@@ -2784,8 +2858,10 @@ export class AppShell extends LitElement {
         const remotes = await gitService.getRemotes(repoPath);
         showToast(
           remotes.success && (remotes.data?.length ?? 0) === 0
-            ? 'No remotes configured. Add a remote before pushing tags.'
-            : `Could not determine the tag destination: ${remoteResult.error?.message ?? 'Unknown error'}`,
+            ? msg('No remotes configured. Add a remote before pushing tags.')
+            : msg(
+                str`Could not determine the tag destination: ${remoteResult.error?.message ?? msg('Unknown error')}`,
+              ),
           'error',
         );
         return;
@@ -2795,10 +2871,10 @@ export class AppShell extends LitElement {
 
       if (result.success) {
         this.refreshConflictDialogRepo(repoPath);
-        showToast(`Pushed tag ${tagName} to ${remote}`, 'success');
+        showToast(msg(str`Pushed tag ${tagName} to ${remote}`), 'success');
       } else if (!gitService.isNetworkGateRefusal(result.error)) {
         log.error('Push tag failed:', result.error);
-        showErrorWithSuggestion(result.error?.message || '', 'Push tag failed', {
+        showErrorWithSuggestion(result.error, msg('Push tag failed'), {
           operation: 'push-tag',
           // Carries the tag through to the Force Push Tag suggestion action.
           branchName: tagName,
@@ -2840,40 +2916,44 @@ export class AppShell extends LitElement {
     return html`
       <div class="context-menu-submenu" data-testid="multi-commit-actions">
         <span class="context-menu-label" data-testid="multi-commit-count"
-          >${count} commits selected</span
+          >${msg(str`${count} commits selected`)}</span
         >
         <button
           class="context-menu-item"
           data-testid="multi-cherry-pick"
           ?disabled=${this.isRefOperationInFlight()}
           @click=${this.handleCherryPickSelection}
-          title="Apply all ${count} selected commits to the current branch, oldest first"
+          title=${msg(
+            str`Apply all ${count} selected commits to the current branch, oldest first`,
+          )}
         >
           <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
             <path d="M8 4a4 4 0 1 1 0 8 4 4 0 0 1 0-8zM8 2a6 6 0 1 0 0 12A6 6 0 0 0 8 2z" />
             <path d="M8 5v6M5 8h6" stroke="currentColor" stroke-width="1.5" fill="none" />
           </svg>
-          Cherry-pick ${count} commits
+          ${msg(str`Cherry-pick ${count} commits`)}
         </button>
         <button
           class="context-menu-item"
           data-testid="multi-squash"
           ?disabled=${this.isRefOperationInFlight()}
           @click=${this.handleSquashSelection}
-          title="Squash the ${count} selected contiguous commits into a single commit"
+          title=${msg(
+            str`Squash the ${count} selected contiguous commits into a single commit`,
+          )}
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
             <line x1="9" y1="3" x2="9" y2="21"></line>
             <line x1="15" y1="3" x2="15" y2="21"></line>
           </svg>
-          Squash ${count} commits
+          ${msg(str`Squash ${count} commits`)}
         </button>
         <button
           class="context-menu-item"
           data-testid="multi-create-patch"
           @click=${this.handleCreatePatchFromSelection}
-          title="Write one .patch file per selected commit, numbered oldest first"
+          title=${msg('Write one .patch file per selected commit, numbered oldest first')}
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
@@ -2881,7 +2961,7 @@ export class AppShell extends LitElement {
             <line x1="12" y1="18" x2="12" y2="12"></line>
             <line x1="9" y1="15" x2="15" y2="15"></line>
           </svg>
-          Create patch from ${count} commits
+          ${msg(str`Create patch from ${count} commits`)}
         </button>
         ${count === 2
           ? html`
@@ -2889,7 +2969,7 @@ export class AppShell extends LitElement {
                 class="context-menu-item"
                 data-testid="multi-compare"
                 @click=${this.handleCompareSelection}
-                title="Compare the two selected commits"
+                title=${msg('Compare the two selected commits')}
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <polyline points="17 1 21 5 17 9"></polyline>
@@ -2897,14 +2977,14 @@ export class AppShell extends LitElement {
                   <polyline points="7 23 3 19 7 15"></polyline>
                   <path d="M21 13v2a4 4 0 01-4 4H3"></path>
                 </svg>
-                Compare these commits
+                ${msg('Compare these commits')}
               </button>
             `
           : ''}
       </div>
       <div class="context-menu-divider"></div>
       <span class="context-menu-label" data-testid="single-commit-scope"
-        >Just ${subjectShort}</span
+        >${msg(str`Just ${subjectShort}`)}</span
       >
     `;
   }
@@ -2939,8 +3019,9 @@ export class AppShell extends LitElement {
     const merge = commits.find((c) => c.parentIds.length > 1);
     if (merge) {
       showToast(
-        `${merge.shortId || merge.oid.substring(0, 7)} is a merge commit — cherry-pick it on ` +
-          'its own to choose which parent to keep, then run the rest as a batch',
+        msg(
+          str`${merge.shortId || merge.oid.substring(0, 7)} is a merge commit — cherry-pick it on its own to choose which parent to keep, then run the rest as a batch`,
+        ),
         'warning',
         8000,
       );
@@ -2948,7 +3029,7 @@ export class AppShell extends LitElement {
     }
 
     const confirmed = await showConfirm(
-      `Cherry-pick ${commits.length} commits`,
+      msg(str`Cherry-pick ${commits.length} commits`),
       cherryPickConfirmMessage(commits, branch),
       'warning',
     );
@@ -2962,7 +3043,9 @@ export class AppShell extends LitElement {
         continue;
       }
 
-      const message = result.error?.message ?? '';
+      // The conflict check reads the backend's own wording, while the message
+      // the user sees is the already-localised one.
+      const message = backendErrorMatchText(result.error);
       const isConflict =
         result.error?.code === 'CHERRY_PICK_CONFLICT' || message.toLowerCase().includes('conflict');
       showToast(
@@ -2970,7 +3053,8 @@ export class AppShell extends LitElement {
           applied,
           commits.slice(index),
           commits.length,
-          message || (isConflict ? 'it conflicts' : 'the cherry-pick failed'),
+          backendErrorDisplayText(result.error) ||
+            (isConflict ? msg('it conflicts') : msg('the cherry-pick failed')),
         ),
         'error',
         12000,
@@ -2983,7 +3067,7 @@ export class AppShell extends LitElement {
       return;
     }
 
-    showToast(`Cherry-picked ${applied.length} commits onto ${branch}`, 'success');
+    showToast(msg(str`Cherry-picked ${applied.length} commits onto ${branch}`), 'success');
     this.refreshConflictDialogRepo(repoPath);
   }
 
@@ -3009,7 +3093,7 @@ export class AppShell extends LitElement {
 
     const branch = this.activeRepository?.currentBranch?.shorthand ?? 'HEAD';
     const confirmed = await showConfirm(
-      `Squash ${commits.length} commits`,
+      msg(str`Squash ${commits.length} commits`),
       squashConfirmMessage(commits, branch),
       'warning',
     );
@@ -3024,11 +3108,11 @@ export class AppShell extends LitElement {
     if (result.success) {
       const count = result.data?.squashedCount ?? commits.length;
       const newShort = (result.data?.newOid ?? newest.oid).substring(0, 7);
-      showToast(`Squashed ${count} commits into ${newShort}`, 'success');
+      showToast(msg(str`Squashed ${count} commits into ${newShort}`), 'success');
       this.refreshConflictDialogRepo(repoPath);
       window.dispatchEvent(new CustomEvent('status-refresh'));
     } else {
-      showErrorWithSuggestion(result.error?.message || '', 'Failed to squash commits');
+      showErrorWithSuggestion(result.error, msg('Failed to squash commits'));
     }
   }
 
@@ -3067,9 +3151,9 @@ export class AppShell extends LitElement {
   private handleCherryPickComplete(e: CustomEvent): void {
     const { sourceCommit, noCommit, repositoryPath } = e.detail;
     if (noCommit) {
-      showToast(`Staged changes from ${sourceCommit.oid.substring(0, 7)}`, 'success');
+      showToast(msg(str`Staged changes from ${sourceCommit.oid.substring(0, 7)}`), 'success');
     } else {
-      showToast(`Cherry-picked ${sourceCommit.oid.substring(0, 7)}`, 'success');
+      showToast(msg(str`Cherry-picked ${sourceCommit.oid.substring(0, 7)}`), 'success');
     }
     // Pinned refresh: after a mid-operation tab switch the cherry-pick
     // completed on the ORIGINATING repo — refreshing the active tab would
@@ -3105,8 +3189,8 @@ export class AppShell extends LitElement {
     this.resetConflictDetailState();
     this.openConflictDialogPinned(repositoryPath);
     notifyWarning(
-      'Cherry-pick Conflict',
-      'Conflicts detected during cherry-pick. Please resolve conflicts to continue.',
+      msg('Cherry-pick Conflict'),
+      msg('Conflicts detected during cherry-pick. Please resolve conflicts to continue.'),
       !settingsStore.getState().showNativeNotifications
     );
     this.refreshConflictDialogRepo(repositoryPath ?? null);
@@ -3158,7 +3242,9 @@ export class AppShell extends LitElement {
     const operationType = this.deriveConflictOperationType();
     if (operationType === null) {
       showToast(
-        `Conflicts from an external ${this.activeRepository.repository.state} operation — resolve them with git in a terminal`,
+        msg(
+          str`Conflicts from an external ${this.activeRepository.repository.state} operation — resolve them with git in a terminal`,
+        ),
         'warning',
       );
       return;
@@ -3204,10 +3290,14 @@ export class AppShell extends LitElement {
     // always means, and tell the user so.
     const isMergeCommit = commit.parentIds.length > 1;
     const confirmed = await showConfirm(
-      'Revert Commit',
+      msg('Revert Commit'),
       isMergeCommit
-        ? `Commit ${commit.oid.substring(0, 7)} is a merge commit. Reverting it will create a new commit that undoes the merge relative to its first parent (mainline). Continue?`
-        : `Are you sure you want to revert commit ${commit.oid.substring(0, 7)}? This will create a new commit that undoes the changes.`,
+        ? msg(
+            str`Commit ${commit.oid.substring(0, 7)} is a merge commit. Reverting it will create a new commit that undoes the merge relative to its first parent (mainline). Continue?`,
+          )
+        : msg(
+            str`Are you sure you want to revert commit ${commit.oid.substring(0, 7)}? This will create a new commit that undoes the changes.`,
+          ),
       'warning'
     );
     if (!confirmed) return;
@@ -3222,7 +3312,7 @@ export class AppShell extends LitElement {
 
     if (result.success) {
       this.refreshConflictDialogRepo(repoPath);
-      showToast(`Reverted ${commit.oid.substring(0, 7)}`, 'success');
+      showToast(msg(str`Reverted ${commit.oid.substring(0, 7)}`), 'success');
     } else if (result.error?.code === 'REVERT_CONFLICT') {
       // Show conflict resolution dialog
       this.conflictOperationType = 'revert';
@@ -3230,13 +3320,15 @@ export class AppShell extends LitElement {
       this.openConflictDialogPinned(repoPath);
       this.refreshConflictDialogRepo(repoPath);
       notifyWarning(
-        'Revert Conflict',
-        `Conflicts detected while reverting ${commit.oid.substring(0, 7)}. Please resolve conflicts to continue.`,
+        msg('Revert Conflict'),
+        msg(
+          str`Conflicts detected while reverting ${commit.oid.substring(0, 7)}. Please resolve conflicts to continue.`,
+        ),
         !settingsStore.getState().showNativeNotifications
       );
     } else {
       log.error('Revert failed:', result.error);
-      showErrorWithSuggestion(result.error?.message || '', 'Revert failed');
+      showErrorWithSuggestion(result.error, msg('Revert failed'));
     }
   }
 
@@ -3263,7 +3355,7 @@ export class AppShell extends LitElement {
     // Reject an unabortable state BEFORE prompting — otherwise the user
     // confirms a destructive action that was never going to run.
     if (!ABORTABLE_STATES.includes(state)) {
-      showToast(`Cannot abort operation: ${state}`, 'error');
+      showToast(msg(str`Cannot abort operation: ${state}`), 'error');
       return;
     }
 
@@ -3292,9 +3384,10 @@ export class AppShell extends LitElement {
     this.abortInProgress = true;
 
     const confirmed = await showConfirm(
-      `Abort ${operationLabel(state)}?`,
-      `This discards all conflict resolutions and restores the working tree to ` +
-        `its state before the ${operationLabel(state)} began. This cannot be undone.`,
+      msg(str`Abort ${operationLabel(state)}?`),
+      msg(
+        str`This discards all conflict resolutions and restores the working tree to its state before the ${operationLabel(state)} began. This cannot be undone.`,
+      ),
       'warning'
     );
 
@@ -3324,18 +3417,18 @@ export class AppShell extends LitElement {
           // Unreachable while ABORTABLE_STATES gates entry above. Kept explicit
           // so that adding a state to that list without adding a case here
           // fails loudly instead of silently running an unrelated abort.
-          showToast(`Cannot abort operation: ${state}`, 'error');
+          showToast(msg(str`Cannot abort operation: ${state}`), 'error');
           return;
       }
 
       if (result.success) {
-        showToast(`Aborted ${operationLabel(state)}`, 'success');
+        showToast(msg(str`Aborted ${operationLabel(state)}`), 'success');
         // `path` was captured before the abort await — pin the refresh to it so
         // a mid-abort tab switch doesn't refresh the wrong repo.
         this.refreshConflictDialogRepo(path);
       } else {
         log.error('Abort failed:', result.error);
-        showToast(result.error?.message || 'Abort failed', 'error');
+        showToast(result.error?.message || msg('Abort failed'), 'error');
       }
     } finally {
       this.abortInProgress = false;
@@ -3363,7 +3456,7 @@ export class AppShell extends LitElement {
     // Reject an unskippable state BEFORE doing anything, so the handler can
     // never run a skip the banner was not offering.
     if (!SKIPPABLE_STATES.includes(state)) {
-      showToast(`Cannot skip operation: ${state}`, 'error');
+      showToast(msg(str`Cannot skip operation: ${state}`), 'error');
       return;
     }
 
@@ -3386,9 +3479,10 @@ export class AppShell extends LitElement {
       // this runs with a pinned path.
       if ((repo.status ?? []).some((f) => f.isConflicted)) {
         const confirmed = await showConfirm(
-          `Skip ${operationLabel(state)}?`,
-          `This commit will not be applied and the conflict resolutions for it are ` +
-            `discarded. Commits already applied stay, and the rest of the range continues.`,
+          msg(str`Skip ${operationLabel(state)}?`),
+          msg(
+            str`This commit will not be applied and the conflict resolutions for it are discarded. Commits already applied stay, and the rest of the range continues.`,
+          ),
           'warning'
         );
         if (!confirmed) return;
@@ -3405,18 +3499,18 @@ export class AppShell extends LitElement {
           // Unreachable while SKIPPABLE_STATES gates entry above. Kept explicit
           // so that adding a state to that list without adding a case here
           // fails loudly instead of silently running an unrelated skip.
-          showToast(`Cannot skip operation: ${state}`, 'error');
+          showToast(msg(str`Cannot skip operation: ${state}`), 'error');
           return;
       }
 
       if (result.success) {
-        showToast(`Skipped ${operationLabel(state)}`, 'success');
+        showToast(msg(str`Skipped ${operationLabel(state)}`), 'success');
         // `path` was captured before the skip await — pin the refresh to it so
         // a mid-skip tab switch doesn't refresh the wrong repo.
         this.refreshConflictDialogRepo(path);
       } else {
         log.error('Skip failed:', result.error);
-        showToast(result.error?.message || 'Skip failed', 'error');
+        showToast(result.error?.message || msg('Skip failed'), 'error');
       }
     } finally {
       this.skipInProgress = false;
@@ -3437,7 +3531,7 @@ export class AppShell extends LitElement {
       .getState()
       .openRepositories.some((r) => r.repository.path === repoPath);
     if (!open) {
-      showToast('That repository is no longer open', 'warning');
+      showToast(msg('That repository is no longer open'), 'warning');
       return null;
     }
     return repoPath;
@@ -3484,7 +3578,7 @@ export class AppShell extends LitElement {
       .openRepositories.find((r) => r.repository.path === repoPath);
     if (!repo) {
       showToast(
-        `Cannot force delete ${branchName}: its repository is no longer open`,
+        msg(str`Cannot force delete ${branchName}: its repository is no longer open`),
         'warning'
       );
       return;
@@ -3497,11 +3591,10 @@ export class AppShell extends LitElement {
     // here too, and the toast button must not be the cheaper route to the same
     // irreversible outcome.
     const confirmed = await showConfirm(
-      'Force Delete Branch',
-      `"${branchName}" in ${repo.repository.name} has commits that are not ` +
-        `merged anywhere else. Force deleting it discards those commits ` +
-        `permanently — they will be recoverable only through the reflog. ` +
-        `Continue?`,
+      msg('Force Delete Branch'),
+      msg(
+        str`"${branchName}" in ${repo.repository.name} has commits that are not merged anywhere else. Force deleting it discards those commits permanently — they will be recoverable only through the reflog. Continue?`,
+      ),
       'warning'
     );
 
@@ -3511,13 +3604,15 @@ export class AppShell extends LitElement {
       const result = await gitService.deleteBranch(repoPath, branchName, true);
       if (result.success) {
         this.refreshConflictDialogRepo(repoPath);
-        showToast(`Force deleted branch ${branchName}`, 'success');
+        showToast(msg(str`Force deleted branch ${branchName}`), 'success');
       } else {
-        showToast(result.error?.message || 'Force delete failed', 'error');
+        showToast(result.error?.message || msg('Force delete failed'), 'error');
       }
     } catch (err) {
       showToast(
-        `Force delete failed: ${err instanceof Error ? err.message : 'Unknown error'}`,
+        msg(
+          str`Force delete failed: ${err instanceof Error ? err.message : msg('Unknown error')}`,
+        ),
         'error'
       );
     }
@@ -3598,7 +3693,7 @@ export class AppShell extends LitElement {
       initDialog.open(path);
       return;
     }
-    showToast('Could not open the Initialize Repository dialog', 'error');
+    showToast(msg('Could not open the Initialize Repository dialog'), 'error');
   };
 
   /** Start listening for folders dropped onto the window. */
@@ -3733,7 +3828,7 @@ export class AppShell extends LitElement {
     // The dialog is open but could not be reached, so the create form was never
     // prefilled. Say so rather than leaving the user staring at a blank form
     // wondering which branch it is about.
-    showToast('Could not open the create form. Fill in the branch manually.', 'error');
+    showToast(msg('Could not open the create form. Fill in the branch manually.'), 'error');
   };
 
   private setIntegrationDialogOpen(type: IntegrationType, open: boolean): void {
@@ -3806,16 +3901,15 @@ export class AppShell extends LitElement {
     // confirm has to say which ref it is about to overwrite.
     const branch = repo.currentBranch?.shorthand ?? repo.repository.headRef;
     const confirmed = await showConfirm(
-      'Force Push',
-      `This replaces "${branch}" on the remote of ${repo.repository.name} with your ` +
-        `local commits. Any commits on the remote that you do not have will be ` +
-        `removed from it. The push is refused if the remote has moved since your ` +
-        `last fetch.`,
+      msg('Force Push'),
+      msg(
+        str`This replaces "${branch}" on the remote of ${repo.repository.name} with your local commits. Any commits on the remote that you do not have will be removed from it. The push is refused if the remote has moved since your last fetch.`,
+      ),
       'error'
     );
     if (!confirmed) return;
 
-    const opId = progressService.startOperation('push', 'Force pushing to remote...', {
+    const opId = progressService.startOperation('push', msg('Force pushing to remote...'), {
       cancellable: true,
     });
     const result = await gitService.push({
@@ -3834,13 +3928,13 @@ export class AppShell extends LitElement {
     } else {
       progressService.failOperation(opId);
       if (gitService.isOperationCancelled(result.error)) {
-        showToast('Force push cancelled', 'info');
+        showToast(msg('Force push cancelled'), 'info');
       } else if (!gitService.isNetworkGateRefusal(result.error)) {
         // NOT through showErrorWithSuggestion: a force push that is itself
         // rejected would match the same branch that produced this toast and
         // offer Force Push again, an unbounded loop over the one action that
         // discards remote commits.
-        showToast(result.error?.message || 'Force push failed', 'error');
+        showToast(result.error?.message || msg('Force push failed'), 'error');
       }
     }
   }
@@ -3881,7 +3975,9 @@ export class AppShell extends LitElement {
     const remoteResult = await gitService.getPushRemote(repoPath, remote);
     if (!remoteResult.success || !remoteResult.data) {
       showToast(
-        `Could not determine the tag destination: ${remoteResult.error?.message ?? 'Unknown error'}`,
+        msg(
+          str`Could not determine the tag destination: ${remoteResult.error?.message ?? msg('Unknown error')}`,
+        ),
         'error',
       );
       return;
@@ -3889,10 +3985,10 @@ export class AppShell extends LitElement {
     const destination = remoteResult.data;
 
     const confirmed = await showConfirm(
-      'Force Push Tag',
-      `This moves the tag "${tagName}" on "${destination}" in ` +
-        `${repo.repository.name} to your local commit. Anyone who already fetched ` +
-        `the tag keeps the old one until they delete it locally.`,
+      msg('Force Push Tag'),
+      msg(
+        str`This moves the tag "${tagName}" on "${destination}" in ${repo.repository.name} to your local commit. Anyone who already fetched the tag keeps the old one until they delete it locally.`,
+      ),
       'error'
     );
     if (!confirmed) return;
@@ -3908,14 +4004,14 @@ export class AppShell extends LitElement {
     });
     if (result.success) {
       showToast(
-        `Force pushed tag ${tagName} to ${destination}`,
+        msg(str`Force pushed tag ${tagName} to ${destination}`),
         'success',
       );
       this.refreshConflictDialogRepo(repoPath);
     } else if (!gitService.isNetworkGateRefusal(result.error)) {
       // Plain toast, same reason as forcePush: routing through the suggestion
       // service would offer Force Push Tag again.
-      showToast(result.error?.message || 'Force push tag failed', 'error');
+      showToast(result.error?.message || msg('Force push tag failed'), 'error');
     }
   }
 
@@ -3948,32 +4044,31 @@ export class AppShell extends LitElement {
     // Saying "commits after X are removed" is false in the first case and
     // mischaracterises the second — and a confirm that overstates trains users
     // to dismiss the one that matters.
-    const droppedNote =
-      `This branch will point at ${commit.shortId}. Any commit no longer reachable ` +
-      `from it is recoverable only through the reflog.`;
 
     if (mode === 'hard') {
       const confirmed = await showConfirm(
-        'Hard Reset',
-        `Hard reset to "${commit.summary}"?\n\n${droppedNote}\n\n` +
-          `All uncommitted changes are also discarded permanently — those are not ` +
-          `in the reflog and cannot be recovered.`,
+        msg('Hard Reset'),
+        msg(
+          str`Hard reset to "${commit.summary}"?\n\nThis branch will point at ${commit.shortId}. Any commit no longer reachable from it is recoverable only through the reflog.\n\nAll uncommitted changes are also discarded permanently — those are not in the reflog and cannot be recovered.`,
+        ),
         'warning'
       );
       if (!confirmed) return;
     } else if (mode === 'mixed') {
       const confirmed = await showConfirm(
-        'Mixed Reset',
-        `Reset to "${commit.summary}"?\n\n${droppedNote}\n\n` +
-          `Your working-directory changes are kept, but unstaged.`,
+        msg('Mixed Reset'),
+        msg(
+          str`Reset to "${commit.summary}"?\n\nThis branch will point at ${commit.shortId}. Any commit no longer reachable from it is recoverable only through the reflog.\n\nYour working-directory changes are kept, but unstaged.`,
+        ),
         'warning'
       );
       if (!confirmed) return;
     } else if (mode === 'soft') {
       const confirmed = await showConfirm(
-        'Soft Reset',
-        `Reset to "${commit.summary}"?\n\n${droppedNote}\n\n` +
-          `Your changes remain staged.`,
+        msg('Soft Reset'),
+        msg(
+          str`Reset to "${commit.summary}"?\n\nThis branch will point at ${commit.shortId}. Any commit no longer reachable from it is recoverable only through the reflog.\n\nYour changes remain staged.`,
+        ),
         'warning'
       );
       if (!confirmed) return;
@@ -3991,11 +4086,11 @@ export class AppShell extends LitElement {
       // Without this the user cannot tell a completed reset from a click that
       // did nothing — failure was reported, success was silent. Every sibling
       // destructive handler in this file toasts on success.
-      showToast(`Reset to ${commit.shortId} (${mode})`, 'success');
+      showToast(msg(str`Reset to ${commit.shortId} (${mode})`), 'success');
       this.refreshConflictDialogRepo(repoPath);
     } else {
       log.error('Reset failed:', result.error);
-      showErrorWithSuggestion(result.error?.message || '', 'Reset failed');
+      showErrorWithSuggestion(result.error, msg('Reset failed'));
     }
   }
 
@@ -4068,25 +4163,25 @@ export class AppShell extends LitElement {
 
     const statusResult = await gitService.getStatus(repoPath);
     if (!statusResult.success || !statusResult.data) {
-      showToast('Failed to check status', 'error');
+      showToast(msg('Failed to check status'), 'error');
       return;
     }
 
     const hasStagedChanges = statusResult.data.some((f) => f.isStaged);
     if (!hasStagedChanges) {
-      showToast('No staged changes to fold into commit', 'error');
+      showToast(msg('No staged changes to fold into commit'), 'error');
       return;
     }
 
     const result = await gitService.fixupCommit(repoPath, commit.oid);
     if (result.success) {
-      showToast(`Folded staged changes into ${commit.shortId}`, 'success');
+      showToast(msg(str`Folded staged changes into ${commit.shortId}`), 'success');
       this.refreshConflictDialogRepo(repoPath);
       window.dispatchEvent(new CustomEvent('status-refresh'));
     } else {
       showErrorWithSuggestion(
-        result.error?.message || '',
-        'Failed to fold staged changes into commit',
+        result.error,
+        msg('Failed to fold staged changes into commit'),
       );
     }
   }
@@ -4116,13 +4211,13 @@ export class AppShell extends LitElement {
     // Check if there are staged changes
     const statusResult = await gitService.getStatus(repoPath);
     if (!statusResult.success || !statusResult.data) {
-      showToast('Failed to check status', 'error');
+      showToast(msg('Failed to check status'), 'error');
       return;
     }
 
     const hasStagedChanges = statusResult.data.some(f => f.isStaged);
     if (!hasStagedChanges) {
-      showToast('No staged changes to fixup', 'error');
+      showToast(msg('No staged changes to fixup'), 'error');
       return;
     }
 
@@ -4132,11 +4227,11 @@ export class AppShell extends LitElement {
     });
 
     if (result.success) {
-      showToast(`Created fixup commit for ${commit.shortId}`, 'success');
+      showToast(msg(str`Created fixup commit for ${commit.shortId}`), 'success');
       this.refreshConflictDialogRepo(repoPath);
       window.dispatchEvent(new CustomEvent('status-refresh'));
     } else {
-      showErrorWithSuggestion(result.error?.message || '', 'Failed to create fixup commit');
+      showErrorWithSuggestion(result.error, msg('Failed to create fixup commit'));
     }
   }
 
@@ -4164,13 +4259,13 @@ export class AppShell extends LitElement {
     // Check if there are staged changes
     const statusResult = await gitService.getStatus(repoPath);
     if (!statusResult.success || !statusResult.data) {
-      showToast('Failed to check status', 'error');
+      showToast(msg('Failed to check status'), 'error');
       return;
     }
 
     const hasStagedChanges = statusResult.data.some(f => f.isStaged);
     if (!hasStagedChanges) {
-      showToast('No staged changes to squash', 'error');
+      showToast(msg('No staged changes to squash'), 'error');
       return;
     }
 
@@ -4180,11 +4275,14 @@ export class AppShell extends LitElement {
     });
 
     if (result.success) {
-      showToast(`Created squash commit for ${commit.shortId}`, 'success');
+      showToast(msg(str`Created squash commit for ${commit.shortId}`), 'success');
       this.refreshConflictDialogRepo(repoPath);
       window.dispatchEvent(new CustomEvent('status-refresh'));
     } else {
-      showErrorWithSuggestion(result.error?.message || '', 'Failed to create squash commit');
+      showErrorWithSuggestion(
+        result.error,
+        msg('Failed to create squash commit'),
+      );
     }
   }
 
@@ -4207,7 +4305,7 @@ export class AppShell extends LitElement {
   private isMergeCommit(commit: { shortId: string; parentIds?: string[] }): boolean {
     if ((commit.parentIds?.length ?? 0) <= 1) return false;
     showToast(
-      `${commit.shortId} is a merge commit — its message cannot be rewritten by rebase`,
+      msg(str`${commit.shortId} is a merge commit — its message cannot be rewritten by rebase`),
       'warning',
     );
     return true;
@@ -4269,13 +4367,14 @@ export class AppShell extends LitElement {
     const result = await gitService.isAncestorOfHead(repoPath, oid);
     if (this.activeRepository?.repository.path !== repoPath) return false;
     if (!result.success) {
-      showToast(result.error?.message ?? 'Could not check where that commit lives', 'error');
+      showToast(result.error?.message ?? msg('Could not check where that commit lives'), 'error');
       return false;
     }
     if (!result.data) {
       showToast(
-        `${shortId} is not on the current branch — check out the branch that ` +
-          `contains it first`,
+        msg(
+          str`${shortId} is not on the current branch — check out the branch that contains it first`,
+        ),
         'warning',
       );
       return false;
@@ -4290,7 +4389,7 @@ export class AppShell extends LitElement {
   ): Promise<boolean | null> {
     const historyResult = await gitService.getCommitHistory({ path: repoPath, limit: 1 });
     if (this.activeRepository?.repository.path !== repoPath) {
-      showToast(`Repository changed — ${operation} cancelled`, 'warning');
+      showToast(msg(str`Repository changed — ${operation} cancelled`), 'warning');
       return null;
     }
     return !!(
@@ -4334,7 +4433,7 @@ export class AppShell extends LitElement {
       // preceded by a promise the app is about to break.
       if (this.isMergeCommit(commit)) return;
       if (!(await this.canRewriteInPlace(commit.oid, commit.shortId, repoPath))) return;
-      showToast('Only the latest commit can be amended — opening interactive rebase', 'info');
+      showToast(msg('Only the latest commit can be amended — opening interactive rebase'), 'info');
       this.interactiveRebaseDialog?.open(`${commit.oid}^`, {
         rewordCommitOid: commit.oid,
       });
@@ -4516,15 +4615,15 @@ export class AppShell extends LitElement {
     } else {
       log.error('Failed to checkout branch:', result.data?.message || result.error);
       showErrorWithSuggestion(
-        result.data?.message || result.error?.message || '',
-        'Failed to checkout branch',
+        result.data?.message || result.error,
+        msg('Failed to checkout branch'),
       );
     }
   }
 
   private handleCopySha(e: CustomEvent<{ sha: string }>): void {
     // Show brief feedback that SHA was copied
-    showToast(`Copied SHA ${e.detail.sha} to clipboard`, 'success');
+    showToast(msg(str`Copied SHA ${e.detail.sha} to clipboard`), 'success');
   }
 
   /**
@@ -4538,8 +4637,13 @@ export class AppShell extends LitElement {
   ): void {
     const { action, commitOid } = e.detail;
     const shortOid = commitOid.substring(0, 7);
-    const verb = action === 'added' ? 'added to' : action === 'updated' ? 'updated on' : 'removed from';
-    showToast(`Note ${verb} ${shortOid}`, 'success');
+    const message =
+      action === 'added'
+        ? msg(str`Note added to ${shortOid}`)
+        : action === 'updated'
+          ? msg(str`Note updated on ${shortOid}`)
+          : msg(str`Note removed from ${shortOid}`);
+    showToast(message, 'success');
   }
 
   /**
@@ -4633,7 +4737,9 @@ export class AppShell extends LitElement {
     const editing = this.diffView;
     if (editing?.hasUnsavedEdits) {
       showToast(
-        `Unsaved edits to ${editing.editingPath ?? 'this file'} were discarded`,
+        msg(
+          str`Unsaved edits to ${editing.editingPath ?? msg('this file')} were discarded`,
+        ),
         'warning'
       );
     }
@@ -4662,12 +4768,12 @@ export class AppShell extends LitElement {
 
   private getDiffTitle(): string {
     if (this.diffFile) {
-      return this.diffFile.isStaged ? 'Staged Changes' : 'Working Changes';
+      return this.diffFile.isStaged ? msg('Staged Changes') : msg('Working Changes');
     }
     if (this.diffCommitFile) {
-      return `Commit ${this.diffCommitFile.commitOid.substring(0, 7)}`;
+      return msg(str`Commit ${this.diffCommitFile.commitOid.substring(0, 7)}`);
     }
-    return 'Diff';
+    return msg('Diff');
   }
 
   private getDiffPath(): string {
@@ -4783,7 +4889,7 @@ export class AppShell extends LitElement {
             repositoryStore.getState().updateActiveRepository(result.data);
           }
         } else if (!result.success) {
-          showToast(result.error?.message ?? 'Failed to refresh repository', 'error');
+          showToast(result.error?.message ?? msg('Failed to refresh repository'), 'error');
         }
       }
       // Remotes are repository state a refresh must RE-READ, not a fact loaded
@@ -4909,13 +5015,13 @@ export class AppShell extends LitElement {
       // D3: Surface feedback instead of silently returning when the account
       // can't be found (e.g. it was deleted between dispatch and handling).
       if (!account) {
-        showToast('Account not found', 'error');
+        showToast(msg('Account not found'), 'error');
         return;
       }
       await unifiedProfileService.refreshAccountCachedUser(account);
     } catch (error) {
       log.error('Failed to refresh account', error);
-      showToast('Failed to refresh account connection', 'error');
+      showToast(msg('Failed to refresh account connection'), 'error');
     }
   }
 
@@ -4973,7 +5079,7 @@ export class AppShell extends LitElement {
       status.find((f) => f.path === e.detail.filePath);
     if (!entry) {
       showToast(
-        'That file is no longer in the working-tree changes — refresh and search again',
+        msg('That file is no longer in the working-tree changes — refresh and search again'),
         'info',
         4000,
       );
@@ -5021,7 +5127,9 @@ export class AppShell extends LitElement {
       } else {
         this.paletteBranches = [];
         showToast(
-          `Failed to load branches: ${branchResult.error?.message ?? 'Unknown error'}`,
+          msg(
+            str`Failed to load branches: ${branchResult.error?.message ?? msg('Unknown error')}`,
+          ),
           'error',
         );
       }
@@ -5030,7 +5138,9 @@ export class AppShell extends LitElement {
       } else {
         this.paletteTrackedFiles = [];
         showToast(
-          `Failed to load tracked files: ${filesResult.error?.message ?? 'Unknown error'}`,
+          msg(
+            str`Failed to load tracked files: ${filesResult.error?.message ?? msg('Unknown error')}`,
+          ),
           'error',
         );
       }
@@ -5067,7 +5177,7 @@ export class AppShell extends LitElement {
       if (!this.activeRepository) {
         uiStore.getState().addToast({
           type: 'warning',
-          message: 'Please open a repository first',
+          message: msg('Please open a repository first'),
           duration: 3000,
         });
         return;
@@ -5105,7 +5215,17 @@ export class AppShell extends LitElement {
       return;
     }
 
-    this.syncAppMenuState(this.hasOpenRepository(), true);
+    // The menu is built in Rust with English labels; retitle it for the active
+    // locale before the first enabled-state push (a rebuild resets those). A
+    // language that applies later — the persisted one at startup arrives
+    // through a dynamic import, and Settings can change it at any time — is
+    // picked up by the `app-language-changed` listener below.
+    void syncAppMenuLabels().then((result) => {
+      if (!result.success) {
+        log.warn('Failed to localise the application menu:', result.error?.message);
+      }
+      this.syncAppMenuState(this.hasOpenRepository(), true);
+    });
   }
 
   private hasOpenRepository(): boolean {
@@ -5138,7 +5258,7 @@ export class AppShell extends LitElement {
     const action = resolveMenuAction(id, this.getPaletteCommands(), this.appMenuShellHandlers());
     if (!action) {
       log.warn(`No handler for application menu item "${id}"`);
-      showToast('That menu action is not available', 'error');
+      showToast(msg('That menu action is not available'), 'error');
       return;
     }
     action();
@@ -5151,9 +5271,12 @@ export class AppShell extends LitElement {
    */
   private appMenuShellHandlers(): MenuShellHandlers {
     return {
-      openRepository: () => this.dispatchToToolbar('open-repository', 'Open Repository'),
-      cloneRepository: () => this.dispatchToToolbar('clone-repository', 'Clone Repository'),
-      initRepository: () => this.dispatchToToolbar('init-repository', 'New Repository'),
+      openRepository: () =>
+        this.dispatchToToolbar('open-repository', msg('Open Repository')),
+      cloneRepository: () =>
+        this.dispatchToToolbar('clone-repository', msg('Clone Repository')),
+      initRepository: () =>
+        this.dispatchToToolbar('init-repository', msg('New Repository')),
       closeRepositoryTab: this.requiresRepository(() => {
         repositoryStore.getState().removeRepository(this.activeRepository!.repository.path);
       }),
@@ -5163,7 +5286,7 @@ export class AppShell extends LitElement {
       // that lands on the full command list and leaves the user to type is a
       // dead end, not a switcher.
       switchBranch: this.requiresRepository(() => {
-        void this.openCommandPalette(SWITCH_BRANCH_PALETTE_QUERY);
+        void this.openCommandPalette(switchBranchPaletteQuery());
       }),
       commandPalette: () => {
         void this.openCommandPalette();
@@ -5184,7 +5307,7 @@ export class AppShell extends LitElement {
   private dispatchToToolbar(eventName: string, label: string): void {
     const toolbar = this.shadowRoot?.querySelector('gn-toolbar');
     if (!toolbar) {
-      showToast(`${label} is not available right now`, 'error');
+      showToast(msg(str`${label} is not available right now`), 'error');
       return;
     }
     toolbar.dispatchEvent(new CustomEvent(eventName));
@@ -5194,12 +5317,14 @@ export class AppShell extends LitElement {
     try {
       const version = await updateService.getAppVersion();
       await showMessage(
-        'About Gitnado',
-        `Gitnado ${version}\n\nA fully-featured, open-source, cross-platform Git GUI client.`
+        msg('About Gitnado'),
+        msg(
+          str`Gitnado ${version}\n\nA fully-featured, open-source, cross-platform Git GUI client.`,
+        )
       );
     } catch (error) {
       log.warn('Failed to show the About dialog:', error);
-      showToast('Could not show application information', 'error');
+      showToast(msg('Could not show application information'), 'error');
     }
   }
 
@@ -5215,19 +5340,24 @@ export class AppShell extends LitElement {
    * array identity each time, making it re-filter its whole list while closed.
    * Nothing in the table varies with repository or dialog state — every action
    * reads live state when it RUNS, which is also what lets the native menu
-   * resolve an id to a live action — so the modifier-key label is the entire
-   * cache key.
+   * resolve an id to a live action — so the modifier-key label and the active
+   * locale (the labels are msg() results) are the entire cache key.
    */
   private getPaletteCommands(): PaletteCommand[] {
     const mod = navigator.platform.includes('Mac') ? '⌘' : 'Ctrl';
-    if (this.paletteCommandsCache && this.paletteCommandsCacheKey === mod) {
+    // The labels below are msg() results, so the locale is one of the inputs
+    // this list renders. Without it in the key, switching language left the
+    // palette showing the previous language until the modifier key changed —
+    // the same stale-locale trap a module-scope msg() would create.
+    const cacheKey = `${mod}:${getLocale()}`;
+    if (this.paletteCommandsCache && this.paletteCommandsCacheKey === cacheKey) {
       return this.paletteCommandsCache;
     }
     const commands: PaletteCommand[] = [
       ...buildPaletteCommands(this satisfies PaletteCommandHost),
       {
         id: 'jira-issues',
-        label: 'Jira Issues...',
+        label: msg('Jira Issues...'),
         category: 'action',
         icon: 'globe',
         action: this.requiresRepository(() => {
@@ -5235,7 +5365,7 @@ export class AppShell extends LitElement {
         }),
       },
     ];
-    this.paletteCommandsCacheKey = mod;
+    this.paletteCommandsCacheKey = cacheKey;
     this.paletteCommandsCache = commands;
     return commands;  }
 
@@ -5287,7 +5417,10 @@ export class AppShell extends LitElement {
       for (const { persisted, repo } of results) {
         if (!repo) {
           repositoryStore.getState().prunePersistedRepo(persisted.path);
-          showToast(`Could not restore repository "${persisted.name}" (${persisted.path})`, 'error');
+          showToast(
+            msg(str`Could not restore repository "${persisted.name}" (${persisted.path})`),
+            'error',
+          );
         }
       }
 
@@ -5461,7 +5594,9 @@ export class AppShell extends LitElement {
     this.autoFetchFailureReported.add(repoPath);
     const repoName = repoPath.split(/[\\/]/).filter(Boolean).pop() || repoPath;
     showToast(
-      `${repoName}: auto-fetch failed${message ? ` — ${message}` : ''}. Ahead/behind counts may be stale.`,
+      msg(
+        str`${repoName}: auto-fetch failed${message ? ` — ${message}` : ''}. Ahead/behind counts may be stale.`,
+      ),
       'warning',
       6000,
     );
@@ -5525,7 +5660,9 @@ export class AppShell extends LitElement {
   }): void => {
     const repoName = event.repoPath.split(/[\\/]/).filter(Boolean).pop() || event.repoPath;
     showToast(
-      `${repoName}: remote has ${event.behind} new commit${event.behind !== 1 ? 's' : ''} available`,
+      event.behind === 1
+        ? msg(str`${repoName}: remote has ${event.behind} new commit available`)
+        : msg(str`${repoName}: remote has ${event.behind} new commits available`),
       'info',
       5000,
     );
@@ -5624,8 +5761,8 @@ export class AppShell extends LitElement {
     // runRefExclusive before this runs and released in its finally, so the
     // cancel path needs no extra bookkeeping.
     const message = await showPrompt(
-      'Stash Changes',
-      'Message for this stash (optional):',
+      msg('Stash Changes'),
+      msg('Message for this stash (optional):'),
       '',
       'WIP'
     );
@@ -5646,13 +5783,13 @@ export class AppShell extends LitElement {
     if (result.success) {
       if (result.data === null) {
         // Clean working tree: nothing to stash — informational, not an error.
-        showToast('No local changes to save', 'info');
+        showToast(msg('No local changes to save'), 'info');
         return;
       }
-      showToast('Stash created', 'success');
+      showToast(msg('Stash created'), 'success');
       this.refreshConflictDialogRepo(repoPath);
     } else {
-      showToast(result.error?.message ?? 'Failed to create stash', 'error');
+      showToast(result.error?.message ?? msg('Failed to create stash'), 'error');
     }
   }
 
@@ -5701,9 +5838,11 @@ export class AppShell extends LitElement {
       showToast(
         result.success
           ? aggressive
-            ? 'Aggressive garbage collection completed'
-            : 'Garbage collection completed'
-          : `Garbage collection failed: ${result.error?.message ?? 'Unknown error'}`,
+            ? msg('Aggressive garbage collection completed')
+            : msg('Garbage collection completed')
+          : msg(
+              str`Garbage collection failed: ${result.error?.message ?? msg('Unknown error')}`,
+            ),
         result.success ? 'success' : 'error'
       );
     } finally {
@@ -5738,7 +5877,9 @@ export class AppShell extends LitElement {
     showToast(
       result.success
         ? summariseFsck(result.data?.message)
-        : `Repository integrity check failed: ${result.error?.message ?? 'Unknown error'}`,
+        : msg(
+            str`Repository integrity check failed: ${result.error?.message ?? msg('Unknown error')}`,
+          ),
       result.success ? 'success' : 'error'
     );
   }
@@ -5771,8 +5912,8 @@ export class AppShell extends LitElement {
         .finally(() => releaseMaintenance(repoPath));
       showToast(
         result.success
-          ? 'Pruned unreachable objects'
-          : `Prune failed: ${result.error?.message ?? 'Unknown error'}`,
+          ? msg('Pruned unreachable objects')
+          : msg(str`Prune failed: ${result.error?.message ?? msg('Unknown error')}`),
         result.success ? 'success' : 'error'
       );
     } finally {
@@ -5809,7 +5950,10 @@ export class AppShell extends LitElement {
       this.refreshConflictDialogRepo(repoPath);
     } else {
       log.error('Failed to checkout branch:', result.data?.message || result.error);
-      showErrorWithSuggestion(result.data?.message || result.error?.message || '', 'Failed to checkout branch');
+      showErrorWithSuggestion(
+        result.data?.message || result.error,
+        msg('Failed to checkout branch'),
+      );
     }
   }
 
@@ -5828,7 +5972,7 @@ export class AppShell extends LitElement {
     );
     if (!result.success || !result.data?.success) {
       const message =
-        result.data?.message || result.error?.message || 'Failed to open file in editor';
+        result.data?.message || result.error?.message || msg('Failed to open file in editor');
       log.error('Failed to open file in editor:', message);
       showToast(message, 'error');
     }
@@ -5849,7 +5993,7 @@ export class AppShell extends LitElement {
         if (result.success && result.data) {
           repositoryStore.getState().addRepository(result.data);
         } else {
-          showToast(result.error?.message ?? 'Failed to open repository', 'error');
+          showToast(result.error?.message ?? msg('Failed to open repository'), 'error');
           return;
         }
       }
@@ -5859,7 +6003,10 @@ export class AppShell extends LitElement {
       this.blameCommitOid = null;
       dialogs.open('blame');
     } catch (error) {
-      showToast(error instanceof Error ? error.message : 'Failed to open repository', 'error');
+      showToast(
+        error instanceof Error ? error.message : msg('Failed to open repository'),
+        'error',
+      );
     }
   }
 
@@ -5875,9 +6022,17 @@ export class AppShell extends LitElement {
     // Two distinct miss cases need different guidance: a commit hidden by
     // the branch-visibility filter will NEVER appear through scrolling
     if (this.graphCanvas?.hasLoadedCommit(oid)) {
-      showToast('Commit is hidden by the branch visibility filter — show its branch to reveal it', 'info', 4000);
+      showToast(
+        msg('Commit is hidden by the branch visibility filter — show its branch to reveal it'),
+        'info',
+        4000,
+      );
     } else {
-      showToast('Commit is not loaded in the graph yet — scroll further back to load it', 'info', 4000);
+      showToast(
+        msg('Commit is not loaded in the graph yet — scroll further back to load it'),
+        'info',
+        4000,
+      );
     }
   }
 
@@ -5954,7 +6109,9 @@ export class AppShell extends LitElement {
       ${ab.ahead > 0
         ? html`<span
             class="status-ahead"
-            title="${ab.ahead} commit${ab.ahead !== 1 ? 's' : ''} to push"
+            title=${ab.ahead === 1
+              ? msg(str`${ab.ahead} commit to push`)
+              : msg(str`${ab.ahead} commits to push`)}
             style="margin-left: 12px; color: var(--color-success, #4caf50);"
             >&uarr;${ab.ahead}</span
           >`
@@ -5962,7 +6119,9 @@ export class AppShell extends LitElement {
       ${ab.behind > 0
         ? html`<span
             class="status-behind"
-            title="${ab.behind} commit${ab.behind !== 1 ? 's' : ''} to pull"
+            title=${ab.behind === 1
+              ? msg(str`${ab.behind} commit to pull`)
+              : msg(str`${ab.behind} commits to pull`)}
             style="margin-left: ${ab.ahead > 0 ? '4' : '12'}px; color: var(--color-warning, #ff9800);"
             >&darr;${ab.behind}</span
           >`
@@ -5987,10 +6146,11 @@ export class AppShell extends LitElement {
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
           <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
         </svg>
-        <div class="window-drop-overlay-title">Drop a folder to open it</div>
+        <div class="window-drop-overlay-title">${msg('Drop a folder to open it')}</div>
         <div class="window-drop-overlay-hint">
-          It opens in a new tab. Git repositories open straight away; any other folder can be
-          scanned or initialized.
+          ${msg(
+            'It opens in a new tab. Git repositories open straight away; any other folder can be scanned or initialized.',
+          )}
         </div>
       </div>
     `;
@@ -6002,7 +6162,7 @@ export class AppShell extends LitElement {
         e.preventDefault();
         const main = this.shadowRoot?.querySelector('#main-content') as HTMLElement;
         main?.focus();
-      }}>Skip to main content</a>
+      }}>${msg('Skip to main content')}</a>
 
       ${this.globalLoading ? html`<div class="global-loading-bar"></div>` : ''}
 
@@ -6093,22 +6253,30 @@ export class AppShell extends LitElement {
                           </svg>
                         </span>
                         <span class="operation-text">
-                          ${this.activeRepository.repository.state === 'cherrypick' ? 'Cherry-pick in progress' :
-                            this.activeRepository.repository.state === 'merge' ? 'Merge in progress' :
-                            this.activeRepository.repository.state === 'rebase' ||
-                            this.activeRepository.repository.state === 'rebase-interactive' ||
-                            this.activeRepository.repository.state === 'rebase-merge' ? 'Rebase in progress' :
-                            this.activeRepository.repository.state === 'revert' ? 'Revert in progress' :
-                            this.activeRepository.repository.state === 'bisect' ? 'Bisect in progress' :
-                            this.activeRepository.repository.state === 'clean' ? 'Conflicts need resolution' :
-                            `Operation in progress: ${this.activeRepository.repository.state}`}
+                          ${this.activeRepository.repository.state === 'cherrypick'
+                            ? msg('Cherry-pick in progress')
+                            : this.activeRepository.repository.state === 'merge'
+                              ? msg('Merge in progress')
+                              : this.activeRepository.repository.state === 'rebase' ||
+                                  this.activeRepository.repository.state === 'rebase-interactive' ||
+                                  this.activeRepository.repository.state === 'rebase-merge'
+                                ? msg('Rebase in progress')
+                                : this.activeRepository.repository.state === 'revert'
+                                  ? msg('Revert in progress')
+                                  : this.activeRepository.repository.state === 'bisect'
+                                    ? msg('Bisect in progress')
+                                    : this.activeRepository.repository.state === 'clean'
+                                      ? msg('Conflicts need resolution')
+                                      : msg(
+                                          str`Operation in progress: ${this.activeRepository.repository.state}`,
+                                        )}
                         </span>
                         <div class="operation-banner-actions">
                           ${this.canResolveConflicts(this.activeRepository.repository.state) ||
                           (this.activeRepository.repository.state === 'clean' && this.hasConflictedFiles)
                             ? html`
                                 <button class="operation-btn operation-btn-primary" @click=${this.handleOpenConflictDialog}>
-                                  Resolve Conflicts
+                                  ${msg('Resolve Conflicts')}
                                 </button>
                               `
                             : ''}
@@ -6120,9 +6288,11 @@ export class AppShell extends LitElement {
                                   this.abortInProgress ||
                                   this.isRefOperationInFlight()}
                                   @click=${() => this.handleSkipOperation()}
-                                  title="Do not apply this commit; keep what is already applied"
+                                  title=${msg(
+                                    'Do not apply this commit; keep what is already applied',
+                                  )}
                                 >
-                                  Skip
+                                  ${msg('Skip')}
                                 </button>
                               `
                             : ''}
@@ -6135,7 +6305,7 @@ export class AppShell extends LitElement {
                                   this.isRefOperationInFlight()}
                                   @click=${() => this.handleAbortOperation()}
                                 >
-                                  Abort
+                                  ${msg('Abort')}
                                 </button>
                               `
                             : ''}
@@ -6145,7 +6315,7 @@ export class AppShell extends LitElement {
                                   class="operation-btn operation-btn-primary"
                                   @click=${() => { dialogs.open('bisect'); }}
                                 >
-                                  Manage Bisect
+                                  ${msg('Manage Bisect')}
                                 </button>
                               `
                             : ''}
@@ -6178,7 +6348,7 @@ export class AppShell extends LitElement {
                           <button
                             class="diff-close-btn"
                             @click=${this.handleCloseDiff}
-                            title="Close diff (Esc)"
+                            title=${msg('Close diff (Esc)')}
                           >
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                               <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -6326,46 +6496,48 @@ export class AppShell extends LitElement {
               </div>
               ${this.renderMultiCommitActions()}
               <div class="context-menu-divider"></div>
-              <button class="context-menu-item" ?disabled=${this.isRefOperationInFlight()} @click=${() => void this.handleQuickAmend()} title="Amend (edit) this commit">
+              <button class="context-menu-item" ?disabled=${this.isRefOperationInFlight()} @click=${() => void this.handleQuickAmend()} title=${msg('Amend (edit) this commit')}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
                   <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
                 </svg>
-                Amend
+                ${msg('Amend')}
               </button>
-              <button class="context-menu-item" ?disabled=${this.isRefOperationInFlight()} @click=${this.handleRewordCommit} title="Change the commit message">
+              <button class="context-menu-item" ?disabled=${this.isRefOperationInFlight()} @click=${this.handleRewordCommit} title=${msg('Change the commit message')}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <line x1="17" y1="10" x2="3" y2="10"></line>
                   <line x1="21" y1="6" x2="3" y2="6"></line>
                   <line x1="21" y1="14" x2="3" y2="14"></line>
                   <line x1="17" y1="18" x2="3" y2="18"></line>
                 </svg>
-                Reword
+                ${msg('Reword')}
               </button>
               <div class="context-menu-divider"></div>
-              <button class="context-menu-item" data-testid="fold-staged-into-commit" ?disabled=${this.isRefOperationInFlight()} @click=${this.handleFoldStagedIntoCommit} title="Immediately fold staged changes into this commit and replay later commits">
+              <button class="context-menu-item" data-testid="fold-staged-into-commit" ?disabled=${this.isRefOperationInFlight()} @click=${this.handleFoldStagedIntoCommit} title=${msg(
+                  'Immediately fold staged changes into this commit and replay later commits',
+                )}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <polyline points="16 16 12 12 8 16"></polyline>
                   <line x1="12" y1="12" x2="12" y2="21"></line>
                   <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"></path>
                 </svg>
-                Fold staged into this
+                ${msg('Fold staged into this')}
               </button>
-              <button class="context-menu-item" ?disabled=${this.isRefOperationInFlight()} @click=${this.handleFixupCommit} title="Create fixup commit for this commit (requires staged changes)">
+              <button class="context-menu-item" ?disabled=${this.isRefOperationInFlight()} @click=${this.handleFixupCommit} title=${msg('Create fixup commit for this commit (requires staged changes)')}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                   <polyline points="17 8 12 3 7 8"></polyline>
                   <line x1="12" y1="3" x2="12" y2="15"></line>
                 </svg>
-                Fixup into this
+                ${msg('Fixup into this')}
               </button>
-              <button class="context-menu-item" ?disabled=${this.isRefOperationInFlight()} @click=${this.handleSquashCommit} title="Create squash commit for this commit (requires staged changes)">
+              <button class="context-menu-item" ?disabled=${this.isRefOperationInFlight()} @click=${this.handleSquashCommit} title=${msg('Create squash commit for this commit (requires staged changes)')}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
                   <line x1="9" y1="3" x2="9" y2="21"></line>
                   <line x1="15" y1="3" x2="15" y2="21"></line>
                 </svg>
-                Squash into this
+                ${msg('Squash into this')}
               </button>
               <div class="context-menu-divider"></div>
               <button class="context-menu-item" ?disabled=${this.isRefOperationInFlight()} @click=${this.handleCherryPick}>
@@ -6373,21 +6545,21 @@ export class AppShell extends LitElement {
                   <path d="M8 4a4 4 0 1 1 0 8 4 4 0 0 1 0-8zM8 2a6 6 0 1 0 0 12A6 6 0 0 0 8 2z"/>
                   <path d="M8 5v6M5 8h6" stroke="currentColor" stroke-width="1.5" fill="none"/>
                 </svg>
-                Cherry-pick
+                ${msg('Cherry-pick')}
               </button>
               <button class="context-menu-item" ?disabled=${this.isRefOperationInFlight()} @click=${this.handleRevertCommit}>
                 <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
                   <path d="M1.5 8a6.5 6.5 0 1 1 13 0 6.5 6.5 0 0 1-13 0zM8 3a5 5 0 1 0 0 10A5 5 0 0 0 8 3z"/>
                   <path d="M8 4v4l3 2" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/>
                 </svg>
-                Revert
+                ${msg('Revert')}
               </button>
               <button class="context-menu-item" @click=${this.handleCreateTagFromContext}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"></path>
                   <line x1="7" y1="7" x2="7.01" y2="7"></line>
                 </svg>
-                Create tag
+                ${msg('Create tag')}
               </button>
               <button class="context-menu-item" @click=${this.handleCreateBranchFromContext}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -6396,15 +6568,15 @@ export class AppShell extends LitElement {
                   <circle cx="6" cy="18" r="3"></circle>
                   <path d="M18 9a9 9 0 0 1-9 9"></path>
                 </svg>
-                Create branch
+                ${msg('Create branch')}
               </button>
-              <button class="context-menu-item" @click=${this.handleDescribeFromContext} title="Name this commit after the nearest tag (git describe)">
+              <button class="context-menu-item" @click=${this.handleDescribeFromContext} title=${msg('Name this commit after the nearest tag (git describe)')}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <circle cx="12" cy="12" r="10"></circle>
                   <line x1="12" y1="16" x2="12" y2="12"></line>
                   <line x1="12" y1="8" x2="12.01" y2="8"></line>
                 </svg>
-                Describe this commit
+                ${msg('Describe this commit')}
               </button>
               <button class="context-menu-item" @click=${this.handleCreatePatchFromContext}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -6413,19 +6585,19 @@ export class AppShell extends LitElement {
                   <line x1="12" y1="18" x2="12" y2="12"></line>
                   <line x1="9" y1="15" x2="15" y2="15"></line>
                 </svg>
-                Create patch…
+                ${msg('Create patch…')}
               </button>
               <div class="context-menu-divider"></div>
               <div class="context-menu-submenu">
-                <span class="context-menu-label">Reset to this commit</span>
+                <span class="context-menu-label">${msg('Reset to this commit')}</span>
                 <button class="context-menu-item" ?disabled=${this.isRefOperationInFlight()} @click=${() => this.handleResetToCommit('soft')}>
-                  Soft (keep changes staged)
+                  ${msg('Soft (keep changes staged)')}
                 </button>
                 <button class="context-menu-item" ?disabled=${this.isRefOperationInFlight()} @click=${() => this.handleResetToCommit('mixed')}>
-                  Mixed (keep changes unstaged)
+                  ${msg('Mixed (keep changes unstaged)')}
                 </button>
                 <button class="context-menu-item danger" ?disabled=${this.isRefOperationInFlight()} @click=${() => this.handleResetToCommit('hard')}>
-                  Hard (discard all changes)
+                  ${msg('Hard (discard all changes)')}
                 </button>
               </div>
             </div>
@@ -6440,7 +6612,11 @@ export class AppShell extends LitElement {
               @click=${(e: Event) => e.stopPropagation()}
             >
               <div class="context-menu-header">
-                <span class="context-menu-oid">${this.refContextMenu.refType === 'tag' ? 'Tag' : this.refContextMenu.refType === 'remoteBranch' ? 'Remote' : 'Branch'}</span>
+                <span class="context-menu-oid">${this.refContextMenu.refType === 'tag'
+                  ? msg('Tag')
+                  : this.refContextMenu.refType === 'remoteBranch'
+                    ? msg('Remote')
+                    : msg('Branch')}</span>
                 <span class="context-menu-summary">${this.refContextMenu.refName}</span>
               </div>
               <div class="context-menu-divider"></div>
@@ -6454,7 +6630,7 @@ export class AppShell extends LitElement {
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <polyline points="20 6 9 17 4 12"></polyline>
                       </svg>
-                      Checkout
+                      ${msg('Checkout')}
                     </button>
                     <button class="context-menu-item" ?disabled=${this.isRefOperationInFlight()} @click=${this.handleRefMerge}>
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -6462,7 +6638,7 @@ export class AppShell extends LitElement {
                         <circle cx="6" cy="6" r="3"></circle>
                         <path d="M6 21V9a9 9 0 0 0 9 9"></path>
                       </svg>
-                      Merge into current branch
+                      ${msg('Merge into current branch')}
                     </button>
                     <button class="context-menu-item" ?disabled=${this.isRefOperationInFlight()} @click=${this.handleRefRebase}>
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -6471,7 +6647,7 @@ export class AppShell extends LitElement {
                         <circle cx="6" cy="18" r="3"></circle>
                         <path d="M18 9a9 9 0 0 1-9 9"></path>
                       </svg>
-                      Rebase current branch onto this
+                      ${msg('Rebase current branch onto this')}
                     </button>
                     ${this.refContextMenu.isHead
                       ? nothing
@@ -6491,7 +6667,7 @@ export class AppShell extends LitElement {
                               <polyline points="3 6 5 6 21 6"></polyline>
                               <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
                             </svg>
-                            Delete branch
+                            ${msg('Delete branch')}
                           </button>
                         `}
                   `
@@ -6505,7 +6681,7 @@ export class AppShell extends LitElement {
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                           <polyline points="20 6 9 17 4 12"></polyline>
                         </svg>
-                        Checkout
+                        ${msg('Checkout')}
                       </button>
                       <button class="context-menu-item" ?disabled=${this.isRefOperationInFlight()} @click=${this.handleRefMerge}>
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -6513,7 +6689,7 @@ export class AppShell extends LitElement {
                           <circle cx="6" cy="6" r="3"></circle>
                           <path d="M6 21V9a9 9 0 0 0 9 9"></path>
                         </svg>
-                        Merge into current branch
+                        ${msg('Merge into current branch')}
                       </button>
                       <button class="context-menu-item" ?disabled=${this.isRefOperationInFlight()} @click=${this.handleRefRebase}>
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -6522,7 +6698,7 @@ export class AppShell extends LitElement {
                           <circle cx="6" cy="18" r="3"></circle>
                           <path d="M18 9a9 9 0 0 1-9 9"></path>
                         </svg>
-                        Rebase current branch onto this
+                        ${msg('Rebase current branch onto this')}
                       </button>
                     `
                   : html`
@@ -6534,7 +6710,7 @@ export class AppShell extends LitElement {
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                           <polyline points="20 6 9 17 4 12"></polyline>
                         </svg>
-                        Checkout tag
+                        ${msg('Checkout tag')}
                       </button>
                       <button
                         class="context-menu-item"
@@ -6546,7 +6722,7 @@ export class AppShell extends LitElement {
                           <line x1="12" y1="19" x2="12" y2="5"></line>
                           <polyline points="5 12 12 5 19 12"></polyline>
                         </svg>
-                        Push tag to remote
+                        ${msg('Push tag to remote')}
                       </button>
                       <div class="context-menu-divider"></div>
                       <button
@@ -6558,7 +6734,7 @@ export class AppShell extends LitElement {
                           <polyline points="3 6 5 6 21 6"></polyline>
                           <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
                         </svg>
-                        Delete tag
+                        ${msg('Delete tag')}
                       </button>
                     `}
               <!-- Rendered for local branches, remote branches AND tags: an
@@ -6572,7 +6748,7 @@ export class AppShell extends LitElement {
                   <rect x="1" y="3" width="22" height="5"></rect>
                   <line x1="10" y1="12" x2="14" y2="12"></line>
                 </svg>
-                Export archive…
+                ${msg('Export archive…')}
               </button>
             </div>
           `
@@ -6650,7 +6826,8 @@ export class AppShell extends LitElement {
 
       ${this.activeRepository && dialogs.isOpen('repositoryHealth') ? html`
         <gn-modal
-          modalTitle="Repository Health"
+          data-role="repository-health"
+          modalTitle=${msg('Repository Health')}
           ?open=${dialogs.isOpen('repositoryHealth')}
           @close=${this.handleRepositoryHealthClose}
         >

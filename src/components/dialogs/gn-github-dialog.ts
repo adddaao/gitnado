@@ -5,6 +5,7 @@
 
 import { LitElement, html, css, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
+import { localized, msg, str } from '@lit/localize';
 import { sharedStyles } from '../../styles/shared-styles.ts';
 import * as gitService from '../../services/git.service.ts';
 import { invokeCommand } from '../../services/tauri-api.ts';
@@ -58,6 +59,7 @@ export interface PrReviewComment {
 }
 
 @customElement('gn-github-dialog')
+@localized()
 export class GnGitHubDialog extends LitElement {
   static styles = [
     sharedStyles,
@@ -1014,7 +1016,7 @@ export class GnGitHubDialog extends LitElement {
         // A failed/denied sign-in clears the pending spinner — surface the error
         // so the user isn't left staring at a silently reset form (dead-end).
         if (state.status === 'error') {
-          this.error = state.error ?? 'GitHub sign-in failed';
+          this.error = state.error ?? msg('GitHub sign-in failed');
           showToast(this.error, 'error');
           // The flow is over and can no longer emit `oauth-complete`, so release
           // the pinned target — otherwise a later completion would be attributed
@@ -1183,7 +1185,7 @@ export class GnGitHubDialog extends LitElement {
       }
     } catch (err) {
       if (generation !== this.loadGeneration) return;
-      this.error = err instanceof Error ? err.message : 'Failed to load data';
+      this.error = err instanceof Error ? err.message : msg('Failed to load data');
     } finally {
       if (generation === this.loadGeneration) {
         this.isLoading = false;
@@ -1222,16 +1224,16 @@ export class GnGitHubDialog extends LitElement {
           });
         }
       } else if (!result.success) {
-        this.error = result.error?.message ?? 'Failed to check connection';
+        this.error = result.error?.message ?? msg('Failed to check connection');
         this.connectionStatus = { connected: false, user: null, scopes: [] };
         this.syncSharedConnectionStatus(false);
       } else {
-        this.error = 'Failed to verify connection';
+        this.error = msg('Failed to verify connection');
         this.connectionStatus = { connected: false, user: null, scopes: [] };
         this.syncSharedConnectionStatus(false);
       }
     } catch (err) {
-      this.error = err instanceof Error ? err.message : 'Failed to check connection';
+      this.error = err instanceof Error ? err.message : msg('Failed to check connection');
       this.connectionStatus = { connected: false, user: null, scopes: [] };
       this.syncSharedConnectionStatus(false);
     }
@@ -1326,7 +1328,7 @@ export class GnGitHubDialog extends LitElement {
     } else if (!result.success) {
       // A genuine backend failure (not merely "this isn't a GitHub repo", which
       // surfaces as success with null data) must not fail silently.
-      this.error = result.error?.message ?? 'Failed to detect GitHub repository';
+      this.error = result.error?.message ?? msg('Failed to detect GitHub repository');
     }
   }
 
@@ -1369,11 +1371,11 @@ export class GnGitHubDialog extends LitElement {
       } else {
         // Leave the loaded pages, page cursor and hasMore flag alone so the
         // button stays put for a retry.
-        this.error = result.error?.message ?? 'Failed to load pull requests';
+        this.error = result.error?.message ?? msg('Failed to load pull requests');
       }
     } catch (err) {
       if (requestId !== this.prRequestId) return;
-      this.error = err instanceof Error ? err.message : 'Failed to load pull requests';
+      this.error = err instanceof Error ? err.message : msg('Failed to load pull requests');
     } finally {
       if (requestId === this.prRequestId) {
         if (append) {
@@ -1419,11 +1421,11 @@ export class GnGitHubDialog extends LitElement {
           [prNumber]: result.data,
         };
       } else if (!gitService.isNetworkGateRefusal(result.error)) {
-        this.error = result.error?.message ?? 'Failed to load PR comments';
+        this.error = result.error?.message ?? msg('Failed to load PR comments');
         showToast(this.error, 'error');
       }
     } catch (err) {
-      this.error = err instanceof Error ? err.message : 'Failed to load PR comments';
+      this.error = err instanceof Error ? err.message : msg('Failed to load PR comments');
       showToast(this.error, 'error');
     } finally {
       this.loadingCommentsForPr = null;
@@ -1459,14 +1461,14 @@ export class GnGitHubDialog extends LitElement {
         this.commentBodyInput = '';
         this.commentFilePathInput = '';
         this.commentLineInput = '';
-        showToast('Comment posted', 'success');
+        showToast(msg('Comment posted'), 'success');
         await this.loadPrComments(prNumber);
       } else if (!gitService.isNetworkGateRefusal(result.error)) {
-        this.error = result.error?.message ?? 'Failed to post PR comment';
+        this.error = result.error?.message ?? msg('Failed to post PR comment');
         showToast(this.error, 'error');
       }
     } catch (err) {
-      this.error = err instanceof Error ? err.message : 'Failed to post PR comment';
+      this.error = err instanceof Error ? err.message : msg('Failed to post PR comment');
       showToast(this.error, 'error');
     } finally {
       this.postingCommentForPr = null;
@@ -1504,11 +1506,11 @@ export class GnGitHubDialog extends LitElement {
         // Use the shared error banner (like loadPullRequests) rather than a
         // toast, so a shared failure across the batched loads doesn't stack
         // four near-identical toasts on open.
-        this.error = result.error?.message ?? 'Failed to load workflow runs';
+        this.error = result.error?.message ?? msg('Failed to load workflow runs');
       }
     } catch (err) {
       if (requestId !== this.runsRequestId) return;
-      this.error = err instanceof Error ? err.message : 'Failed to load workflow runs';
+      this.error = err instanceof Error ? err.message : msg('Failed to load workflow runs');
     } finally {
       if (append && requestId === this.runsRequestId) this.isLoadingMoreRuns = false;
     }
@@ -1544,11 +1546,11 @@ export class GnGitHubDialog extends LitElement {
         this.issues = append ? [...this.issues, ...result.data.issues] : result.data.issues;
         this.issuesNextPage = result.data.nextPage ?? null;
       } else if (!result.success) {
-        this.error = result.error?.message ?? 'Failed to load issues';
+        this.error = result.error?.message ?? msg('Failed to load issues');
       }
     } catch (err) {
       if (requestId !== this.issuesRequestId) return;
-      this.error = err instanceof Error ? err.message : 'Failed to load issues';
+      this.error = err instanceof Error ? err.message : msg('Failed to load issues');
     } finally {
       if (append && requestId === this.issuesRequestId) this.isLoadingMoreIssues = false;
     }
@@ -1569,10 +1571,10 @@ export class GnGitHubDialog extends LitElement {
       if (result.success && result.data) {
         this.repoLabels = result.data;
       } else if (!result.success) {
-        this.error = result.error?.message ?? 'Failed to load labels';
+        this.error = result.error?.message ?? msg('Failed to load labels');
       }
     } catch (err) {
-      this.error = err instanceof Error ? err.message : 'Failed to load labels';
+      this.error = err instanceof Error ? err.message : msg('Failed to load labels');
     }
   }
 
@@ -1601,11 +1603,11 @@ export class GnGitHubDialog extends LitElement {
         this.releasesPage = requestedPage;
         this.hasMoreReleases = result.data.length === RELEASE_PAGE_SIZE;
       } else if (!result.success) {
-        this.error = result.error?.message ?? 'Failed to load releases';
+        this.error = result.error?.message ?? msg('Failed to load releases');
       }
     } catch (err) {
       if (requestId !== this.releasesRequestId) return;
-      this.error = err instanceof Error ? err.message : 'Failed to load releases';
+      this.error = err instanceof Error ? err.message : msg('Failed to load releases');
     } finally {
       if (append && requestId === this.releasesRequestId) this.isLoadingMoreReleases = false;
     }
@@ -1614,7 +1616,7 @@ export class GnGitHubDialog extends LitElement {
   private async handleStartOAuth(): Promise<void> {
     const clientId = getClientId('github');
     if (!clientId) {
-      this.error = 'GitHub OAuth is not configured. Please use a Personal Access Token.';
+      this.error = msg('GitHub OAuth is not configured. Please use a Personal Access Token.');
       this.authMethod = 'pat';
       return;
     }
@@ -1685,7 +1687,7 @@ export class GnGitHubDialog extends LitElement {
         await unifiedProfileService.loadUnifiedProfileForRepository(this.repositoryPath);
       }
       if (!targetAccountExists()) {
-        this.error = 'The GitHub account was removed before sign-in completed. Please sign in again.';
+        this.error = msg('The GitHub account was removed before sign-in completed. Please sign in again.');
         showToast(this.error, 'error');
         return;
       }
@@ -1695,13 +1697,13 @@ export class GnGitHubDialog extends LitElement {
       const verifyResult = await gitService.checkGitHubConnectionWithToken(tokens.accessToken);
       log.debug('Verify result', { success: verifyResult.success, connected: verifyResult.data?.connected });
       if (!verifyResult.success || !verifyResult.data?.connected) {
-        this.error = verifyResult.error?.message ?? 'OAuth token verification failed';
+        this.error = verifyResult.error?.message ?? msg('OAuth token verification failed');
         return;
       }
 
       const user = verifyResult.data.user;
       if (!targetAccountExists()) {
-        this.error = 'The GitHub account was removed before sign-in completed. Please sign in again.';
+        this.error = msg('The GitHub account was removed before sign-in completed. Please sign in again.');
         showToast(this.error, 'error');
         return;
       }
@@ -1723,7 +1725,7 @@ export class GnGitHubDialog extends LitElement {
         );
         if (!targetAccountExists()) {
           await credentialService.deleteAccountToken('github', targetAccountId);
-          this.error = 'The GitHub account was removed before sign-in completed. Please sign in again.';
+          this.error = msg('The GitHub account was removed before sign-in completed. Please sign in again.');
           showToast(this.error, 'error');
           return;
         }
@@ -1794,7 +1796,9 @@ export class GnGitHubDialog extends LitElement {
       if (!applyOAuthResultToSelection) {
         this.oauthState = { status: 'idle' };
         showToast(
-          user?.login ? `Connected GitHub account @${user.login}` : 'Connected GitHub account',
+          user?.login
+            ? msg(str`Connected GitHub account @${user.login}`)
+            : msg('Connected GitHub account'),
           'success'
         );
         return;
@@ -1808,7 +1812,9 @@ export class GnGitHubDialog extends LitElement {
       // not visible — surface a toast so the connection isn't a silent no-op.
       if (!wasOpen) {
         showToast(
-          user?.login ? `Connected GitHub account @${user.login}` : 'Connected GitHub account',
+          user?.login
+            ? msg(str`Connected GitHub account @${user.login}`)
+            : msg('Connected GitHub account'),
           'success'
         );
       }
@@ -1827,7 +1833,7 @@ export class GnGitHubDialog extends LitElement {
       if (targetAccountId && !targetAccountExists()) {
         await credentialService.deleteAccountToken('github', targetAccountId);
       }
-      this.error = err instanceof Error ? err.message : 'OAuth authentication failed';
+      this.error = err instanceof Error ? err.message : msg('OAuth authentication failed');
     } finally {
       this.isLoading = false;
     }
@@ -1844,7 +1850,7 @@ export class GnGitHubDialog extends LitElement {
       // First verify the token works by checking connection
       const verifyResult = await gitService.checkGitHubConnectionWithToken(tokenToSave);
       if (!verifyResult.success || !verifyResult.data?.connected) {
-        this.error = verifyResult.error?.message ?? 'Invalid token or connection failed';
+        this.error = verifyResult.error?.message ?? msg('Invalid token or connection failed');
         return;
       }
 
@@ -1907,7 +1913,7 @@ export class GnGitHubDialog extends LitElement {
         ]);
       }
     } catch (err) {
-      this.error = err instanceof Error ? err.message : 'Failed to save token';
+      this.error = err instanceof Error ? err.message : msg('Failed to save token');
       this.tokenInput = tokenToSave;
     } finally {
       this.isLoading = false;
@@ -1949,8 +1955,8 @@ export class GnGitHubDialog extends LitElement {
         } catch (appErr) {
           showToast(
             appErr instanceof Error
-              ? `Disconnected, but the GitHub App configuration could not be removed: ${appErr.message}`
-              : 'Disconnected, but the GitHub App configuration could not be removed',
+              ? msg(str`Disconnected, but the GitHub App configuration could not be removed: ${appErr.message}`)
+              : msg('Disconnected, but the GitHub App configuration could not be removed'),
             'warning',
           );
         }
@@ -1964,7 +1970,7 @@ export class GnGitHubDialog extends LitElement {
       this.repoLabels = [];
       this.releases = [];
     } catch (err) {
-      this.error = err instanceof Error ? err.message : 'Failed to disconnect';
+      this.error = err instanceof Error ? err.message : msg('Failed to disconnect');
       showToast(this.error, 'error');
     } finally {
       this.isLoading = false;
@@ -1975,10 +1981,10 @@ export class GnGitHubDialog extends LitElement {
     if (!this.selectedAccountId) return;
 
     const selected = this.accounts.find((a) => a.id === this.selectedAccountId);
-    const accountName = selected?.name ?? 'this account';
+    const accountName = selected?.name ?? msg('this account');
     const confirmed = await showConfirm(
-      'Delete GitHub Integration',
-      `Delete ${accountName}? The stored token will be removed and any profile that uses this account as its default will lose that reference.`,
+      msg('Delete GitHub Integration'),
+      msg(str`Delete ${accountName}? The stored token will be removed and any profile that uses this account as its default will lose that reference.`),
       'warning',
     );
     if (!confirmed) return;
@@ -2004,8 +2010,8 @@ export class GnGitHubDialog extends LitElement {
         } catch (appErr) {
           showToast(
             appErr instanceof Error
-              ? `Account deleted, but the GitHub App configuration could not be removed: ${appErr.message}`
-              : 'Account deleted, but the GitHub App configuration could not be removed',
+              ? msg(str`Account deleted, but the GitHub App configuration could not be removed: ${appErr.message}`)
+              : msg('Account deleted, but the GitHub App configuration could not be removed'),
             'warning',
           );
         }
@@ -2027,12 +2033,12 @@ export class GnGitHubDialog extends LitElement {
         await credentialService.deleteAccountToken('github', accountId);
       } catch (tokenErr) {
         // M10: surface partial failure instead of swallowing it.
-        const msg =
+        const message =
           tokenErr instanceof Error
-            ? `Account deleted, but its stored token could not be removed: ${tokenErr.message}`
-            : 'Account deleted, but its stored token could not be removed.';
-        this.error = msg;
-        showToast(msg, 'error');
+            ? msg(str`Account deleted, but its stored token could not be removed: ${tokenErr.message}`)
+            : msg('Account deleted, but its stored token could not be removed.');
+        this.error = message;
+        showToast(message, 'error');
       }
 
       if (this.accounts.length > 0) {
@@ -2040,9 +2046,9 @@ export class GnGitHubDialog extends LitElement {
       }
     } catch (err) {
       // M10: pair inline error with a toast for consistent feedback.
-      const msg = err instanceof Error ? err.message : 'Failed to delete integration';
-      this.error = msg;
-      showToast(msg, 'error');
+      const message = err instanceof Error ? err.message : msg('Failed to delete integration');
+      this.error = message;
+      showToast(message, 'error');
     } finally {
       this.isLoading = false;
     }
@@ -2058,7 +2064,7 @@ export class GnGitHubDialog extends LitElement {
       );
       this.appInstallations = installations;
     } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Failed to load installations', 'error');
+      showToast(err instanceof Error ? err.message : msg('Failed to load installations'), 'error');
     }
     this.loadingInstallations = false;
   }
@@ -2082,7 +2088,7 @@ export class GnGitHubDialog extends LitElement {
       );
 
       if (!status.connected) {
-        throw new Error('GitHub App configuration was not accepted by the server');
+        throw new Error(msg('GitHub App configuration was not accepted by the server'));
       }
 
       // The App connection always gets its OWN account record. Reusing
@@ -2123,8 +2129,8 @@ export class GnGitHubDialog extends LitElement {
         } catch (supersededErr) {
           showToast(
             supersededErr instanceof Error
-              ? `Connected, but the previous GitHub App account could not be removed: ${supersededErr.message}`
-              : 'Connected, but the previous GitHub App account could not be removed',
+              ? msg(str`Connected, but the previous GitHub App account could not be removed: ${supersededErr.message}`)
+              : msg('Connected, but the previous GitHub App account could not be removed'),
             'warning',
           );
         }
@@ -2147,7 +2153,7 @@ export class GnGitHubDialog extends LitElement {
       this.isAddingAccount = false;
       this.syncSharedConnectionStatus(true);
 
-      showToast('Connected via GitHub App', 'success');
+      showToast(msg('Connected via GitHub App'), 'success');
 
       // Reset form
       this.appId = '';
@@ -2155,7 +2161,7 @@ export class GnGitHubDialog extends LitElement {
       this.appInstallationId = '';
       this.appInstallations = [];
     } catch (err) {
-      this.error = err instanceof Error ? err.message : 'Failed to connect GitHub App';
+      this.error = err instanceof Error ? err.message : msg('Failed to connect GitHub App');
       showToast(this.error, 'error');
     }
 
@@ -2176,7 +2182,7 @@ export class GnGitHubDialog extends LitElement {
     if (result.success && result.data) {
       this.createPrBody = result.data.body;
     } else {
-      showToast(result.error?.message ?? 'Failed to generate description', 'error');
+      showToast(result.error?.message ?? msg('Failed to generate description'), 'error');
     }
 
     this.generatingPrDescription = false;
@@ -2214,12 +2220,12 @@ export class GnGitHubDialog extends LitElement {
         this.createPrDraft = false;
         this.activeTab = 'pull-requests';
         await this.loadPullRequests();
-        showToast('Pull request created successfully', 'success');
+        showToast(msg('Pull request created successfully'), 'success');
       } else {
-        this.error = result.error?.message ?? 'Failed to create pull request';
+        this.error = result.error?.message ?? msg('Failed to create pull request');
       }
     } catch (err) {
-      this.error = err instanceof Error ? err.message : 'Failed to create pull request';
+      this.error = err instanceof Error ? err.message : msg('Failed to create pull request');
     } finally {
       this.isLoading = false;
     }
@@ -2265,12 +2271,12 @@ export class GnGitHubDialog extends LitElement {
         this.createIssueLabels = [];
         this.activeTab = 'issues';
         await this.loadIssues();
-        showToast('Issue created successfully', 'success');
+        showToast(msg('Issue created successfully'), 'success');
       } else {
-        this.error = result.error?.message ?? 'Failed to create issue';
+        this.error = result.error?.message ?? msg('Failed to create issue');
       }
     } catch (err) {
-      this.error = err instanceof Error ? err.message : 'Failed to create issue';
+      this.error = err instanceof Error ? err.message : msg('Failed to create issue');
     } finally {
       this.isLoading = false;
     }
@@ -2328,12 +2334,12 @@ export class GnGitHubDialog extends LitElement {
         this.createReleaseGenerateNotes = true;
         this.activeTab = 'releases';
         await this.loadReleases();
-        showToast('Release created successfully', 'success');
+        showToast(msg('Release created successfully'), 'success');
       } else {
-        this.error = result.error?.message ?? 'Failed to create release';
+        this.error = result.error?.message ?? msg('Failed to create release');
       }
     } catch (err) {
-      this.error = err instanceof Error ? err.message : 'Failed to create release';
+      this.error = err instanceof Error ? err.message : msg('Failed to create release');
     } finally {
       this.isLoading = false;
     }
@@ -2372,10 +2378,10 @@ export class GnGitHubDialog extends LitElement {
     const diff = now.getTime() - date.getTime();
     const days = Math.floor(diff / (1000 * 60 * 60 * 24));
 
-    if (days === 0) return 'today';
-    if (days === 1) return 'yesterday';
-    if (days < 7) return `${days} days ago`;
-    if (days < 30) return `${Math.floor(days / 7)} weeks ago`;
+    if (days === 0) return msg('today');
+    if (days === 1) return msg('yesterday');
+    if (days < 7) return msg(str`${days} days ago`);
+    if (days < 30) return msg(str`${Math.floor(days / 7)} weeks ago`);
     return date.toLocaleDateString();
   }
 
@@ -2397,8 +2403,8 @@ export class GnGitHubDialog extends LitElement {
             ` : ''}
           </div>
           <div class="connection-actions">
-            <button class="btn btn-danger" @click=${() => this.handleDisconnect()} ?disabled=${this.isLoading}>Disconnect</button>
-            <button class="btn btn-danger-outline" @click=${() => this.handleDeleteIntegration()} ?disabled=${this.isLoading}>Delete</button>
+            <button class="btn btn-danger" @click=${() => this.handleDisconnect()} ?disabled=${this.isLoading}>${msg('Disconnect')}</button>
+            <button class="btn btn-danger-outline" @click=${() => this.handleDeleteIntegration()} ?disabled=${this.isLoading}>${msg('Delete')}</button>
           </div>
         </div>
       `;
@@ -2416,19 +2422,19 @@ export class GnGitHubDialog extends LitElement {
             @click=${() => this.authMethod = 'oauth'}
             ?disabled=${!oauthConfigured}
           >
-            Sign in with GitHub
+            ${msg('Sign in with GitHub')}
           </button>
           <button
             class="auth-method-btn ${this.authMethod === 'pat' ? 'active' : ''}"
             @click=${() => this.authMethod = 'pat'}
           >
-            Personal Access Token
+            ${msg('Personal Access Token')}
           </button>
           <button
             class="auth-method-btn ${this.authMethod === 'app' ? 'active' : ''}"
             @click=${() => this.authMethod = 'app'}
           >
-            GitHub App
+            ${msg('GitHub App')}
           </button>
         </div>
 
@@ -2438,9 +2444,9 @@ export class GnGitHubDialog extends LitElement {
             ${isOAuthPending ? html`
               <div class="oauth-pending">
                 <div class="oauth-spinner"></div>
-                <p>${this.oauthState.status === 'exchanging' ? 'Completing sign in...' : 'Waiting for authorization...'}</p>
-                <p class="oauth-hint">Complete the sign in in your browser</p>
-                <button class="btn" @click=${this.handleCancelOAuth}>Cancel</button>
+                <p>${this.oauthState.status === 'exchanging' ? msg('Completing sign in...') : msg('Waiting for authorization...')}</p>
+                <p class="oauth-hint">${msg('Complete the sign in in your browser')}</p>
+                <button class="btn" @click=${this.handleCancelOAuth}>${msg('Cancel')}</button>
               </div>
             ` : html`
               <button
@@ -2451,19 +2457,19 @@ export class GnGitHubDialog extends LitElement {
                 <svg class="github-icon" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
                 </svg>
-                Sign in with GitHub
+                ${msg('Sign in with GitHub')}
               </button>
               ${!oauthConfigured ? html`
-                <p class="oauth-hint">OAuth is not configured. Use a Personal Access Token instead.</p>
+                <p class="oauth-hint">${msg('OAuth is not configured. Use a Personal Access Token instead.')}</p>
               ` : html`
-                <p class="oauth-hint">Opens GitHub in your browser to sign in</p>
+                <p class="oauth-hint">${msg('Opens GitHub in your browser to sign in')}</p>
               `}
             `}
           </div>
         ` : this.authMethod === 'pat' ? html`
           <!-- PAT Form -->
           <div class="form-group">
-            <label>Personal Access Token</label>
+            <label>${msg('Personal Access Token')}</label>
             <input
               type="password"
               placeholder="ghp_xxxxxxxxxxxx"
@@ -2476,13 +2482,13 @@ export class GnGitHubDialog extends LitElement {
               }}
             />
             <span class="help-text">
-              Create a token at
+              ${msg('Create a token at')}
               <a
                 class="help-link"
                 href="https://github.com/settings/tokens/new?scopes=repo,read:user"
                 @click=${handleExternalLink}
               >github.com/settings/tokens</a>
-              with <code>repo</code> and <code>read:user</code> scopes.
+              ${msg('with')} <code>repo</code> ${msg('and')} <code>read:user</code> ${msg('scopes.')}
             </span>
           </div>
           <div class="btn-row">
@@ -2492,7 +2498,7 @@ export class GnGitHubDialog extends LitElement {
                 @click=${() => this.handleDeleteIntegration()}
                 ?disabled=${this.isLoading}
               >
-                Delete Integration
+                ${msg('Delete Integration')}
               </button>
             ` : nothing}
             <button
@@ -2500,7 +2506,7 @@ export class GnGitHubDialog extends LitElement {
               @click=${() => this.handleSaveToken()}
               ?disabled=${this.isLoading || !this.tokenInput.trim()}
             >
-              Connect to GitHub
+              ${msg('Connect to GitHub')}
             </button>
           </div>
         ` : nothing}
@@ -2508,7 +2514,7 @@ export class GnGitHubDialog extends LitElement {
         ${this.authMethod === 'app' ? html`
           <!-- GitHub App Form -->
           <div class="form-group">
-            <label>App ID</label>
+            <label>${msg('App ID')}</label>
             <input
               type="text"
               placeholder="123456"
@@ -2520,9 +2526,9 @@ export class GnGitHubDialog extends LitElement {
             />
           </div>
           <div class="form-group">
-            <label>Private Key (.pem)</label>
+            <label>${msg('Private Key (.pem)')}</label>
             <textarea
-              placeholder="Paste your private key PEM content here..."
+              placeholder=${msg('Paste your private key PEM content here...')}
               rows="4"
               style="font-family: var(--font-mono, monospace); font-size: 11px; resize: vertical;"
               .value=${this.appPrivateKey}
@@ -2531,20 +2537,20 @@ export class GnGitHubDialog extends LitElement {
                 this.appInstallations = [];
               }}
             ></textarea>
-            <span class="help-text">Paste the private key from your GitHub App settings, or drag and drop the .pem file.</span>
+            <span class="help-text">${msg('Paste the private key from your GitHub App settings, or drag and drop the .pem file.')}</span>
           </div>
 
           ${this.appId && this.appPrivateKey ? html`
             <div class="form-group">
               <div style="display:flex;align-items:center;justify-content:space-between">
-                <label>Installation</label>
+                <label>${msg('Installation')}</label>
                 <button
                   class="btn btn-sm"
                   style="font-size:12px;padding:2px 8px"
                   @click=${this.handleLoadInstallations}
                   ?disabled=${this.loadingInstallations}
                 >
-                  ${this.loadingInstallations ? 'Loading...' : 'Load Installations'}
+                  ${this.loadingInstallations ? msg('Loading...') : msg('Load Installations')}
                 </button>
               </div>
               ${this.appInstallations.length > 0 ? html`
@@ -2552,7 +2558,7 @@ export class GnGitHubDialog extends LitElement {
                   .value=${this.appInstallationId}
                   @change=${(e: Event) => this.appInstallationId = (e.target as HTMLSelectElement).value}
                 >
-                  <option value="">Select installation...</option>
+                  <option value="">${msg('Select installation...')}</option>
                   ${this.appInstallations.map(inst => html`
                     <option value=${String(inst.id)}>
                       ${inst.account.login} (${inst.targetType})
@@ -2562,7 +2568,7 @@ export class GnGitHubDialog extends LitElement {
               ` : html`
                 <input
                   type="text"
-                  placeholder="Installation ID (click Load to discover)"
+                  placeholder=${msg('Installation ID (click Load to discover)')}
                   .value=${this.appInstallationId}
                   @input=${(e: Event) => this.appInstallationId = (e.target as HTMLInputElement).value}
                 />
@@ -2576,13 +2582,13 @@ export class GnGitHubDialog extends LitElement {
               @click=${this.handleConnectGitHubApp}
               ?disabled=${this.isLoading || !this.appId || !this.appPrivateKey || !this.appInstallationId}
             >
-              Connect via GitHub App
+              ${msg('Connect via GitHub App')}
             </button>
           </div>
           <span class="help-text">
-            Create a GitHub App at
+            ${msg('Create a GitHub App at')}
             <a class="help-link" href="https://github.com/settings/apps/new" @click=${handleExternalLink}>github.com/settings/apps</a>
-            with the permissions your workflow needs.
+            ${msg('with the permissions your workflow needs.')}
           </span>
         ` : nothing}
       </div>
@@ -2598,10 +2604,39 @@ export class GnGitHubDialog extends LitElement {
     return html`
       <div class="load-more">
         <button class="btn" ?disabled=${isLoading} @click=${onClick}>
-          ${isLoading ? 'Loading...' : 'Load more'}
+          ${isLoading ? msg('Loading...') : msg('Load more')}
         </button>
       </div>
     `;
+  }
+
+  /**
+   * The filter is a machine enum (`open`/`closed`/`all`), so each empty state is
+   * its own message instead of one sentence that would leave the filter word in
+   * English.
+   */
+  private noPullRequestsMessage(): string {
+    if (this.prFilter === 'open') return msg('No open pull requests');
+    if (this.prFilter === 'closed') return msg('No closed pull requests');
+    return msg('No all pull requests');
+  }
+
+  /** As `noPullRequestsMessage`, including the "pages searched so far" variant. */
+  private noIssuesMessage(): string {
+    const searched = this.issuesNextPage !== null;
+    if (this.issueFilter === 'open') {
+      return searched
+        ? msg('No open issues in the pages searched so far')
+        : msg('No open issues');
+    }
+    if (this.issueFilter === 'closed') {
+      return searched
+        ? msg('No closed issues in the pages searched so far')
+        : msg('No closed issues');
+    }
+    return searched
+      ? msg('No all issues in the pages searched so far')
+      : msg('No all issues');
   }
 
   private renderPullRequestsTab() {
@@ -2611,7 +2646,7 @@ export class GnGitHubDialog extends LitElement {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"></path>
           </svg>
-          <p>Connect to GitHub to view pull requests</p>
+          <p>${msg('Connect to GitHub to view pull requests')}</p>
         </div>
       `;
     }
@@ -2624,7 +2659,7 @@ export class GnGitHubDialog extends LitElement {
             <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
             <line x1="12" y1="17" x2="12.01" y2="17"></line>
           </svg>
-          <p>No GitHub repository detected</p>
+          <p>${msg('No GitHub repository detected')}</p>
         </div>
       `;
     }
@@ -2632,16 +2667,16 @@ export class GnGitHubDialog extends LitElement {
     return html`
       <div class="filter-row">
         <select class="filter-select" @change=${this.handlePrFilterChange}>
-          <option value="open" ?selected=${this.prFilter === 'open'}>Open</option>
-          <option value="closed" ?selected=${this.prFilter === 'closed'}>Closed</option>
-          <option value="all" ?selected=${this.prFilter === 'all'}>All</option>
+          <option value="open" ?selected=${this.prFilter === 'open'}>${msg('Open')}</option>
+          <option value="closed" ?selected=${this.prFilter === 'closed'}>${msg('Closed')}</option>
+          <option value="all" ?selected=${this.prFilter === 'all'}>${msg('All')}</option>
         </select>
         <button class="btn" @click=${() => this.activeTab = 'create-pr'}>
-          + New PR
+          ${msg('+ New PR')}
         </button>
       </div>
 
-      ${this.isLoading ? html`<div class="loading">Loading pull requests...</div>` : ''}
+      ${this.isLoading ? html`<div class="loading">${msg('Loading pull requests...')}</div>` : ''}
 
       ${!this.isLoading && this.pullRequests.length === 0 ? html`
         <div class="empty-state">
@@ -2650,7 +2685,7 @@ export class GnGitHubDialog extends LitElement {
             <circle cx="6" cy="6" r="3"></circle>
             <path d="M6 21V9a9 9 0 0 0 9 9"></path>
           </svg>
-          <p>No ${this.prFilter} pull requests</p>
+          <p>${this.noPullRequestsMessage()}</p>
         </div>
       ` : ''}
 
@@ -2664,7 +2699,7 @@ export class GnGitHubDialog extends LitElement {
                 <div class="pr-meta">
                   <span class="pr-state ${this.getPrState(pr)}">${this.getPrState(pr)}</span>
                   <span class="pr-branch">${pr.headRef} → ${pr.baseRef}</span>
-                  <span>by ${pr.user.login}</span>
+                  <span>${msg(str`by ${pr.user.login}`)}</span>
                   <span>${this.formatDate(pr.createdAt)}</span>
                 </div>
               </div>
@@ -2678,10 +2713,10 @@ export class GnGitHubDialog extends LitElement {
                 <button
                   class="btn pr-comments-toggle"
                   data-testid="pr-comments-toggle-${pr.number}"
-                  title="Review comments"
+                  title=${msg('Review comments')}
                   @click=${() => this.togglePrComments(pr.number)}
                 >
-                  Comments${this.prComments[pr.number] ? ` (${this.prComments[pr.number].length})` : ''}
+                  ${msg('Comments')}${this.prComments[pr.number] ? ` (${this.prComments[pr.number].length})` : ''}
                 </button>
               </div>
             </div>
@@ -2704,9 +2739,9 @@ export class GnGitHubDialog extends LitElement {
     return html`
       <div class="pr-comments-drawer" data-testid="pr-comments-drawer-${prNumber}" @click=${(e: Event) => e.stopPropagation()}>
         ${isLoadingComments ? html`
-          <div class="pr-comments-empty">Loading comments...</div>
+          <div class="pr-comments-empty">${msg('Loading comments...')}</div>
         ` : comments.length === 0 ? html`
-          <div class="pr-comments-empty">No comments yet</div>
+          <div class="pr-comments-empty">${msg('No comments yet')}</div>
         ` : html`
           <div class="pr-comments-list">
             ${comments.map(c => html`
@@ -2728,7 +2763,7 @@ export class GnGitHubDialog extends LitElement {
             <input
               type="text"
               class="pr-comment-file-input"
-              placeholder="File path (optional, for inline comment)"
+              placeholder=${msg('File path (optional, for inline comment)')}
               .value=${this.commentFilePathInput}
               @input=${(e: Event) => {
                 this.commentFilePathInput = (e.target as HTMLInputElement).value;
@@ -2738,7 +2773,7 @@ export class GnGitHubDialog extends LitElement {
               type="number"
               min="1"
               class="pr-comment-line-input"
-              placeholder="Line #"
+              placeholder=${msg('Line #')}
               .value=${this.commentLineInput}
               @input=${(e: Event) => {
                 this.commentLineInput = (e.target as HTMLInputElement).value;
@@ -2749,7 +2784,7 @@ export class GnGitHubDialog extends LitElement {
             <textarea
               class="pr-comment-body-input"
               rows="2"
-              placeholder="Write a review comment..."
+              placeholder=${msg('Write a review comment...')}
               .value=${this.commentBodyInput}
               @input=${(e: Event) => {
                 this.commentBodyInput = (e.target as HTMLTextAreaElement).value;
@@ -2761,7 +2796,7 @@ export class GnGitHubDialog extends LitElement {
               ?disabled=${!this.commentBodyInput.trim() || isPosting}
               @click=${() => this.handleAddPrComment(prNumber, commitId)}
             >
-              ${isPosting ? 'Posting...' : 'Post Comment'}
+              ${isPosting ? msg('Posting...') : msg('Post Comment')}
             </button>
           </div>
         </div>
@@ -2776,7 +2811,7 @@ export class GnGitHubDialog extends LitElement {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"></path>
           </svg>
-          <p>Connect to GitHub to view workflow runs</p>
+          <p>${msg('Connect to GitHub to view workflow runs')}</p>
         </div>
       `;
     }
@@ -2789,7 +2824,7 @@ export class GnGitHubDialog extends LitElement {
             <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
             <line x1="12" y1="17" x2="12.01" y2="17"></line>
           </svg>
-          <p>No GitHub repository detected</p>
+          <p>${msg('No GitHub repository detected')}</p>
         </div>
       `;
     }
@@ -2800,7 +2835,7 @@ export class GnGitHubDialog extends LitElement {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
           </svg>
-          <p>No workflow runs found</p>
+          <p>${msg('No workflow runs found')}</p>
         </div>
       ` : ''}
 
@@ -2822,7 +2857,7 @@ export class GnGitHubDialog extends LitElement {
               href="${run.htmlUrl}"
               @click=${(e: Event) => { e.stopPropagation(); handleExternalLink(e); }}
             >
-              View →
+              ${msg('View →')}
             </a>
           </div>
         `)}
@@ -2841,7 +2876,7 @@ export class GnGitHubDialog extends LitElement {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"></path>
           </svg>
-          <p>Connect to GitHub to view issues</p>
+          <p>${msg('Connect to GitHub to view issues')}</p>
         </div>
       `;
     }
@@ -2854,7 +2889,7 @@ export class GnGitHubDialog extends LitElement {
             <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
             <line x1="12" y1="17" x2="12.01" y2="17"></line>
           </svg>
-          <p>No GitHub repository detected</p>
+          <p>${msg('No GitHub repository detected')}</p>
         </div>
       `;
     }
@@ -2862,16 +2897,16 @@ export class GnGitHubDialog extends LitElement {
     return html`
       <div class="filter-row">
         <select class="filter-select" @change=${this.handleIssueFilterChange}>
-          <option value="open" ?selected=${this.issueFilter === 'open'}>Open</option>
-          <option value="closed" ?selected=${this.issueFilter === 'closed'}>Closed</option>
-          <option value="all" ?selected=${this.issueFilter === 'all'}>All</option>
+          <option value="open" ?selected=${this.issueFilter === 'open'}>${msg('Open')}</option>
+          <option value="closed" ?selected=${this.issueFilter === 'closed'}>${msg('Closed')}</option>
+          <option value="all" ?selected=${this.issueFilter === 'all'}>${msg('All')}</option>
         </select>
         <button class="btn" @click=${() => this.activeTab = 'create-issue'}>
-          + New Issue
+          ${msg('+ New Issue')}
         </button>
       </div>
 
-      ${this.isLoading ? html`<div class="loading">Loading issues...</div>` : ''}
+      ${this.isLoading ? html`<div class="loading">${msg('Loading issues...')}</div>` : ''}
 
       ${!this.isLoading && this.issues.length === 0 ? html`
         <div class="empty-state">
@@ -2880,11 +2915,7 @@ export class GnGitHubDialog extends LitElement {
             <line x1="12" y1="8" x2="12" y2="12"></line>
             <line x1="12" y1="16" x2="12.01" y2="16"></line>
           </svg>
-          <p>
-            ${this.issuesNextPage === null
-              ? html`No ${this.issueFilter} issues`
-              : html`No ${this.issueFilter} issues in the pages searched so far`}
-          </p>
+          <p>${this.noIssuesMessage()}</p>
         </div>
       ` : ''}
 
@@ -2896,7 +2927,7 @@ export class GnGitHubDialog extends LitElement {
               <div class="issue-title">${issue.title}</div>
               <div class="issue-meta">
                 <span class="issue-state ${issue.state}">${issue.state}</span>
-                <span>by ${issue.user.login}</span>
+                <span>${msg(str`by ${issue.user.login}`)}</span>
                 <span>${this.formatDate(issue.createdAt)}</span>
                 ${issue.comments > 0 ? html`
                   <span class="issue-comments">
@@ -2934,19 +2965,19 @@ export class GnGitHubDialog extends LitElement {
     return html`
       <div class="token-form">
         <div class="form-group">
-          <label>Title</label>
+          <label>${msg('Title')}</label>
           <input
             type="text"
-            placeholder="Issue title"
+            placeholder=${msg('Issue title')}
             .value=${this.createIssueTitle}
             @input=${(e: Event) => this.createIssueTitle = (e.target as HTMLInputElement).value}
           />
         </div>
 
         <div class="form-group">
-          <label>Description</label>
+          <label>${msg('Description')}</label>
           <textarea
-            placeholder="Describe the issue..."
+            placeholder=${msg('Describe the issue...')}
             .value=${this.createIssueBody}
             @input=${(e: Event) => this.createIssueBody = (e.target as HTMLTextAreaElement).value}
           ></textarea>
@@ -2954,7 +2985,7 @@ export class GnGitHubDialog extends LitElement {
 
         ${this.repoLabels.length > 0 ? html`
           <div class="form-group">
-            <label>Labels</label>
+            <label>${msg('Labels')}</label>
             <div class="issue-labels" style="cursor: pointer;">
               ${this.repoLabels.map(label => html`
                 <span
@@ -2975,14 +3006,14 @@ export class GnGitHubDialog extends LitElement {
 
         <div class="btn-row">
           <button class="btn" @click=${() => this.activeTab = 'issues'}>
-            Cancel
+            ${msg('Cancel')}
           </button>
           <button
             class="btn btn-primary"
             @click=${this.handleCreateIssue}
             ?disabled=${this.isLoading || !this.createIssueTitle}
           >
-            Create Issue
+            ${msg('Create Issue')}
           </button>
         </div>
       </div>
@@ -2996,7 +3027,7 @@ export class GnGitHubDialog extends LitElement {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"></path>
           </svg>
-          <p>Connect to GitHub to view releases</p>
+          <p>${msg('Connect to GitHub to view releases')}</p>
         </div>
       `;
     }
@@ -3009,7 +3040,7 @@ export class GnGitHubDialog extends LitElement {
             <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
             <line x1="12" y1="17" x2="12.01" y2="17"></line>
           </svg>
-          <p>No GitHub repository detected</p>
+          <p>${msg('No GitHub repository detected')}</p>
         </div>
       `;
     }
@@ -3017,11 +3048,11 @@ export class GnGitHubDialog extends LitElement {
     return html`
       <div class="filter-row">
         <button class="btn" @click=${() => this.activeTab = 'create-release'}>
-          + New Release
+          ${msg('+ New Release')}
         </button>
       </div>
 
-      ${this.isLoading ? html`<div class="loading">Loading releases...</div>` : ''}
+      ${this.isLoading ? html`<div class="loading">${msg('Loading releases...')}</div>` : ''}
 
       ${!this.isLoading && this.releases.length === 0 ? html`
         <div class="empty-state">
@@ -3029,7 +3060,7 @@ export class GnGitHubDialog extends LitElement {
             <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path>
             <line x1="7" y1="7" x2="7.01" y2="7"></line>
           </svg>
-          <p>No releases found</p>
+          <p>${msg('No releases found')}</p>
         </div>
       ` : ''}
 
@@ -3041,18 +3072,20 @@ export class GnGitHubDialog extends LitElement {
               <div class="release-title">${release.name || release.tagName}</div>
               <div class="release-meta">
                 ${index === 0 && !release.draft && !release.prerelease ? html`
-                  <span class="release-badge latest">Latest</span>
+                  <span class="release-badge latest">${msg('Latest')}</span>
                 ` : ''}
                 ${release.prerelease ? html`
-                  <span class="release-badge prerelease">Pre-release</span>
+                  <span class="release-badge prerelease">${msg('Pre-release')}</span>
                 ` : ''}
                 ${release.draft ? html`
-                  <span class="release-badge draft">Draft</span>
+                  <span class="release-badge draft">${msg('Draft')}</span>
                 ` : ''}
-                <span>by ${release.author.login}</span>
+                <span>${msg(str`by ${release.author.login}`)}</span>
                 <span>${this.formatDate(release.createdAt)}</span>
                 ${release.assetsCount > 0 ? html`
-                  <span>${release.assetsCount} asset${release.assetsCount !== 1 ? 's' : ''}</span>
+                  <span>${release.assetsCount === 1
+                    ? msg('1 asset')
+                    : msg(str`${release.assetsCount} assets`)}</span>
                 ` : ''}
               </div>
             </div>
@@ -3070,30 +3103,30 @@ export class GnGitHubDialog extends LitElement {
     return html`
       <div class="token-form">
         <div class="form-group">
-          <label>Tag Name</label>
+          <label>${msg('Tag Name')}</label>
           <input
             type="text"
             placeholder="v1.0.0"
             .value=${this.createReleaseTag}
             @input=${(e: Event) => this.createReleaseTag = (e.target as HTMLInputElement).value}
           />
-          <span class="help-text">Create a new tag or use an existing one</span>
+          <span class="help-text">${msg('Create a new tag or use an existing one')}</span>
         </div>
 
         <div class="form-group">
-          <label>Release Title</label>
+          <label>${msg('Release Title')}</label>
           <input
             type="text"
-            placeholder="Release title (optional)"
+            placeholder=${msg('Release title (optional)')}
             .value=${this.createReleaseName}
             @input=${(e: Event) => this.createReleaseName = (e.target as HTMLInputElement).value}
           />
         </div>
 
         <div class="form-group">
-          <label>Description</label>
+          <label>${msg('Description')}</label>
           <textarea
-            placeholder="Describe this release..."
+            placeholder=${msg('Describe this release...')}
             .value=${this.createReleaseBody}
             @input=${(e: Event) => this.createReleaseBody = (e.target as HTMLTextAreaElement).value}
           ></textarea>
@@ -3106,7 +3139,7 @@ export class GnGitHubDialog extends LitElement {
               .checked=${this.createReleaseGenerateNotes}
               @change=${(e: Event) => this.createReleaseGenerateNotes = (e.target as HTMLInputElement).checked}
             />
-            Auto-generate release notes
+            ${msg('Auto-generate release notes')}
           </label>
         </div>
 
@@ -3117,7 +3150,7 @@ export class GnGitHubDialog extends LitElement {
               .checked=${this.createReleasePrerelease}
               @change=${(e: Event) => this.createReleasePrerelease = (e.target as HTMLInputElement).checked}
             />
-            Mark as pre-release
+            ${msg('Mark as pre-release')}
           </label>
         </div>
 
@@ -3128,20 +3161,20 @@ export class GnGitHubDialog extends LitElement {
               .checked=${this.createReleaseDraft}
               @change=${(e: Event) => this.createReleaseDraft = (e.target as HTMLInputElement).checked}
             />
-            Save as draft
+            ${msg('Save as draft')}
           </label>
         </div>
 
         <div class="btn-row">
           <button class="btn" @click=${() => this.activeTab = 'releases'}>
-            Cancel
+            ${msg('Cancel')}
           </button>
           <button
             class="btn btn-primary"
             @click=${this.handleCreateRelease}
             ?disabled=${this.isLoading || !this.createReleaseTag}
           >
-            Create Release
+            ${msg('Create Release')}
           </button>
         </div>
       </div>
@@ -3170,10 +3203,10 @@ export class GnGitHubDialog extends LitElement {
     return html`
       <div class="token-form">
         <div class="form-group">
-          <label>Title</label>
+          <label>${msg('Title')}</label>
           <input
             type="text"
-            placeholder="Pull request title"
+            placeholder=${msg('Pull request title')}
             .value=${this.createPrTitle}
             @input=${(e: Event) => this.createPrTitle = (e.target as HTMLInputElement).value}
           />
@@ -3181,26 +3214,26 @@ export class GnGitHubDialog extends LitElement {
 
         <div class="form-group">
           <div style="display:flex;align-items:center;justify-content:space-between">
-            <label>Description</label>
+            <label>${msg('Description')}</label>
             <button
               class="btn btn-sm"
               style="font-size:12px;padding:2px 8px;display:flex;align-items:center;gap:4px"
               @click=${this.handleGeneratePrDescription}
               ?disabled=${this.generatingPrDescription || !this.createPrHead || !this.createPrBase}
-              title="Generate description using AI"
+              title=${msg('Generate description using AI')}
             >
-              ${this.generatingPrDescription ? 'Generating...' : html`<svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a3.5 3.5 0 0 0-3.5 3.5c0 1.193.603 2.26 1.5 2.898V9.5a1 1 0 0 0 .293.707l1 1a1 1 0 0 0 1.414 0l1-1A1 1 0 0 0 10 9.5V7.398A3.496 3.496 0 0 0 11.5 4.5 3.5 3.5 0 0 0 8 1z"/></svg> AI Generate`}
+              ${this.generatingPrDescription ? msg('Generating...') : html`<svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a3.5 3.5 0 0 0-3.5 3.5c0 1.193.603 2.26 1.5 2.898V9.5a1 1 0 0 0 .293.707l1 1a1 1 0 0 0 1.414 0l1-1A1 1 0 0 0 10 9.5V7.398A3.496 3.496 0 0 0 11.5 4.5 3.5 3.5 0 0 0 8 1z"/></svg> ${msg('AI Generate')}`}
             </button>
           </div>
           <textarea
-            placeholder="Describe your changes..."
+            placeholder=${msg('Describe your changes...')}
             .value=${this.createPrBody}
             @input=${(e: Event) => this.createPrBody = (e.target as HTMLTextAreaElement).value}
           ></textarea>
         </div>
 
         <div class="form-group">
-          <label>Head Branch (your changes)</label>
+          <label>${msg('Head Branch (your changes)')}</label>
           <input
             type="text"
             placeholder="feature-branch"
@@ -3210,7 +3243,7 @@ export class GnGitHubDialog extends LitElement {
         </div>
 
         <div class="form-group">
-          <label>Base Branch (merge into)</label>
+          <label>${msg('Base Branch (merge into)')}</label>
           <input
             type="text"
             placeholder="main"
@@ -3226,20 +3259,20 @@ export class GnGitHubDialog extends LitElement {
               .checked=${this.createPrDraft}
               @change=${(e: Event) => this.createPrDraft = (e.target as HTMLInputElement).checked}
             />
-            Create as draft
+            ${msg('Create as draft')}
           </label>
         </div>
 
         <div class="btn-row">
           <button class="btn" @click=${() => this.activeTab = 'pull-requests'}>
-            Cancel
+            ${msg('Cancel')}
           </button>
           <button
             class="btn btn-primary"
             @click=${this.handleCreatePR}
             ?disabled=${this.isLoading || !this.createPrTitle || !this.createPrHead || !this.createPrBase}
           >
-            Create Pull Request
+            ${msg('Create Pull Request')}
           </button>
         </div>
       </div>
@@ -3256,7 +3289,7 @@ export class GnGitHubDialog extends LitElement {
       >
         <div class="content">
           ${this.attachToProfileName
-            ? html`<div class="attach-breadcrumb" data-testid="attach-breadcrumb">Adding to <strong>${this.attachToProfileName}</strong></div>`
+            ? html`<div class="attach-breadcrumb" data-testid="attach-breadcrumb">${msg('Adding to')} <strong>${this.attachToProfileName}</strong></div>`
             : nothing}
           ${this.detectedRepo ? html`
             <div class="repo-info">
@@ -3283,31 +3316,31 @@ export class GnGitHubDialog extends LitElement {
               class="tab ${this.activeTab === 'connection' ? 'active' : ''}"
               @click=${() => this.activeTab = 'connection'}
             >
-              Connection
+              ${msg('Connection')}
             </button>
             <button
               class="tab ${this.activeTab === 'pull-requests' ? 'active' : ''}"
               @click=${() => this.activeTab = 'pull-requests'}
             >
-              Pull Requests
+              ${msg('Pull Requests')}
             </button>
             <button
               class="tab ${this.activeTab === 'issues' ? 'active' : ''}"
               @click=${() => this.activeTab = 'issues'}
             >
-              Issues
+              ${msg('Issues')}
             </button>
             <button
               class="tab ${this.activeTab === 'releases' ? 'active' : ''}"
               @click=${() => this.activeTab = 'releases'}
             >
-              Releases
+              ${msg('Releases')}
             </button>
             <button
               class="tab ${this.activeTab === 'actions' ? 'active' : ''}"
               @click=${() => this.activeTab = 'actions'}
             >
-              Actions
+              ${msg('Actions')}
             </button>
           </div>
 

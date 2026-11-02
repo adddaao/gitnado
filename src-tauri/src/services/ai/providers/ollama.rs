@@ -3,7 +3,7 @@
 //! Supports locally running Ollama at localhost:11434
 
 use crate::services::ai::{
-    AiProvider, AiProviderType, GeneratedCommitMessage, COMMIT_MESSAGE_PROMPT,
+    commit_message_prompt, AiProvider, AiProviderType, GeneratedCommitMessage, PromptLanguage,
 };
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -103,11 +103,16 @@ impl AiProvider for OllamaProvider {
         &self,
         diff: &str,
         model: Option<&str>,
+        language: PromptLanguage,
     ) -> Result<GeneratedCommitMessage, String> {
         let model_name = model.unwrap_or(AiProviderType::Ollama.default_model());
         let url = format!("{}/api/generate", self.endpoint);
 
-        let prompt = format!("{}{}\n\nCommit message:", COMMIT_MESSAGE_PROMPT, diff);
+        let prompt = format!(
+            "{}{}\n\nCommit message:",
+            commit_message_prompt(language),
+            diff
+        );
 
         let request = OllamaGenerateRequest {
             model: model_name.to_string(),

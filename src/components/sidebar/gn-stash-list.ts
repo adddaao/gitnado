@@ -5,6 +5,7 @@
 
 import { LitElement, html, css, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
+import { localized, msg, str } from '@lit/localize';
 import { sharedStyles } from '../../styles/shared-styles.ts';
 import * as gitService from '../../services/git.service.ts';
 import { showConfirm, showPrompt } from '../../services/dialog.service.ts';
@@ -18,6 +19,7 @@ import {
   subscribeRefOps,
 } from '../../utils/ref-lock.ts';
 
+import { backendErrorMatchText } from '../../services/backend-error.service.ts';
 interface ContextMenuState {
   visible: boolean;
   x: number;
@@ -26,6 +28,7 @@ interface ContextMenuState {
 }
 
 @customElement('gn-stash-list')
+@localized()
 export class GnStashList extends LitElement {
   static styles = [
     sharedStyles,
@@ -493,7 +496,7 @@ export class GnStashList extends LitElement {
           composed: true,
         }));
       } else {
-        this.error = result.error?.message || 'Failed to load stashes';
+        this.error = result.error?.message || msg('Failed to load stashes');
         this.stashes = [];
         this.collapseDetails();
         this.dispatchEvent(new CustomEvent('stash-count-changed', {
@@ -506,7 +509,7 @@ export class GnStashList extends LitElement {
     } catch (err) {
       console.error('Failed to load stashes:', err);
       if (isFresh()) {
-        this.error = err instanceof Error ? err.message : 'Failed to load stashes';
+        this.error = err instanceof Error ? err.message : msg('Failed to load stashes');
         this.stashes = [];
         this.collapseDetails();
         this.dispatchEvent(new CustomEvent('stash-count-changed', {
@@ -514,7 +517,7 @@ export class GnStashList extends LitElement {
           bubbles: true,
           composed: true,
         }));
-        showToast('Failed to load stashes', 'error');
+        showToast(msg('Failed to load stashes'), 'error');
       }
     } finally {
       if (isFresh()) {
@@ -545,8 +548,8 @@ export class GnStashList extends LitElement {
     // was based on and not the stashed work — three stashes on one branch were
     // indistinguishable before a destructive Pop/Drop.
     const message = await showPrompt(
-      'Stash Changes',
-      'Message for this stash (optional):',
+      msg('Stash Changes'),
+      msg('Message for this stash (optional):'),
       '',
       'WIP'
     );
@@ -572,13 +575,13 @@ export class GnStashList extends LitElement {
       if (result.success) {
         if (result.data === null) {
           // Clean working tree: nothing to stash — informational, not an error.
-          showToast('No local changes to save', 'info');
+          showToast(msg('No local changes to save'), 'info');
           return;
         }
         // The shortcut and the palette both toast "Stash created"; this
         // surface reloaded the list and said nothing, so the same operation
         // reported differently depending on where it was started.
-        showToast('Stash created', 'success');
+        showToast(msg('Stash created'), 'success');
         await this.loadStashes();
         this.dispatchEvent(new CustomEvent('stash-created', {
           detail: { repositoryPath: repoPath },
@@ -587,11 +590,11 @@ export class GnStashList extends LitElement {
         }));
       } else {
         console.error('Failed to create stash:', result.error);
-        showToast(result.error?.message ?? 'Failed to create stash', 'error');
+        showToast(result.error?.message ?? msg('Failed to create stash'), 'error');
       }
     } catch (err) {
       console.error('Failed to create stash:', err);
-      showToast('Failed to create stash', 'error');
+      showToast(msg('Failed to create stash'), 'error');
     } finally {
       this.isStashing = false;
       this.releaseOperation(repoPath);
@@ -635,10 +638,22 @@ export class GnStashList extends LitElement {
     action: 'applied' | 'popped' | 'dropped' | 'shown'
   ): Promise<number | null> {
     const result = await gitService.getStashes(repoPath);
+    // `action` is a code-level past participle that goes into the sentence
+    // below, so it is translated on its own instead of leaking English into a
+    // translated message.
+    const actionLabel =
+      action === 'applied'
+        ? msg('applied')
+        : action === 'popped'
+          ? msg('popped')
+          : action === 'dropped'
+            ? msg('dropped')
+            : msg('shown');
 
     if (!result.success || !result.data) {
       showToast(
-        result.error?.message ?? `Could not read the stash list — nothing was ${action}`,
+        result.error?.message ??
+          msg(str`Could not read the stash list — nothing was ${actionLabel}`),
         'error'
       );
       return null;
@@ -648,7 +663,7 @@ export class GnStashList extends LitElement {
 
     if (index < 0) {
       showToast(
-        `"${stash.message}" is no longer in the stash list — nothing was ${action}`,
+        msg(str`"${stash.message}" is no longer in the stash list — nothing was ${actionLabel}`),
         'warning'
       );
       await this.loadStashes();
@@ -722,7 +737,9 @@ export class GnStashList extends LitElement {
           // this preview — taking an inline error with it and leaving the row
           // to just silently close. Same channel the other staleness paths use.
           showToast(
-            `"${stash.message}" moved in the stash list while it was being read — open it again`,
+            msg(
+              str`"${stash.message}" moved in the stash list while it was being read — open it again`
+            ),
             'warning'
           );
           this.collapseDetails();
@@ -731,12 +748,14 @@ export class GnStashList extends LitElement {
         }
         this.stashDetails = result.data;
       } else {
-        this.detailsError = result.error?.message ?? 'Failed to read stash contents';
+        this.detailsError =
+          result.error?.message ?? msg('Failed to read stash contents');
       }
     } catch (err) {
       console.error('Failed to read stash contents:', err);
       if (isFresh()) {
-        this.detailsError = err instanceof Error ? err.message : 'Failed to read stash contents';
+        this.detailsError =
+          err instanceof Error ? err.message : msg('Failed to read stash contents');
       }
     } finally {
       if (isFresh()) {
@@ -804,7 +823,7 @@ export class GnStashList extends LitElement {
       if (result.success) {
         // Reports itself, like Create and like branch/tag delete. The only
         // signal these ran at all was a row changing or vanishing.
-        showToast('Stash applied', 'success');
+        showToast(msg('Stash applied'), 'success');
         await this.loadStashes();
         this.dispatchEvent(new CustomEvent('stash-applied', {
           detail: { repositoryPath: repoPath },
@@ -818,9 +837,9 @@ export class GnStashList extends LitElement {
         // "Merge conflict" beside it reads as "nothing happened" — the same
         // reason pull, the dashboard and every auto-stash path warn instead.
         if (this.isConflictError(result.error)) {
-          showToast('Stash applied — conflicts need resolution', 'warning');
+          showToast(msg('Stash applied — conflicts need resolution'), 'warning');
         } else {
-          showToast(result.error?.message ?? 'Failed to apply stash', 'error');
+          showToast(result.error?.message ?? msg('Failed to apply stash'), 'error');
         }
         // A conflicting apply left the changes in the working tree; open the
         // conflict resolution dialog. The stash was NOT dropped (apply, not pop),
@@ -850,11 +869,16 @@ export class GnStashList extends LitElement {
   }
 
   /** True when a stash apply/pop error indicates a merge conflict. */
-  private isConflictError(error: { code?: string; message?: string } | undefined): boolean {
+  private isConflictError(
+    error: { code?: string; message?: string; originalMessage?: string } | undefined
+  ): boolean {
     if (!error) return false;
     // Prefer the structured error code; keep the message match as a fallback.
+    // Matched on the backend's own wording: `message` is already localised, so
+    // the English fallback has to read `originalMessage`.
     if (error.code === 'MERGE_CONFLICT') return true;
-    return !!error.message && error.message.toLowerCase().includes('conflict');
+    const text = backendErrorMatchText(error).toLowerCase();
+    return text.includes('conflict');
   }
 
   private async handlePopStash(): Promise<void> {
@@ -871,8 +895,10 @@ export class GnStashList extends LitElement {
     // stash.
     const repoPath = this.repositoryPath;
     const confirmed = await showConfirm(
-      'Pop Stash',
-      `This will apply the stash "${stash.message}" and remove it from the stash list. Any conflicts will need to be resolved manually. Continue?`,
+      msg('Pop Stash'),
+      msg(
+        str`This will apply the stash "${stash.message}" and remove it from the stash list. Any conflicts will need to be resolved manually. Continue?`
+      ),
       'warning'
     );
     if (!confirmed) {
@@ -893,7 +919,7 @@ export class GnStashList extends LitElement {
       if (result.success) {
         // Reports itself, like Create and like branch/tag delete. The only
         // signal these ran at all was a row changing or vanishing.
-        showToast('Stash popped', 'success');
+        showToast(msg('Stash popped'), 'success');
         await this.loadStashes();
         this.dispatchEvent(new CustomEvent('stash-applied', {
           detail: { repositoryPath: repoPath },
@@ -907,9 +933,9 @@ export class GnStashList extends LitElement {
         // "Merge conflict" beside it reads as "nothing happened" — the same
         // reason pull, the dashboard and every auto-stash path warn instead.
         if (this.isConflictError(result.error)) {
-          showToast('Stash popped — conflicts need resolution', 'warning');
+          showToast(msg('Stash popped — conflicts need resolution'), 'warning');
         } else {
-          showToast(result.error?.message ?? 'Failed to pop stash', 'error');
+          showToast(result.error?.message ?? msg('Failed to pop stash'), 'error');
         }
         // A conflicting pop left the changes in the working tree AND left the
         // stash entry in place. Open the conflict resolution dialog; completion
@@ -952,8 +978,8 @@ export class GnStashList extends LitElement {
     // stash is dropped in the wrong repo.
     const repoPath = this.repositoryPath;
     const confirmed = await showConfirm(
-      'Drop Stash',
-      `Are you sure you want to drop "${stash.message}"?\n\nThis action cannot be undone.`,
+      msg('Drop Stash'),
+      msg(str`Are you sure you want to drop "${stash.message}"?\n\nThis action cannot be undone.`),
       'warning'
     );
 
@@ -975,7 +1001,7 @@ export class GnStashList extends LitElement {
       if (result.success) {
         // Reports itself, like Create and like branch/tag delete. The only
         // signal these ran at all was a row changing or vanishing.
-        showToast('Stash dropped', 'success');
+        showToast(msg('Stash dropped'), 'success');
         await this.loadStashes();
         this.dispatchEvent(new CustomEvent('stash-dropped', {
           detail: { stash, repositoryPath: repoPath },
@@ -984,7 +1010,7 @@ export class GnStashList extends LitElement {
         }));
       } else {
         console.error('Failed to drop stash:', result.error);
-        showToast(result.error?.message ?? 'Failed to drop stash', 'error');
+        showToast(result.error?.message ?? msg('Failed to drop stash'), 'error');
       }
     } finally {
       this.releaseOperation(lockedRepo);
@@ -993,7 +1019,7 @@ export class GnStashList extends LitElement {
 
   private renderStashDetails() {
     if (this.detailsLoading) {
-      return html`<div class="stash-details stash-details-status">Loading contents...</div>`;
+      return html`<div class="stash-details stash-details-status">${msg('Loading contents...')}</div>`;
     }
     if (this.detailsError) {
       return html`<div class="stash-details stash-details-error" role="alert">${this.detailsError}</div>`;
@@ -1002,13 +1028,13 @@ export class GnStashList extends LitElement {
 
     const { files, totalAdditions, totalDeletions } = this.stashDetails;
     if (files.length === 0) {
-      return html`<div class="stash-details stash-details-status">No file changes</div>`;
+      return html`<div class="stash-details stash-details-status">${msg('No file changes')}</div>`;
     }
 
     return html`
       <div class="stash-details">
         <div class="stash-details-total">
-          <span>${files.length} ${files.length === 1 ? 'file' : 'files'}</span>
+          <span>${files.length === 1 ? msg('1 file') : msg(str`${files.length} files`)}</span>
           <span class="additions">+${totalAdditions}</span>
           <span class="deletions">-${totalDeletions}</span>
         </div>
@@ -1033,7 +1059,7 @@ export class GnStashList extends LitElement {
       <div
         class="context-menu"
         role="menu"
-        aria-label="Stash actions"
+        aria-label=${msg('Stash actions')}
         style="left: ${this.contextMenu.x}px; top: ${this.contextMenu.y}px;"
         @click=${(e: Event) => e.stopPropagation()}
         @keydown=${(e: KeyboardEvent) => this.handleContextMenuKeydown(e)}
@@ -1045,21 +1071,21 @@ export class GnStashList extends LitElement {
             <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
             <circle cx="12" cy="12" r="3"></circle>
           </svg>
-          Show Contents
+          ${msg('Show Contents')}
         </button>
         <div class="context-menu-divider" role="separator"></div>
         <button class="context-menu-item" role="menuitem" ?disabled=${this.operationInProgress} @click=${this.handleApplyStash}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="20 6 9 17 4 12"></polyline>
           </svg>
-          Apply
+          ${msg('Apply')}
         </button>
         <button class="context-menu-item" role="menuitem" ?disabled=${this.operationInProgress} @click=${this.handlePopStash}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M12 3v18"></path>
             <path d="M5 8l7-7 7 7"></path>
           </svg>
-          Pop
+          ${msg('Pop')}
         </button>
         <div class="context-menu-divider" role="separator"></div>
         <button class="context-menu-item danger" role="menuitem" ?disabled=${this.operationInProgress} @click=${this.handleDropStash}>
@@ -1067,7 +1093,7 @@ export class GnStashList extends LitElement {
             <polyline points="3 6 5 6 21 6"></polyline>
             <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"></path>
           </svg>
-          Drop
+          ${msg('Drop')}
         </button>
       </div>
     `;
@@ -1076,11 +1102,11 @@ export class GnStashList extends LitElement {
   render() {
     return html`
       ${this.loading
-        ? html`<div class="loading">Loading stashes...</div>`
+        ? html`<div class="loading">${msg('Loading stashes...')}</div>`
         : this.error
           ? html`<div class="error" role="alert">${this.error}</div>`
           : this.stashes.length === 0
-          ? html`<div class="empty">No stashes</div>`
+          ? html`<div class="empty">${msg('No stashes')}</div>`
           : html`
               <ul class="stash-list" role="list">
                 ${this.stashes.map((stash) => html`
@@ -1092,7 +1118,7 @@ export class GnStashList extends LitElement {
                     class="stash-item"
                     role="listitem"
                     tabindex="0"
-                    aria-label="Stash: ${stash.message}"
+                    aria-label=${msg(str`Stash: ${stash.message}`)}
                     aria-expanded=${this.expandedOid === stash.oid ? 'true' : 'false'}
                     title=${stash.message}
                     @click=${() => this.handleToggleDetails(stash)}
@@ -1132,7 +1158,7 @@ export class GnStashList extends LitElement {
             <div class="stash-actions">
               <button
                 class="stash-btn"
-                title="Save your uncommitted changes to a new stash"
+                title=${msg('Save your uncommitted changes to a new stash')}
                 ?disabled=${this.isStashing || this.operationInProgress}
                 @click=${this.handleCreateStash}
               >
@@ -1140,7 +1166,7 @@ export class GnStashList extends LitElement {
                   <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
                   <path d="M16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16"></path>
                 </svg>
-                ${this.isStashing ? 'Stashing...' : 'Stash Changes'}
+                ${this.isStashing ? msg('Stashing...') : msg('Stash Changes')}
               </button>
             </div>
           `}

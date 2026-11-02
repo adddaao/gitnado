@@ -1,3 +1,4 @@
+import { msg, str } from '@lit/localize';
 import { showToast } from '../services/notification.service.ts';
 
 /**
@@ -71,8 +72,8 @@ export function sweepRepoScopedDialogs(options: {
     if (!pinned || isRepoOpen(pinned)) continue;
 
     const entry = entries[el.tagName.toLowerCase()] ?? {
-      dismissed: 'the dialog was closed',
-      running: 'operation',
+      dismissed: msg('the dialog was closed'),
+      running: msg('operation'),
     };
 
     if (el.operationInFlight) {
@@ -89,17 +90,23 @@ export function sweepRepoScopedDialogs(options: {
         // runs to completion.
         entry.clearFlag?.();
         showToast(
-          `The repository tab was closed — the ${entry.running} will finish in the background`,
+          msg(
+            str`The repository tab was closed — the ${entry.running} will finish in the background`
+          ),
           'warning'
         );
       } else if (el.closeWhenIdle) {
         showToast(
-          `The repository tab was closed — the ${entry.running} is still running; the dialog will close when it finishes`,
+          msg(
+            str`The repository tab was closed — the ${entry.running} is still running; the dialog will close when it finishes`
+          ),
           'warning'
         );
       } else {
         showToast(
-          `The repository tab was closed — the ${entry.running} is still running against the closed repository and cannot be stopped`,
+          msg(
+            str`The repository tab was closed — the ${entry.running} is still running against the closed repository and cannot be stopped`
+          ),
           'warning'
         );
       }
@@ -110,6 +117,6 @@ export function sweepRepoScopedDialogs(options: {
 
     (el.close ?? el.closeWhenIdle)?.call(el);
     entry.clearFlag?.();
-    showToast(`The repository tab was closed — ${entry.dismissed}`, 'warning');
+    showToast(msg(str`The repository tab was closed — ${entry.dismissed}`), 'warning');
   }
 }

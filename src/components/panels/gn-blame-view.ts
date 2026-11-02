@@ -1,5 +1,6 @@
 import { LitElement, html, css, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
+import { localized, msg, str } from '@lit/localize';
 import { sharedStyles } from '../../styles/shared-styles.ts';
 import { codeStyles } from '../../styles/code-styles.ts';
 import { getFileBlame } from '../../services/git.service.ts';
@@ -38,6 +39,7 @@ function getAuthorColor(name: string): string {
 }
 
 @customElement('gn-blame-view')
+@localized()
 export class GnBlameView extends CodeRenderMixin(LitElement) {
   static styles = [
     sharedStyles,
@@ -443,13 +445,13 @@ export class GnBlameView extends CodeRenderMixin(LitElement) {
       } else {
         this.lines = [];
         this.processLinesIntoGroups();
-        this.error = result.error?.message ?? 'Failed to load blame';
+        this.error = result.error?.message ?? msg('Failed to load blame');
       }
     } catch (e) {
       if (seq !== this.loadSeq) return;
       this.lines = [];
       this.processLinesIntoGroups();
-      this.error = e instanceof Error ? e.message : 'Failed to load blame';
+      this.error = e instanceof Error ? e.message : msg('Failed to load blame');
     } finally {
       if (seq === this.loadSeq) {
         this.isLoading = false;
@@ -527,12 +529,14 @@ export class GnBlameView extends CodeRenderMixin(LitElement) {
     try {
       await navigator.clipboard.writeText(group.commitOid);
       showToast(
-        `Copied SHA ${group.commitShortId || group.commitOid.substring(0, 7)} to clipboard`,
+        msg(
+          str`Copied SHA ${group.commitShortId || group.commitOid.substring(0, 7)} to clipboard`
+        ),
         'success'
       );
     } catch (err) {
       console.error('Failed to copy hash:', err);
-      showToast('Failed to copy hash to clipboard', 'error');
+      showToast(msg('Failed to copy hash to clipboard'), 'error');
     }
   }
 
@@ -542,10 +546,10 @@ export class GnBlameView extends CodeRenderMixin(LitElement) {
     this.contextMenu = { ...this.contextMenu, visible: false };
     try {
       await navigator.clipboard.writeText(line.content);
-      showToast('Copied line to clipboard', 'success');
+      showToast(msg('Copied line to clipboard'), 'success');
     } catch (err) {
       console.error('Failed to copy line:', err);
-      showToast('Failed to copy line to clipboard', 'error');
+      showToast(msg('Failed to copy line to clipboard'), 'error');
     }
   }
 
@@ -564,7 +568,7 @@ export class GnBlameView extends CodeRenderMixin(LitElement) {
             </svg>
             <span class="file-path">${this.filePath}</span>
           </div>
-          <button class="close-btn" @click=${this.handleClose} title="Close">
+          <button class="close-btn" @click=${this.handleClose} title=${msg('Close')}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <line x1="18" y1="6" x2="6" y2="18"></line>
               <line x1="6" y1="6" x2="18" y2="18"></line>
@@ -573,7 +577,7 @@ export class GnBlameView extends CodeRenderMixin(LitElement) {
         </div>
         <div class="loading">
           <div class="loading-spinner"></div>
-          <span>Loading blame...</span>
+          <span>${msg('Loading blame...')}</span>
         </div>
       `;
     }
@@ -588,7 +592,7 @@ export class GnBlameView extends CodeRenderMixin(LitElement) {
             </svg>
             <span class="file-path">${this.filePath}</span>
           </div>
-          <button class="close-btn" @click=${this.handleClose} title="Close">
+          <button class="close-btn" @click=${this.handleClose} title=${msg('Close')}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <line x1="18" y1="6" x2="6" y2="18"></line>
               <line x1="6" y1="6" x2="18" y2="18"></line>
@@ -607,7 +611,7 @@ export class GnBlameView extends CodeRenderMixin(LitElement) {
     }
 
     if (!this.filePath) {
-      return html`<div class="empty">Select a file to view blame</div>`;
+      return html`<div class="empty">${msg('Select a file to view blame')}</div>`;
     }
 
     return html`
@@ -621,11 +625,11 @@ export class GnBlameView extends CodeRenderMixin(LitElement) {
         </div>
         ${this.commitOid ? html`
           <div class="commit-badge">
-            <span>at</span>
+            <span>${msg('at')}</span>
             <code>${this.commitOid.substring(0, 7)}</code>
           </div>
         ` : nothing}
-        <button class="close-btn" @click=${this.handleClose} title="Close blame view (Esc)">
+        <button class="close-btn" @click=${this.handleClose} title=${msg('Close blame view (Esc)')}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="18" y1="6" x2="6" y2="18"></line>
             <line x1="6" y1="6" x2="18" y2="18"></line>
@@ -635,15 +639,15 @@ export class GnBlameView extends CodeRenderMixin(LitElement) {
 
       <div class="stats-bar">
         <div class="stat">
-          <span>Lines:</span>
+          <span>${msg('Lines:')}</span>
           <span class="stat-value">${this.lines.length}</span>
         </div>
         <div class="stat">
-          <span>Authors:</span>
+          <span>${msg('Authors:')}</span>
           <span class="stat-value">${this.uniqueAuthors.size}</span>
         </div>
         <div class="stat">
-          <span>Commits:</span>
+          <span>${msg('Commits:')}</span>
           <span class="stat-value">${this.uniqueCommits.size}</span>
         </div>
       </div>
@@ -716,14 +720,14 @@ export class GnBlameView extends CodeRenderMixin(LitElement) {
             <line x1="12" y1="3" x2="12" y2="9"></line>
             <line x1="12" y1="15" x2="12" y2="21"></line>
           </svg>
-          Show commit details
+          ${msg('Show commit details')}
         </button>
         <button class="context-menu-item" @click=${this.handleContextCopyHash}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
             <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
           </svg>
-          Copy commit hash
+          ${msg('Copy commit hash')}
         </button>
         <div class="context-menu-divider"></div>
         <button class="context-menu-item" @click=${this.handleContextCopyLine}>
@@ -731,7 +735,7 @@ export class GnBlameView extends CodeRenderMixin(LitElement) {
             <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
             <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
           </svg>
-          Copy line
+          ${msg('Copy line')}
         </button>
       </div>
     `;

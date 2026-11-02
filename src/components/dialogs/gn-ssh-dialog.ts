@@ -1,5 +1,6 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
+import { localized, msg, str } from '@lit/localize';
 import { sharedStyles } from '../../styles/shared-styles.ts';
 import * as gitService from '../../services/git.service.ts';
 import { showConfirm } from '../../services/dialog.service.ts';
@@ -14,6 +15,7 @@ type TabId = 'keys' | 'generate' | 'test';
  * View, generate, and test SSH keys
  */
 @customElement('gn-ssh-dialog')
+@localized()
 export class GnSshDialog extends LitElement {
   static styles = [
     sharedStyles,
@@ -398,7 +400,7 @@ export class GnSshDialog extends LitElement {
         this.config = configResult.data;
       } else if (!configResult.success) {
         this.config = null;
-        this.error = configResult.error?.message || 'Failed to load SSH configuration';
+        this.error = configResult.error?.message || msg('Failed to load SSH configuration');
       }
 
       if (keysResult.success && keysResult.data) {
@@ -406,11 +408,11 @@ export class GnSshDialog extends LitElement {
       } else if (!keysResult.success) {
         this.keys = [];
         if (!this.error) {
-          this.error = keysResult.error?.message || 'Failed to load SSH keys';
+          this.error = keysResult.error?.message || msg('Failed to load SSH keys');
         }
       }
     } catch (e) {
-      this.error = e instanceof Error ? e.message : 'Failed to load SSH data';
+      this.error = e instanceof Error ? e.message : msg('Failed to load SSH data');
     } finally {
       this.loading = false;
     }
@@ -449,10 +451,10 @@ export class GnSshDialog extends LitElement {
         this.generatedKey = result.data;
         await this.loadData(); // Refresh key list
       } else {
-        this.error = result.error?.message || 'Failed to generate key';
+        this.error = result.error?.message || msg('Failed to generate key');
       }
     } catch (e) {
-      this.error = e instanceof Error ? e.message : 'Failed to generate key';
+      this.error = e instanceof Error ? e.message : msg('Failed to generate key');
     } finally {
       this.generating = false;
     }
@@ -471,10 +473,10 @@ export class GnSshDialog extends LitElement {
       if (result.success && result.data) {
         this.testResult = result.data;
       } else {
-        this.error = result.error?.message || 'Failed to test connection';
+        this.error = result.error?.message || msg('Failed to test connection');
       }
     } catch (e) {
-      this.error = e instanceof Error ? e.message : 'Failed to test connection';
+      this.error = e instanceof Error ? e.message : msg('Failed to test connection');
     } finally {
       this.testing = false;
     }
@@ -489,15 +491,17 @@ export class GnSshDialog extends LitElement {
           this.copiedKey = null;
         }, 2000);
       } catch {
-        this.error = 'Failed to copy to clipboard';
+        this.error = msg('Failed to copy to clipboard');
       }
     }
   }
 
   private async handleDeleteKey(key: SshKey): Promise<void> {
     const confirmed = await showConfirm(
-      'Delete SSH Key',
-      `Are you sure you want to delete the SSH key "${key.name}"?\n\nThis will delete both the private and public key files.`,
+      msg('Delete SSH Key'),
+      msg(
+        str`Are you sure you want to delete the SSH key "${key.name}"?\n\nThis will delete both the private and public key files.`
+      ),
       'warning'
     );
 
@@ -507,13 +511,13 @@ export class GnSshDialog extends LitElement {
       const result = await gitService.deleteSshKey(key.name);
 
       if (result.success) {
-        showToast(`Deleted SSH key "${key.name}"`, 'success');
+        showToast(msg(str`Deleted SSH key "${key.name}"`), 'success');
         await this.loadData();
       } else {
-        this.error = result.error?.message || 'Failed to delete key';
+        this.error = result.error?.message || msg('Failed to delete key');
       }
     } catch (e) {
-      this.error = e instanceof Error ? e.message : 'Failed to delete key';
+      this.error = e instanceof Error ? e.message : msg('Failed to delete key');
     }
   }
 
@@ -523,16 +527,16 @@ export class GnSshDialog extends LitElement {
 
   private renderKeysTab() {
     if (this.loading) {
-      return html`<div class="loading-indicator">Loading SSH keys...</div>`;
+      return html`<div class="loading-indicator">${msg('Loading SSH keys...')}</div>`;
     }
 
     if (this.keys.length === 0) {
       return html`
         <div class="empty-state">
-          <p>No SSH keys found in ${this.config?.sshDir || '~/.ssh'}</p>
+          <p>${msg(str`No SSH keys found in ${this.config?.sshDir || '~/.ssh'}`)}</p>
           <p style="margin-top: var(--spacing-sm)">
             <button class="btn btn-primary" @click=${() => (this.activeTab = 'generate')}>
-              Generate New Key
+              ${msg('Generate New Key')}
             </button>
           </p>
         </div>
@@ -552,7 +556,7 @@ export class GnSshDialog extends LitElement {
                 <div class="key-actions">
                   <button
                     class="btn-icon"
-                    title="Copy public key"
+                    title=${msg('Copy public key')}
                     @click=${() => this.handleCopyPublicKey(key)}
                   >
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -561,11 +565,11 @@ export class GnSshDialog extends LitElement {
                     </svg>
                   </button>
                   ${this.copiedKey === key.name
-                    ? html`<span class="copy-success">Copied!</span>`
+                    ? html`<span class="copy-success">${msg('Copied!')}</span>`
                     : ''}
                   <button
                     class="btn-icon danger"
-                    title="Delete key"
+                    title=${msg('Delete key')}
                     @click=${() => this.handleDeleteKey(key)}
                   >
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -598,22 +602,22 @@ export class GnSshDialog extends LitElement {
               <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
               <polyline points="22 4 12 14.01 9 11.01"></polyline>
             </svg>
-            SSH Key Generated Successfully
+            ${msg('SSH Key Generated Successfully')}
           </div>
           <p style="margin-bottom: var(--spacing-sm)">
-            Your new ${this.generatedKey.keyType} key has been created at:
+            ${msg(str`Your new ${this.generatedKey.keyType} key has been created at:`)}
           </p>
           <code style="display: block; margin-bottom: var(--spacing-sm)">
             ${this.generatedKey.path}
           </code>
-          <p style="margin-bottom: var(--spacing-sm)">Public key:</p>
+          <p style="margin-bottom: var(--spacing-sm)">${msg('Public key:')}</p>
           <div class="public-key-display">${this.generatedKey.publicKey}</div>
           <div class="form-actions">
             <button
               class="btn btn-secondary"
               @click=${() => this.handleCopyPublicKey(this.generatedKey!)}
             >
-              Copy Public Key
+              ${msg('Copy Public Key')}
             </button>
             <button
               class="btn btn-primary"
@@ -624,7 +628,7 @@ export class GnSshDialog extends LitElement {
                 this.generatePassphrase = '';
               }}
             >
-              Generate Another
+              ${msg('Generate Another')}
             </button>
           </div>
         </div>
@@ -633,51 +637,51 @@ export class GnSshDialog extends LitElement {
 
     return html`
       <div class="form-group">
-        <label>Key Type</label>
+        <label>${msg('Key Type')}</label>
         <select
           .value=${this.generateKeyType}
           @change=${(e: Event) =>
             (this.generateKeyType = (e.target as HTMLSelectElement).value)}
         >
-          <option value="ed25519">Ed25519 (Recommended)</option>
-          <option value="rsa">RSA (4096 bits)</option>
+          <option value="ed25519">${msg('Ed25519 (Recommended)')}</option>
+          <option value="rsa">${msg('RSA (4096 bits)')}</option>
           <option value="ecdsa">ECDSA</option>
         </select>
-        <div class="hint">Ed25519 is recommended for most users</div>
+        <div class="hint">${msg('Ed25519 is recommended for most users')}</div>
       </div>
 
       <div class="form-group">
-        <label>Email</label>
+        <label>${msg('Email')}</label>
         <input
           type="email"
           placeholder="you@example.com"
           .value=${this.generateEmail}
           @input=${(e: Event) => (this.generateEmail = (e.target as HTMLInputElement).value)}
         />
-        <div class="hint">Used as a comment to identify the key</div>
+        <div class="hint">${msg('Used as a comment to identify the key')}</div>
       </div>
 
       <div class="form-group">
-        <label>Filename (optional)</label>
+        <label>${msg('Filename (optional)')}</label>
         <input
           type="text"
           placeholder="id_ed25519"
           .value=${this.generateFilename}
           @input=${(e: Event) => (this.generateFilename = (e.target as HTMLInputElement).value)}
         />
-        <div class="hint">Leave empty for default name based on key type</div>
+        <div class="hint">${msg('Leave empty for default name based on key type')}</div>
       </div>
 
       <div class="form-group">
-        <label>Passphrase (optional)</label>
+        <label>${msg('Passphrase (optional)')}</label>
         <input
           type="password"
-          placeholder="Leave empty for no passphrase"
+          placeholder=${msg('Leave empty for no passphrase')}
           .value=${this.generatePassphrase}
           @input=${(e: Event) =>
             (this.generatePassphrase = (e.target as HTMLInputElement).value)}
         />
-        <div class="hint">A passphrase adds extra security but requires entry on each use</div>
+        <div class="hint">${msg('A passphrase adds extra security but requires entry on each use')}</div>
       </div>
 
       <div class="form-actions">
@@ -686,7 +690,7 @@ export class GnSshDialog extends LitElement {
           ?disabled=${!this.generateEmail || this.generating}
           @click=${this.handleGenerateKey}
         >
-          ${this.generating ? 'Generating...' : 'Generate Key'}
+          ${this.generating ? msg('Generating...') : msg('Generate Key')}
         </button>
       </div>
     `;
@@ -707,7 +711,7 @@ export class GnSshDialog extends LitElement {
       </div>
 
       <div class="form-group">
-        <label>Host</label>
+        <label>${msg('Host')}</label>
         <input
           type="text"
           placeholder="github.com"
@@ -715,7 +719,7 @@ export class GnSshDialog extends LitElement {
           @input=${(e: Event) => (this.testHost = (e.target as HTMLInputElement).value)}
           @keydown=${(e: KeyboardEvent) => e.key === 'Enter' && this.handleTestConnection()}
         />
-        <div class="hint">Enter a hostname to test SSH connection</div>
+        <div class="hint">${msg('Enter a hostname to test SSH connection')}</div>
       </div>
 
       <div class="form-actions">
@@ -724,7 +728,7 @@ export class GnSshDialog extends LitElement {
           ?disabled=${!this.testHost || this.testing}
           @click=${this.handleTestConnection}
         >
-          ${this.testing ? 'Testing...' : 'Test Connection'}
+          ${this.testing ? msg('Testing...') : msg('Test Connection')}
         </button>
       </div>
 
@@ -738,10 +742,9 @@ export class GnSshDialog extends LitElement {
                         <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
                         <polyline points="22 4 12 14.01 9 11.01"></polyline>
                       </svg>
-                      Connection Successful
                       ${this.testResult.username
-                        ? html` (as ${this.testResult.username})`
-                        : ''}
+                        ? msg(str`Connection Successful (as ${this.testResult.username})`)
+                        : msg('Connection Successful')}
                     `
                   : html`
                       <svg class="status-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -749,7 +752,7 @@ export class GnSshDialog extends LitElement {
                         <line x1="15" y1="9" x2="9" y2="15"></line>
                         <line x1="9" y1="9" x2="15" y2="15"></line>
                       </svg>
-                      Connection Failed
+                      ${msg('Connection Failed')}
                     `}
               </div>
               <div class="test-result-message">${this.testResult.message}</div>
@@ -763,7 +766,7 @@ export class GnSshDialog extends LitElement {
     if (!this.open) return null;
 
     return html`
-      <gn-modal modalTitle="SSH Key Management" open @close=${this.handleClose}>
+      <gn-modal modalTitle=${msg('SSH Key Management')} open @close=${this.handleClose}>
         <div class="content">
           ${this.config && !this.config.sshAvailable
             ? html`
@@ -773,7 +776,7 @@ export class GnSshDialog extends LitElement {
                     <line x1="12" y1="8" x2="12" y2="12"></line>
                     <line x1="12" y1="16" x2="12.01" y2="16"></line>
                   </svg>
-                  SSH is not available on this system
+                  ${msg('SSH is not available on this system')}
                 </div>
               `
             : this.config
@@ -783,7 +786,7 @@ export class GnSshDialog extends LitElement {
                       <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
                       <polyline points="22 4 12 14.01 9 11.01"></polyline>
                     </svg>
-                    <span>${this.config.sshVersion || 'SSH available'}</span>
+                    <span>${this.config.sshVersion || msg('SSH available')}</span>
                   </div>
                 `
               : ''}
@@ -806,19 +809,19 @@ export class GnSshDialog extends LitElement {
               class="tab ${this.activeTab === 'keys' ? 'active' : ''}"
               @click=${() => (this.activeTab = 'keys')}
             >
-              SSH Keys
+              ${msg('SSH Keys')}
             </button>
             <button
               class="tab ${this.activeTab === 'generate' ? 'active' : ''}"
               @click=${() => (this.activeTab = 'generate')}
             >
-              Generate Key
+              ${msg('Generate Key')}
             </button>
             <button
               class="tab ${this.activeTab === 'test' ? 'active' : ''}"
               @click=${() => (this.activeTab = 'test')}
             >
-              Test Connection
+              ${msg('Test Connection')}
             </button>
           </div>
 

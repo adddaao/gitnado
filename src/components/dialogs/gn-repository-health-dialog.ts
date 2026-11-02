@@ -5,6 +5,7 @@
 
 import { LitElement, html, css } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
+import { localized, msg, str } from '@lit/localize';
 import { sharedStyles } from '../../styles/shared-styles.ts';
 import * as gitService from '../../services/git.service.ts';
 import { showToast } from '../../services/notification.service.ts';
@@ -40,6 +41,7 @@ interface HealthStats {
 }
 
 @customElement('gn-repository-health-dialog')
+@localized()
 export class GnRepositoryHealthDialog extends LitElement {
   static styles = [
     sharedStyles,
@@ -374,7 +376,7 @@ export class GnRepositoryHealthDialog extends LitElement {
         showToast(
           countResult.error?.message ||
             packsResult.error?.message ||
-            'Failed to load repository health information',
+            msg('Failed to load repository health information'),
           'error',
         );
         return;
@@ -394,7 +396,9 @@ export class GnRepositoryHealthDialog extends LitElement {
 
         // Recommend GC if too many loose objects
         if (looseObjectCount > 500) {
-          recommendations.push('Many loose objects detected. Running garbage collection will improve performance.');
+          recommendations.push(
+            msg('Many loose objects detected. Running garbage collection will improve performance.')
+          );
         }
       }
 
@@ -403,7 +407,9 @@ export class GnRepositoryHealthDialog extends LitElement {
 
         // Recommend repack if too many pack files
         if (packCount > 10) {
-          recommendations.push('Multiple pack files detected. Repacking will consolidate data and save space.');
+          recommendations.push(
+            msg('Multiple pack files detected. Repacking will consolidate data and save space.')
+          );
         }
       }
 
@@ -413,7 +419,9 @@ export class GnRepositoryHealthDialog extends LitElement {
 
       // Recommend cleanup if many branches
       if (branchCount != null && branchCount > 50) {
-        recommendations.push('Many branches detected. Consider cleaning up merged branches.');
+        recommendations.push(
+          msg('Many branches detected. Consider cleaning up merged branches.')
+        );
       }
 
       const tagCount = tagsResult.success && tagsResult.data
@@ -426,7 +434,7 @@ export class GnRepositoryHealthDialog extends LitElement {
 
       // Recommend stash cleanup if many stashes
       if (stashCount != null && stashCount > 10) {
-        recommendations.push('Many stashes detected. Consider cleaning up old stashes.');
+        recommendations.push(msg('Many stashes detected. Consider cleaning up old stashes.'));
       }
 
       // Extract overview stats
@@ -461,7 +469,7 @@ export class GnRepositoryHealthDialog extends LitElement {
     } catch (error) {
       if (targetRepo === this.pinnedRepoPath) {
         console.error('Failed to load health stats:', error);
-        showToast('Failed to load repository health information', 'error');
+        showToast(msg('Failed to load repository health information'), 'error');
       }
     } finally {
       if (targetRepo === this.pinnedRepoPath) {
@@ -519,10 +527,15 @@ export class GnRepositoryHealthDialog extends LitElement {
       });
 
       if (result.success) {
-        showToast(aggressive ? 'Aggressive garbage collection completed' : 'Garbage collection completed', 'success');
+        showToast(
+          aggressive
+            ? msg('Aggressive garbage collection completed')
+            : msg('Garbage collection completed'),
+          'success'
+        );
         await this.loadHealthStats();
       } else {
-        showToast(`Garbage collection failed: ${result.error?.message}`, 'error');
+        showToast(msg(str`Garbage collection failed: ${result.error?.message}`), 'error');
       }
     } finally {
       releaseMaintenance(repoPath);
@@ -569,7 +582,7 @@ export class GnRepositoryHealthDialog extends LitElement {
         // summarised, because that output can run to dozens of lines.
         showToast(summariseFsck(result.data?.message), 'success');
       } else {
-        showToast(`File system check failed: ${result.error?.message}`, 'error');
+        showToast(msg(str`File system check failed: ${result.error?.message}`), 'error');
       }
     } finally {
       releaseMaintenance(repoPath);
@@ -616,10 +629,10 @@ export class GnRepositoryHealthDialog extends LitElement {
       });
 
       if (result.success) {
-        showToast('Pruned unreachable objects', 'success');
+        showToast(msg('Pruned unreachable objects'), 'success');
         await this.loadHealthStats();
       } else {
-        showToast(`Prune failed: ${result.error?.message}`, 'error');
+        showToast(msg(str`Prune failed: ${result.error?.message}`), 'error');
       }
     } finally {
       releaseMaintenance(repoPath);
@@ -640,20 +653,20 @@ export class GnRepositoryHealthDialog extends LitElement {
   render() {
     if (this.loading) {
       return html`
-        <div class="loading">Loading repository health information...</div>
+        <div class="loading">${msg('Loading repository health information...')}</div>
       `;
     }
 
     if (!this.stats) {
       return html`
         <div class="loading">
-          <span>Failed to load health information</span>
+          <span>${msg('Failed to load health information')}</span>
           <button
             class="action-btn"
             style="margin-left: var(--spacing-sm);"
             @click=${() => this.loadHealthStats()}
           >
-            Retry
+            ${msg('Retry')}
           </button>
         </div>
       `;
@@ -663,38 +676,38 @@ export class GnRepositoryHealthDialog extends LitElement {
       <div class="content">
         <!-- Statistics -->
         <div>
-          <div class="section-title">Repository Statistics</div>
+          <div class="section-title">${msg('Repository Statistics')}</div>
           <div class="stats-grid">
             <div class="stat-card">
-              <span class="stat-label">Total Commits</span>
+              <span class="stat-label">${msg('Total Commits')}</span>
               <span class="stat-value">${this.stats.totalCommits != null ? this.stats.totalCommits.toLocaleString() : '—'}</span>
             </div>
             <div class="stat-card">
-              <span class="stat-label">Contributors</span>
+              <span class="stat-label">${msg('Contributors')}</span>
               <span class="stat-value">${this.stats.totalContributors != null ? this.stats.totalContributors.toLocaleString() : '—'}</span>
             </div>
             <div class="stat-card">
-              <span class="stat-label">Total Objects</span>
+              <span class="stat-label">${msg('Total Objects')}</span>
               <span class="stat-value">${this.stats.objectCount.toLocaleString()}</span>
             </div>
             <div class="stat-card">
-              <span class="stat-label">Repository Size</span>
+              <span class="stat-label">${msg('Repository Size')}</span>
               <span class="stat-value">${this.formatSize(this.stats.sizeKb)}</span>
             </div>
             <div class="stat-card">
-              <span class="stat-label">Loose Objects</span>
+              <span class="stat-label">${msg('Loose Objects')}</span>
               <span class="stat-value ${this.stats.looseObjectCount > 500 ? 'warning' : ''}">${this.stats.looseObjectCount.toLocaleString()}</span>
             </div>
             <div class="stat-card">
-              <span class="stat-label">Pack Files</span>
+              <span class="stat-label">${msg('Pack Files')}</span>
               <span class="stat-value ${this.stats.packCount > 10 ? 'warning' : ''}">${this.stats.packCount}</span>
             </div>
             <div class="stat-card">
-              <span class="stat-label">Branches</span>
+              <span class="stat-label">${msg('Branches')}</span>
               <span class="stat-value">${this.stats.branchCount != null ? this.stats.branchCount : '—'}</span>
             </div>
             <div class="stat-card">
-              <span class="stat-label">Tags</span>
+              <span class="stat-label">${msg('Tags')}</span>
               <span class="stat-value">${this.stats.tagCount != null ? this.stats.tagCount : '—'}</span>
             </div>
           </div>
@@ -702,7 +715,7 @@ export class GnRepositoryHealthDialog extends LitElement {
 
         <!-- Recommendations -->
         <div>
-          <div class="section-title">Recommendations</div>
+          <div class="section-title">${msg('Recommendations')}</div>
           ${this.stats.recommendations.length > 0 ? html`
             <div class="recommendations">
               ${this.stats.recommendations.map(rec => html`
@@ -722,14 +735,14 @@ export class GnRepositoryHealthDialog extends LitElement {
                 <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
                 <polyline points="22 4 12 14.01 9 11.01"></polyline>
               </svg>
-              Repository is healthy - no maintenance needed
+              ${msg('Repository is healthy - no maintenance needed')}
             </div>
           `}
         </div>
 
         <!-- Maintenance Actions -->
         <div>
-          <div class="section-title">Maintenance Actions</div>
+          <div class="section-title">${msg('Maintenance Actions')}</div>
           <div class="actions">
             <button
               class="action-btn"
@@ -742,9 +755,11 @@ export class GnRepositoryHealthDialog extends LitElement {
               </svg>
               <div class="action-info">
                 <div class="action-title">
-                  ${this.runningAction === 'gc' ? 'Running...' : 'Garbage Collection'}
+                  ${this.runningAction === 'gc' ? msg('Running...') : msg('Garbage Collection')}
                 </div>
-                <div class="action-desc">Clean up loose objects and optimize repository</div>
+                <div class="action-desc">
+                  ${msg('Clean up loose objects and optimize repository')}
+                </div>
               </div>
             </button>
 
@@ -760,9 +775,13 @@ export class GnRepositoryHealthDialog extends LitElement {
               </svg>
               <div class="action-info">
                 <div class="action-title">
-                  ${this.runningAction === 'gc-aggressive' ? 'Running...' : 'Aggressive GC'}
+                  ${this.runningAction === 'gc-aggressive'
+                    ? msg('Running...')
+                    : msg('Aggressive GC')}
                 </div>
-                <div class="action-desc">Thorough cleanup - may take longer</div>
+                <div class="action-desc">
+                  ${msg('Thorough cleanup - may take longer')}
+                </div>
               </div>
             </button>
 
@@ -779,9 +798,11 @@ export class GnRepositoryHealthDialog extends LitElement {
               </svg>
               <div class="action-info">
                 <div class="action-title">
-                  ${this.runningAction === 'fsck' ? 'Running...' : 'File System Check'}
+                  ${this.runningAction === 'fsck' ? msg('Running...') : msg('File System Check')}
                 </div>
-                <div class="action-desc">Verify repository integrity</div>
+                <div class="action-desc">
+                  ${msg('Verify repository integrity')}
+                </div>
               </div>
             </button>
 
@@ -796,9 +817,13 @@ export class GnRepositoryHealthDialog extends LitElement {
               </svg>
               <div class="action-info">
                 <div class="action-title">
-                  ${this.runningAction === 'prune' ? 'Running...' : 'Prune Unreachable Objects'}
+                  ${this.runningAction === 'prune'
+                    ? msg('Running...')
+                    : msg('Prune Unreachable Objects')}
                 </div>
-                <div class="action-desc">Remove orphaned objects not reachable from any ref</div>
+                <div class="action-desc">
+                  ${msg('Remove orphaned objects not reachable from any ref')}
+                </div>
               </div>
             </button>
           </div>
@@ -817,7 +842,7 @@ export class GnRepositoryHealthDialog extends LitElement {
           class="primary"
           ?disabled=${!!this.runningAction}
           @click=${this.handleClose}
-        >Done</button>
+        >${msg('Done')}</button>
       </div>
     `;
   }
